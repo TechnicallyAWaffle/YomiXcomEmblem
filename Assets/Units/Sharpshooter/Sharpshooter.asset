@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
+  m_Name: Sharpshooter
+  m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  DisplayName: Sharpshooter
+  MaxHealth: 85
+  BaseDodge: 0.15
+  BaseBlock: 0
+  MaxStrain: 100
+  StrainRecoveryPerSecond: 6
+  StrainRecoveryDelay: 1.5
+  MaxEnergy: 0
+  StartingEnergy: 0
+  ActionSpeed: 1
+  MoveSpeed: 4
+  DashDistance: 3
+  EyeHeight: 1.6
+  BodyHeight: 1.8
+  BodyRadius: 0.4
+  BasicAttack: {fileID: 11400000, guid: 322003dbfda63a549bd75b006bb343aa, type: 2}
+  Universal: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
+  Actions:
+  - {fileID: 11400000, guid: ed447ec3502aa394ea725969066ad9ac, type: 2}
+  - {fileID: 11400000, guid: e79c27fd67d2ac148b4b5e5c8a38c6ab, type: 2}
+  - {fileID: 11400000, guid: 8aa261cb29640e24e9fcf974f6f309b0, type: 2}
+  - {fileID: 11400000, guid: 804269327a3dc114caac234d2c14f839, type: 2}
+  - {fileID: 11400000, guid: d53286b3cd683b94a893056620996001, type: 2}
+  - {fileID: 11400000, guid: a4f4773e49e3ea44481848ca112f8fa6, type: 2}
+  - {fileID: 11400000, guid: 96c0392ca5dad4f4aafab48f5a26b021, type: 2}
+  Passives: []
+  ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  DataVersion: 6

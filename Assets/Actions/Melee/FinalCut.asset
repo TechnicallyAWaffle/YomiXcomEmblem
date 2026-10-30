@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b4d3416328b1ad3438229e3e79cfcc50, type: 3}
+  m_Name: FinalCut
+  m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
+  Id: final_cut
+  DisplayName: Final Cut
+  BehaviorId: final_cut
+  Description: Trance only. A finishing blow that deals more damage the more health
+    the target is missing. A kill extends your trance by 3 seconds.
+  Targeting: 2
+  Range: 2
+  IsRanged: 0
+  Windup: 0.5
+  Recovery: 0.8
+  Cooldown: 4
+  EnergyCost: 0
+  EnergyGain: 0
+  RequiredStatus: trance
+  ConsumesRequiredStatus: 0
+  Impact: 1
+  Damage: 30
+  BaseAccuracy: 0.95
+  StunDuration: 1
+  StrainOnTarget: 20
+  StrainOnSelf: 0
+  PiercesTerrain: 0
+  BlockPierce: 0
+  Shape: 0
+  AreaRadius: 0
+  LineWidth: 1
+  Heal: 0
+  Displace: 0
+  DisplaceDistance: 0
+  SelfStatuses: []
+  SelfStatusesOnWindup: 0
+  TargetStatusesOnHit: []
+  TrapArmDelay: 1
+  TrapLifetime: 30
+  LinkedAction: {fileID: 0}
+  IsFollowup: 0
+  ExtraCinematic: 1
+  InterruptedByDamage: 0
+  InterruptedByStun: 0
+  DataVersion: 6

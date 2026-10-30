@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b4d3416328b1ad3438229e3e79cfcc50, type: 3}
+  m_Name: HeavyStrike
+  m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
+  Id: heavy_strike
+  DisplayName: Heavy Strike
+  BehaviorId: basic_attack
+  Description: Slow, heavy melee blow that stuns.
+  Targeting: 2
+  Range: 1.8
+  IsRanged: 0
+  Windup: 0.9
+  Recovery: 0.7
+  Cooldown: 0
+  EnergyCost: 0
+  EnergyGain: 0
+  RequiredStatus: 
+  ConsumesRequiredStatus: 0
+  Impact: 1
+  Damage: 28
+  BaseAccuracy: 0.95
+  StunDuration: 0.8
+  StrainOnTarget: 25
+  StrainOnSelf: 0
+  PiercesTerrain: 0
+  BlockPierce: 0
+  Shape: 0
+  AreaRadius: 0
+  LineWidth: 1
+  Heal: 0
+  Displace: 0
+  DisplaceDistance: 0
+  SelfStatuses: []
+  SelfStatusesOnWindup: 0
+  TargetStatusesOnHit: []
+  TrapArmDelay: 1
+  TrapLifetime: 30
+  LinkedAction: {fileID: 0}
+  InterruptedByDamage: 0
+  InterruptedByStun: 0

@@ -1,0 +1,80 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b4d3416328b1ad3438229e3e79cfcc50, type: 3}
+  m_Name: MarkingShot
+  m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
+  Id: marking_shot
+  DisplayName: Marking Shot
+  BehaviorId: basic_attack
+  Description: Fire a shot that marks the target (attacks hit it more easily) and
+    become undetectable for a short time. Taking damage reveals you.
+  Targeting: 2
+  Range: 18
+  IsRanged: 1
+  Windup: 0.6
+  Recovery: 0.4
+  Cooldown: 10
+  EnergyCost: 0
+  EnergyGain: 0
+  RequiredStatus: 
+  ConsumesRequiredStatus: 0
+  Impact: 0
+  Damage: 10
+  BaseAccuracy: 0.85
+  StunDuration: 0.2
+  StrainOnTarget: 4
+  StrainOnSelf: 0
+  PiercesTerrain: 0
+  BlockPierce: 0
+  Shape: 0
+  AreaRadius: 0
+  LineWidth: 1
+  Heal: 0
+  Displace: 0
+  DisplaceDistance: 0
+  SelfStatuses:
+  - Id: hidden
+    Duration: 4
+    DodgeBonus: 0
+    BlockBonus: 0
+    IncomingAccuracyBonus: 0
+    DodgeDistanceBonus: 0
+    ActionSpeedMult: 1
+    MoveSpeedMult: 1
+    Rooted: 0
+    Untargetable: 1
+    BreaksOnDamage: 1
+    StunImmune: 0
+    KeepsBlock: 0
+  SelfStatusesOnWindup: 0
+  TargetStatusesOnHit:
+  - Id: marked
+    Duration: 8
+    DodgeBonus: 0
+    BlockBonus: 0
+    IncomingAccuracyBonus: 0.25
+    DodgeDistanceBonus: 0
+    ActionSpeedMult: 1
+    MoveSpeedMult: 1
+    Rooted: 0
+    Untargetable: 0
+    BreaksOnDamage: 0
+    StunImmune: 0
+    KeepsBlock: 0
+  TrapArmDelay: 1
+  TrapLifetime: 30
+  LinkedAction: {fileID: 0}
+  IsFollowup: 0
+  ExtraCinematic: 0
+  InterruptedByDamage: 0
+  InterruptedByStun: 0
+  DataVersion: 6
