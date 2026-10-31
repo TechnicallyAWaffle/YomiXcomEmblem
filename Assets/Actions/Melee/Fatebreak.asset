@@ -1,0 +1,83 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b4d3416328b1ad3438229e3e79cfcc50, type: 3}
+  m_Name: Fatebreak
+  m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
+  Id: fatebreak
+  DisplayName: Fatebreak
+  BehaviorId: fatebreak
+  Description: Heavily slows the target while you wind up, then strikes it with a
+    massive blow that knocks it far back.
+  Targeting: 2
+  Range: 2
+  IsRanged: 0
+  CannotTargetSelf: 0
+  DestinationRange: 0
+  Windup: 1.1
+  Recovery: 0.7
+  Cooldown: 0
+  EnergyCost: 0
+  EnergyGain: 0
+  RequiredStatus: trance|wrath
+  ConsumesRequiredStatus: 1
+  ConsumeOnResolve: 1
+  Impact: 1
+  Damage: 50
+  BaseAccuracy: 0.95
+  StunDuration: 1.5
+  StrainOnTarget: 30
+  StrainOnSelf: 0
+  PiercesTerrain: 0
+  BlockPierce: 0
+  Shape: 0
+  AreaRadius: 0
+  LineWidth: 1
+  Heal: 0
+  Displace: 0
+  DisplaceDistance: 6
+  SelfStatuses: []
+  SelfStatusesOnWindup: 0
+  TargetStatusesOnHit: []
+  TargetStatusesDuringWindup:
+  - Id: fated
+    Duration: 3
+    DodgeBonus: 0
+    BlockBonus: 0
+    IncomingAccuracyBonus: 0
+    DodgeDistanceBonus: 0
+    ActionSpeedMult: 0.35
+    MoveSpeedMult: 1
+    Rooted: 0
+    Untargetable: 0
+    BreaksOnDamage: 0
+    StunImmune: 0
+    KeepsBlock: 0
+    DamageDealtMult: 1
+    StrainCostMult: 1
+    ForbidsActions: []
+    AppliesTo: 0
+  TrapArmDelay: 1
+  TrapLifetime: 30
+  LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
+  IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
+  ExtraCinematic: 1
+  InterruptedByDamage: 0
+  InterruptedByStun: 0
+  DataVersion: 9

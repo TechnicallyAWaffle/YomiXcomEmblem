@@ -26,7 +26,7 @@ namespace TacticsGame.Core
     /// </summary>
     public class TakeAimBehavior : SelfBuffBehavior
     {
-        public const float ReactionWindup = 0.35f;
+        public const float ReactionWindup = 0.1f;
 
         public override void Attach(BattleSimulation sim)
         {

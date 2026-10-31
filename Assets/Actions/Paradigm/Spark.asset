@@ -15,19 +15,22 @@ MonoBehaviour:
   Id: spark
   DisplayName: Spark
   BehaviorId: basic_attack
-  Description: Basic ranged spell. Always available.
+  Description: Fire a precise blast of damaging kinetic energy.
   Targeting: 2
   Range: 12
   IsRanged: 1
-  Windup: 0.5
+  CannotTargetSelf: 0
+  DestinationRange: 0
+  Windup: 0.75
   Recovery: 0.5
   Cooldown: 0
   EnergyCost: 0
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  ConsumeOnResolve: 0
   Impact: 0
-  Damage: 8
+  Damage: 15
   BaseAccuracy: 0.85
   StunDuration: 0.2
   StrainOnTarget: 4
@@ -43,11 +46,20 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  TargetStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
   IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
   ExtraCinematic: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 6
+  DataVersion: 9

@@ -1,0 +1,66 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b4d3416328b1ad3438229e3e79cfcc50, type: 3}
+  m_Name: Amblivate
+  m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
+  Id: amblivate
+  DisplayName: Amblivate
+  BehaviorId: levitate
+  Description: Lift an enemy into the air, stunning them while airborne, before dropping
+    them.
+  Targeting: 2
+  Range: 15
+  IsRanged: 1
+  CannotTargetSelf: 0
+  DestinationRange: 0
+  Windup: 0.6
+  Recovery: 0.3
+  Cooldown: 10
+  EnergyCost: 0
+  EnergyGain: 0
+  RequiredStatus: 
+  ConsumesRequiredStatus: 0
+  ConsumeOnResolve: 0
+  Impact: 1
+  Damage: 0
+  BaseAccuracy: 0.9
+  StunDuration: 1.5
+  StrainOnTarget: 0
+  StrainOnSelf: 15
+  PiercesTerrain: 0
+  BlockPierce: 0
+  Shape: 0
+  AreaRadius: 0
+  LineWidth: 1
+  Heal: 0
+  Displace: 0
+  DisplaceDistance: 7
+  SelfStatuses: []
+  SelfStatusesOnWindup: 0
+  TargetStatusesOnHit: []
+  TargetStatusesDuringWindup: []
+  TrapArmDelay: 1
+  TrapLifetime: 30
+  LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
+  IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
+  ExtraCinematic: 0
+  InterruptedByDamage: 0
+  InterruptedByStun: 0
+  DataVersion: 9

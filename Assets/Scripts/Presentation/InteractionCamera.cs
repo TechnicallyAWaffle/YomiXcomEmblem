@@ -14,15 +14,16 @@ namespace TacticsGame.Presentation
     /// timeline to see how it ends. Only actions whose result is already simulated get a shot (so it is never cut
     /// off by the order freeze), and a killing blow gets a short slow-motion beat. Heavy hits, unravels and deaths
     /// shake the camera through a CinemachineImpulseSource.
-    /// Abilities flagged ActionDefinition.ExtraCinematic (Tracking Shot, Final Cut) are always filmed, whatever the mode,
-    /// with slow motion around the impact; if their windup straddled an order pause, the shot cuts in at the impact.
+    /// Abilities flagged ActionDefinition.ExtraCinematic (Tracking Shot, Final Cut) are always filmed, whatever the mode:
+    /// the camera takes focus ExtraFocusLead before they land, with slow motion around the impact; if their windup straddled an order pause, the shot cuts in at the impact.
     /// Moments (an action interrupted by a hit or stun, a unit downed, a hit of HighDamageThreshold or more) briefly slow
-    /// time and frame the units involved, in every mode but Off.
-    ///   C: cycle Key moments / Every attack / Off.
+    /// time and frame the units involved, in every mode but Off. None turns everything off: no shots (signature moves
+    /// included), no slow motion, no shake.
+    ///   C: cycle Key moments / Every attack / Off / None.
     /// </summary>
     public class InteractionCamera : MonoBehaviour
     {
-        public enum Mode { KeyMoments, EveryAttack, Off }
+        public enum Mode { KeyMoments, EveryAttack, Off, None }
 
         public PlaybackDirector Director;
         public CinemachineCamera TacticalCam;
@@ -50,6 +51,8 @@ namespace TacticsGame.Presentation
         [Tooltip("Sim seconds before the impact that the slow motion kicks in, so the blow itself plays slowed.")]
         public float ExtraLeadIn = 0.2f;
         public float ExtraPostHold = 1.3f;
+        [Tooltip("Sim seconds before a signature move lands that the camera takes focus (it doesn't film the whole windup).")]
+        public float ExtraFocusLead = 0.7f;
 
         [Header("Moments: slow motion and a quick shot on interrupts, downs and big hits")]
         public bool MomentsEnabled = true;
@@ -63,7 +66,8 @@ namespace TacticsGame.Presentation
 
         [Header("Framing")]
         public float MeleeShotDistance = 4.5f;   // closer than this = side-on two-shot
-        public float Damping = 6f;
+        [Tooltip("Seconds the shot takes to settle on a moving subject (SmoothDamp easing).")]
+        public float SmoothTime = 0.22f;
 
         private const int ActivePriority = 30;
         private const int IdlePriority = 0;
@@ -108,6 +112,7 @@ namespace TacticsGame.Presentation
             End();
             defs.Clear();
             lastHitBy.Clear();
+            pending = null;
             if (Director.Timeline == null || Director.Timeline.InitialState == null) return;
             foreach (var u in Director.Timeline.InitialState.Units)
                 foreach (var a in u.Actions)
@@ -124,6 +129,7 @@ namespace TacticsGame.Presentation
                 case TacticsGame.Core.EventType.ActionResolved:
                 {
                     var id = ((ActionResolvedInfo)evt.Payload).ActionId;
+                    if (pending != null && pending.Actor != null && pending.Actor.UnitId == evt.ActorId) pending = null;   // landing now: the cut-in below covers it
                     bool filming = active && actor != null && evt.ActorId == actor.UnitId && id == actionId;
                     if (filming)
                     {
@@ -134,7 +140,7 @@ namespace TacticsGame.Presentation
                     ActionDefinition def;
                     var a = Director.FindView(evt.ActorId);
                     var t = Director.FindView(evt.TargetId);
-                    if (a == null || t == null || a == t || !defs.TryGetValue(id, out def) || !def.ExtraCinematic || (active && extra)) break;
+                    if (a == null || t == null || a == t || !defs.TryGetValue(id, out def) || !def.ExtraCinematic || (active && extra) || CurrentMode == Mode.None) break;
                     StartShot(a, t, id, false, true, -1f, 0f);
                     BeginSlowMo(ExtraSlowMo, ExtraSlowMoSeconds);
                     endReal = Time.unscaledTime + ExtraPostHold;
@@ -142,10 +148,11 @@ namespace TacticsGame.Presentation
                 }
                 case TacticsGame.Core.EventType.ActionInterrupted:
                 {
+                    if (pending != null && pending.Actor != null && pending.Actor.UnitId == evt.ActorId) pending = null;   // it won't land
                     if (active && actor != null && evt.ActorId == actor.UnitId) endReal = Mathf.Min(endReal, Time.unscaledTime + 0.4f);
                     // Broken by a hit, a stun or losing the shot: a moment. Dodges, holds and failed follow-ups are not.
                     var reason = ((InterruptInfo)evt.Payload).Reason;
-                    if (reason != "damage" && reason != "heavy impact" && reason != "stun" && reason != "condition lost") break;
+                    if (reason != "damage" && reason != "heavy impact" && reason != "stun" && reason != "condition lost" && reason != "stutter" && reason != "charge broken") break;
                     KeyValuePair<string, float> by;
                     string source = lastHitBy.TryGetValue(evt.ActorId, out by) && evt.SimTime - by.Value < 0.01f ? by.Key : null;
                     Moment(Director.FindView(source), Director.FindView(evt.ActorId), MomentSlowMoSeconds);
@@ -164,6 +171,9 @@ namespace TacticsGame.Presentation
                     if (evt.TargetId != null && evt.ActorId != null) lastHitBy[evt.TargetId] = new KeyValuePair<string, float>(evt.ActorId, evt.SimTime);
                     break;
                 case TacticsGame.Core.EventType.Unravel: Shake(0.5f); break;
+                case TacticsGame.Core.EventType.Fall:   // knocked off a ledge or out of a jump: a moment, like an interrupt
+                    Moment(Director.FindView(evt.ActorId), Director.FindView(evt.TargetId), MomentSlowMoSeconds);
+                    break;
                 case TacticsGame.Core.EventType.Death:
                     Shake(0.4f);
                     Moment(Director.FindView(evt.ActorId), Director.FindView(evt.TargetId), DownedSlowMoSeconds);
@@ -173,7 +183,7 @@ namespace TacticsGame.Presentation
 
         private void TryStart(TimelineEvent evt)
         {
-            if (CinematicCam == null) return;
+            if (CinematicCam == null || CurrentMode == Mode.None) return;
             var a = Director.FindView(evt.ActorId);
             var t = Director.FindView(evt.TargetId);
             var info = (ActionStartedInfo)evt.Payload;
@@ -193,6 +203,12 @@ namespace TacticsGame.Presentation
 
             // Same actor chaining its signature move (Final Cut's follow-up): keep the shot and swing to the new target.
             bool chain = active && extra && actor == a;
+            if (isExtra && !chain)
+            {
+                // Signature moves only take focus near the end, ExtraFocusLead before they land (see LateUpdate).
+                pending = new PendingShot { Actor = a, Target = t, Id = info.ActionId, Kills = kills, LandsAt = resolvedAt };
+                return;
+            }
             StartShot(a, t, info.ActionId, kills, isExtra, resolvedAt, info.Windup, !chain);
         }
 
@@ -202,7 +218,7 @@ namespace TacticsGame.Presentation
         /// </summary>
         private void Moment(UnitView source, UnitView subject, float slowSeconds)
         {
-            if (!MomentsEnabled || CurrentMode == Mode.Off || CinematicCam == null || subject == null) return;
+            if (!MomentsEnabled || CurrentMode == Mode.Off || CurrentMode == Mode.None || CinematicCam == null || subject == null) return;
             if (source == subject) source = null;
             bool involved = active && (actor == subject || target == subject || (source != null && (actor == source || target == source)));
             if (active && extra && !involved) return;
@@ -238,6 +254,8 @@ namespace TacticsGame.Presentation
             Vector3 pos, look;
             Frame(out pos, out look);
             CinematicCam.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(look - pos));
+            lookPoint = look;
+            posVelocity = lookVelocity = Vector3.zero;
             CinematicCam.Priority = ActivePriority;
             if (Tactics != null) Tactics.InputEnabled = false;
         }
@@ -319,11 +337,13 @@ namespace TacticsGame.Presentation
         {
             if (Input.GetKeyDown(CycleKey))
             {
-                CurrentMode = (Mode)(((int)CurrentMode + 1) % 3);
-                if (CurrentMode == Mode.Off) End();
+                CurrentMode = (Mode)(((int)CurrentMode + 1) % 4);
+                if (CurrentMode == Mode.Off || CurrentMode == Mode.None) End();
+                if (CurrentMode == Mode.None) pending = null;
             }
 
             if (slowMoUntil > 0f && Time.unscaledTime >= slowMoUntil) EndSlowMo();
+            UpdatePending();
             if (!active) return;
 
             if (extra && impactSimTime >= 0f && Director.PlaybackClock >= impactSimTime - ExtraLeadIn)
@@ -341,10 +361,29 @@ namespace TacticsGame.Presentation
 
             Vector3 pos, look;
             Frame(out pos, out look);
-            float k = 1f - Mathf.Exp(-Damping * Time.unscaledDeltaTime);
+            // Ease toward the framing (SmoothDamp: accelerates and settles instead of snapping) on unscaled time.
+            float dt = Time.unscaledDeltaTime;
             var t = CinematicCam.transform;
-            t.position = Vector3.Lerp(t.position, pos, k);
-            t.rotation = Quaternion.Slerp(t.rotation, Quaternion.LookRotation(look - t.position), k);
+            t.position = Vector3.SmoothDamp(t.position, pos, ref posVelocity, SmoothTime, Mathf.Infinity, dt);
+            lookPoint = Vector3.SmoothDamp(lookPoint, look, ref lookVelocity, SmoothTime * 0.8f, Mathf.Infinity, dt);
+            if ((lookPoint - t.position).sqrMagnitude > 1e-4f) t.rotation = Quaternion.LookRotation(lookPoint - t.position);
+        }
+
+        /// <summary>A signature move whose shot waits until ExtraFocusLead before it lands.</summary>
+        private class PendingShot { public UnitView Actor, Target; public string Id; public bool Kills; public float LandsAt; }
+        private PendingShot pending;
+        private Vector3 lookPoint, posVelocity, lookVelocity;
+
+        private void UpdatePending()
+        {
+            if (pending == null) return;
+            if (Director.ReachedTarget || pending.Actor == null || pending.Target == null) { pending = null; return; }   // the impact cut-in covers it
+            float left = pending.LandsAt - Director.PlaybackClock;
+            if (left > ExtraFocusLead) return;
+            if (active && extra && actor != pending.Actor) { pending = null; return; }   // never cut away from another signature move
+            var p = pending;
+            pending = null;
+            StartShot(p.Actor, p.Target, p.Id, p.Kills, true, p.LandsAt, Mathf.Max(0f, left));
         }
 
         private void End()
@@ -377,16 +416,16 @@ namespace TacticsGame.Presentation
 
         private void Shake(float force)
         {
-            if (Impulse != null) Impulse.GenerateImpulseWithForce(force);
+            if (Impulse != null && CurrentMode != Mode.None) Impulse.GenerateImpulseWithForce(force);
         }
 
         private void OnGUI()
         {
             UiScale.Begin();
-            string label = CurrentMode == Mode.KeyMoments ? "key moments" : CurrentMode == Mode.EveryAttack ? "every attack" : "off, signature moves only";
+            string label = CurrentMode == Mode.KeyMoments ? "key moments" : CurrentMode == Mode.EveryAttack ? "every attack" : CurrentMode == Mode.Off ? "off, signature moves only" : "none, no cinematic effects";
             var style = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerRight, fontSize = 13 };
             style.normal.textColor = new Color(1f, 1f, 1f, 0.7f);
-            GUI.Label(new Rect(UiScale.Width - 360, UiScale.Height - 26, 350, 22), CycleKey + ": cinematic camera (" + label + ")", style);
+            GUI.Label(new Rect(UiScale.Width - 360, UiScale.Height - 26 - PlayerOrdersUI.BottomReserved, 350, 22), CycleKey + ": cinematic camera (" + label + ")", style);
         }
 
         private static Vector3 Flat(Vector3 v) { v.y = 0f; return v; }

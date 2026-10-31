@@ -16,6 +16,8 @@ namespace TacticsGame.Core
         public bool IsFree;     // reaction actions don't change the actor's phase
         public float DamageMultiplier = 1f;
         public string Tag;      // behavior bookkeeping, copied onto the hits it makes (e.g. Final Cut follow-ups)
+        public float Charge;    // 0..1: how fully a charge ability was charged before release
+        public bool Transcended;   // ordered Transcended (and the definition allows it): the behavior's stronger version
     }
 
     // ---- Effects: behaviors return these; the simulation applies them together so
@@ -29,9 +31,15 @@ namespace TacticsGame.Core
         public float DamageMultiplier = 1f;
         public float AccuracyBonus;
         public float BlockPierceBonus;   // added to the definition's BlockPierce (Steady Strikes' follow-up)
+        public float StunMultiplier = 1f;
+        public bool HasPush;        // shove the target to PushTo if this hits (Bash)
+        public Vector3 PushTo;
         public bool IgnoreRange;    // area hits: the target only needs to be in the area, not in the action's range
         public bool IgnoreCover;    // area hits land regardless of the target's exposure
         public string Tag;
+        /// <summary>Runs once the hit has landed (damage, statuses and stun applied) on a target that is still alive:
+        /// for rules that follow a hit (Subjugate's grab, Amblivate's lift).</summary>
+        public System.Action<BattleSimulation, Unit> OnLanded;
     }
 
     public class HealEffect : SimEffect { public string TargetId; public float Amount; }
@@ -65,6 +73,10 @@ namespace TacticsGame.Core
 
         /// <summary>True if it may be used even when its strain cost would pass max strain (strain just stops at max).</summary>
         public virtual bool AllowsStrainOverflow { get { return false; } }
+
+        /// <summary>True for abilities that close the distance themselves (Phantom Strike's dash): ordered at a target out of
+        /// reach, the unit walks only until the target is within the full Range, not BattleSimulation.ChaseStrikeFraction of it.</summary>
+        public virtual bool ClosesDistance { get { return false; } }
 
         /// <summary>Extra validity checks beyond the built-in cooldown/resource/range/LOS ones.</summary>
         public virtual bool CanStart(BattleSimulation sim, Unit actor, UnitCommand cmd, out string reason)
@@ -159,6 +171,17 @@ namespace TacticsGame.Core
             // Universal
             { "block", new BlockBehavior() },
             { "dash", new DashBehavior() },
+            // Tank, Fighter, Paradigm additions
+            { "bash", new BashBehavior() },
+            { "phantom_strike", new PhantomStrikeBehavior() },
+            { "mesmerize", new MesmerizeBehavior() },
+            { "stutter", new StutterBehavior() },
+            { "lance", new LanceBehavior() },
+            { "subjugate", new SubjugateBehavior() },
+            { "fatebreak", new FatebreakBehavior() },
+            { "status_spell", new StatusSpellBehavior() },
+            { "teleport", new TeleportBehavior() },
+            { "levitate", new LevitateBehavior() },
         };
 
         public static void Register(string id, ActionBehavior behavior) { map[id] = behavior; }

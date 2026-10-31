@@ -2,14 +2,13 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.AI;
 using Unity.AI.Navigation;
 using Unity.Cinemachine;
 using TacticsGame.Core;
 using TacticsGame.Presentation;
 
 /// <summary>
-/// Tools > Combat Test > Build Scene: lays out the four-class squad vs four enemies in CombatTest (units, cover, navmesh bake,
+/// Tools > Combat Test > Build Scene: lays out the four-class squad vs four enemies in CombatTest (units, the map from a MapTemplate, navmesh bake,
 /// camera, HUD) and wires it into the existing BattleSetup / BattleController. Safe to re-run: everything it
 /// places lives under one generated root that is rebuilt each time. Assets it creates are only written once,
 /// so tweaks you make to the action/unit definitions survive a rebuild.
@@ -68,13 +67,14 @@ public static class CombatTestSceneBuilder
             u.Actions = new List<ActionDefinition> { strike }; u.ViewPrefab = unitPrefab;
         });
 
-        // The builder owns these two: always give them the default universal (gunners dash, brawlers block).
-        gunner.Universal = SquadAssets.DefaultUniversal(gunner); MarkDirty(gunner);
-        brawler.Universal = SquadAssets.DefaultUniversal(brawler); MarkDirty(brawler);
+        // The builder owns these two: they get the universal Block and Dash like everyone.
+        SquadAssets.EnsureUniversal(gunner);
+        SquadAssets.EnsureUniversal(brawler);
 
         var playerMat = GetOrCreateMaterial("Assets/Materials/Team_Player.mat", new Color(0.25f, 0.5f, 1f));
         var enemyMat = GetOrCreateMaterial("Assets/Materials/Team_Enemy.mat", new Color(1f, 0.3f, 0.25f));
         var coverMat = GetOrCreateMaterial("Assets/Materials/Cover.mat", new Color(0.55f, 0.55f, 0.5f));
+        var elevationMat = GetOrCreateMaterial("Assets/Materials/Elevation.mat", new Color(0.5f, 0.44f, 0.36f));
 
         FixUnitPrefab(unitLayer);
         unitPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(UnitPrefabPath);
@@ -97,36 +97,6 @@ public static class CombatTestSceneBuilder
             ground.layer = environmentLayer;
         }
 
-        var root = new GameObject(GeneratedRootName);
-        var coverRoot = new GameObject("Cover").transform;
-        coverRoot.SetParent(root.transform, false);
-        var unitsRoot = new GameObject("Units").transform;
-        unitsRoot.SetParent(root.transform, false);
-
-        // Low walls give partial cover (eye height clears them), pillars block sight entirely.
-        var lowWall = new Vector3(4f, 1f, 0.5f);
-        var pillar = new Vector3(1.2f, 3f, 1.2f);
-        AddCover(coverRoot, "LowWall_SW", new Vector3(-4f, 0f, -4f), lowWall, coverMat, environmentLayer);
-        AddCover(coverRoot, "LowWall_SE", new Vector3(4f, 0f, -4f), lowWall, coverMat, environmentLayer);
-        AddCover(coverRoot, "LowWall_NW", new Vector3(-4f, 0f, 4f), lowWall, coverMat, environmentLayer);
-        AddCover(coverRoot, "LowWall_NE", new Vector3(4f, 0f, 4f), lowWall, coverMat, environmentLayer);
-        AddCover(coverRoot, "Pillar_W", new Vector3(-8f, 0f, 0f), pillar, coverMat, environmentLayer);
-        AddCover(coverRoot, "Pillar_C", new Vector3(0f, 0f, 0f), pillar, coverMat, environmentLayer);
-        AddCover(coverRoot, "Pillar_E", new Vector3(8f, 0f, 0f), pillar, coverMat, environmentLayer);
-
-        var placements = new List<BattleContext.Placement>
-        {
-            // The squad: backliners behind, front line forward.
-            Place(unitsRoot, unitPrefab, "Player_Sharpshooter", squad.Sharpshooter, Team.Player, new Vector3(-6f, 0f, -11f), playerMat),
-            Place(unitsRoot, unitPrefab, "Player_Paradigm", squad.Paradigm, Team.Player, new Vector3(-1.5f, 0f, -11.5f), playerMat),
-            Place(unitsRoot, unitPrefab, "Player_Tank", squad.Tank, Team.Player, new Vector3(2f, 0f, -8f), playerMat),
-            Place(unitsRoot, unitPrefab, "Player_Fighter", squad.Melee, Team.Player, new Vector3(6f, 0f, -8.5f), playerMat),
-            Place(unitsRoot, unitPrefab, "Enemy_Gunner_A", gunner, Team.Enemy, new Vector3(-5f, 0f, 10f), enemyMat),
-            Place(unitsRoot, unitPrefab, "Enemy_Gunner_B", gunner, Team.Enemy, new Vector3(5f, 0f, 10f), enemyMat),
-            Place(unitsRoot, unitPrefab, "Enemy_Brawler_A", brawler, Team.Enemy, new Vector3(-2f, 0f, 8f), enemyMat),
-            Place(unitsRoot, unitPrefab, "Enemy_Brawler_B", brawler, Team.Enemy, new Vector3(2f, 0f, 8f), enemyMat),
-        };
-
         var context = Object.FindFirstObjectByType<BattleContext>();
         var controller = Object.FindFirstObjectByType<BattleController>();
         var director = Object.FindFirstObjectByType<PlaybackDirector>();
@@ -135,6 +105,37 @@ public static class CombatTestSceneBuilder
             Debug.LogError("CombatTestSceneBuilder: scene needs a BattleContext, BattleController and PlaybackDirector.");
             return;
         }
+
+        var root = new GameObject(GeneratedRootName);
+        var unitsRoot = new GameObject("Units").transform;
+        unitsRoot.SetParent(root.transform, false);
+
+        // ---- The map. Cover and raised ground come from MapTemplate assets (made once, so Map Builder edits survive a
+        // rebuild). The scene keeps whichever map it had; a fresh scene starts on the Arena.
+        var arena = GetOrCreate<MapTemplate>(ArenaMapPath, FillArena);
+        GetOrCreate<MapTemplate>(OpenFieldMapPath, FillOpenField);
+        var loader = controller.GetComponent<MapLoader>();
+        if (loader == null) loader = controller.gameObject.AddComponent<MapLoader>();
+        loader.Ground = ground != null ? ground.transform : null;
+        loader.Surface = Object.FindFirstObjectByType<NavMeshSurface>();
+        loader.CoverMaterial = coverMat;
+        loader.ElevationMaterial = elevationMat;
+        var map = loader.Current != null ? loader.Current : arena;
+        loader.Build(map);
+        EditorUtility.SetDirty(loader);
+
+        var placements = new List<BattleContext.Placement>
+        {
+            // The squad: backliners behind, front line forward (each at the map's spawn for its place in the squad).
+            Place(unitsRoot, unitPrefab, "Player_Sharpshooter", squad.Sharpshooter, Team.Player, Spawn(map, Team.Player, 0, new Vector3(-6f, 0f, -11f)), playerMat),
+            Place(unitsRoot, unitPrefab, "Player_Paradigm", squad.Paradigm, Team.Player, Spawn(map, Team.Player, 1, new Vector3(-1.5f, 0f, -11.5f)), playerMat),
+            Place(unitsRoot, unitPrefab, "Player_Tank", squad.Tank, Team.Player, Spawn(map, Team.Player, 2, new Vector3(2f, 0f, -8f)), playerMat),
+            Place(unitsRoot, unitPrefab, "Player_Fighter", squad.Melee, Team.Player, Spawn(map, Team.Player, 3, new Vector3(6f, 0f, -8.5f)), playerMat),
+            Place(unitsRoot, unitPrefab, "Enemy_Gunner_A", gunner, Team.Enemy, Spawn(map, Team.Enemy, 0, new Vector3(-5f, 0f, 10f)), enemyMat),
+            Place(unitsRoot, unitPrefab, "Enemy_Gunner_B", gunner, Team.Enemy, Spawn(map, Team.Enemy, 1, new Vector3(5f, 0f, 10f)), enemyMat),
+            Place(unitsRoot, unitPrefab, "Enemy_Brawler_A", brawler, Team.Enemy, Spawn(map, Team.Enemy, 2, new Vector3(-2f, 0f, 8f)), enemyMat),
+            Place(unitsRoot, unitPrefab, "Enemy_Brawler_B", brawler, Team.Enemy, Spawn(map, Team.Enemy, 3, new Vector3(2f, 0f, 8f)), enemyMat),
+        };
 
         context.Placements = placements;
         EditorUtility.SetDirty(context);
@@ -152,6 +153,8 @@ public static class CombatTestSceneBuilder
             cam.transform.LookAt(Vector3.zero);
             EditorUtility.SetDirty(cam.transform);
             rig = SetUpCameras(cam, root.transform, director, controller.EnvironmentMask);
+            rig.BoundsMax = map.GroundSize / 2f;   // MapLoader.Build ran before the rig existed
+            rig.BoundsMin = -rig.BoundsMax;
         }
 
         // Battle plays at normal speed and only freezes while the player is giving orders.
@@ -212,6 +215,14 @@ public static class CombatTestSceneBuilder
         setup.DashAction = SquadAssets.UniversalDash();
         setup.FallbackUnitPrefab = unitPrefab;
         setup.EnemyMaterial = enemyMat;
+        setup.Maps = loader;
+        // Every map template in the project is on offer (ones already listed keep their order).
+        setup.MapChoices.RemoveAll(m => m == null);
+        foreach (string guid in AssetDatabase.FindAssets("t:MapTemplate"))
+        {
+            var m = AssetDatabase.LoadAssetAtPath<MapTemplate>(AssetDatabase.GUIDToAssetPath(guid));
+            if (m != null && !setup.MapChoices.Contains(m)) setup.MapChoices.Add(m);
+        }
         EditorUtility.SetDirty(setup);
         controller.StartOnPlay = false;
         EditorUtility.SetDirty(controller);
@@ -222,7 +233,7 @@ public static class CombatTestSceneBuilder
         EditorSceneManager.SaveScene(scene);
         AddToBuildSettings(ScenePath);   // New Battle reloads the scene by name
         AssetDatabase.SaveAssets();
-        Debug.Log("CombatTestSceneBuilder: CombatTest built (squad vs 4, cover, navmesh). Press Play; R replays after the battle ends.");
+        Debug.Log("CombatTestSceneBuilder: CombatTest built (squad vs 4 on the scene map, navmesh). Tools > Combat Test > Map Builder edits maps. Press Play; R replays after the battle ends.");
     }
 
     /// <summary>
@@ -293,21 +304,87 @@ public static class CombatTestSceneBuilder
         return new BattleContext.Placement { View = go.GetComponent<UnitView>(), Definition = def, Team = team };
     }
 
-    private static void AddCover(Transform parent, string name, Vector3 basePosition, Vector3 size, Material mat, int layer)
-    {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        go.name = name;
-        go.layer = layer;
-        go.transform.SetParent(parent, false);
-        go.transform.position = basePosition + Vector3.up * (size.y / 2f);
-        go.transform.localScale = size;
-        go.GetComponent<Renderer>().sharedMaterial = mat;
-        GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
+    // ------------------------------------------------------------------ starter maps
 
-        // The surface only collects objects marked with a modifier: mark cover so it cuts holes in the navmesh.
-        var modifier = go.AddComponent<NavMeshModifier>();
-        modifier.overrideArea = true;
-        modifier.area = NavMesh.GetAreaFromName("Not Walkable");
+    internal const string ArenaMapPath = "Assets/Maps/Arena.asset";
+    internal const string OpenFieldMapPath = "Assets/Maps/OpenField.asset";
+
+    private static Vector3 Spawn(MapTemplate map, Team team, int index, Vector3 fallback)
+    {
+        var spawns = map != null ? map.Spawns(team) : null;
+        return spawns != null && index < spawns.Count ? spawns[index] : fallback;
+    }
+
+    /// <summary>Cover standing on the ground at (x, z).</summary>
+    private static MapPiece Cover(string name, float x, float z, Vector3 size, float yaw = 0f)
+    {
+        return new MapPiece { Name = name, Kind = MapPieceKind.Cover, Position = new Vector3(x, 0f, z), Size = size, Yaw = yaw };
+    }
+
+    /// <summary>Raised ground from (minX, minZ) to (maxX, maxZ), 'height' tall, sitting on 'baseHeight' (stack a second
+    /// tier on a first rather than overlapping them, so the side faces don't z-fight).</summary>
+    private static MapPiece Raised(string name, float minX, float minZ, float maxX, float maxZ, float baseHeight, float height)
+    {
+        return new MapPiece
+        {
+            Name = name, Kind = MapPieceKind.Elevation,
+            Position = new Vector3((minX + maxX) / 2f, baseHeight, (minZ + maxZ) / 2f), Size = new Vector3(maxX - minX, height, maxZ - minZ),
+        };
+    }
+
+    /// <summary>The original CombatTest layout. Low walls give partial cover (eye height clears them), pillars block sight
+    /// entirely. Raised ground is point-symmetric so neither side starts ahead: a two-tier ridge down each flank, a sniper
+    /// perch behind each team (the Sharpshooter starts on the south one) and crate stacks on the corners.</summary>
+    private static void FillArena(MapTemplate m)
+    {
+        m.DisplayName = "Arena";
+        m.Description = "Low walls and pillars in the middle, ridges down both flanks, a sniper perch behind each side.";
+        m.GroundSize = new Vector2(40f, 50f);
+        var lowWall = new Vector3(4f, 1f, 0.5f);
+        var pillar = new Vector3(1.2f, 3f, 1.2f);
+        const float tier = 1.2f, crates = 0.9f;
+        m.Pieces = new List<MapPiece>
+        {
+            Cover("LowWall_SW", -4f, -4f, lowWall), Cover("LowWall_SE", 4f, -4f, lowWall),
+            Cover("LowWall_NW", -4f, 4f, lowWall), Cover("LowWall_NE", 4f, 4f, lowWall),
+            Cover("Pillar_W", -8f, 0f, pillar), Cover("Pillar_C", 0f, 0f, pillar), Cover("Pillar_E", 8f, 0f, pillar),
+            Raised("Ridge_W", -16f, -5f, -10f, 5f, 0f, tier), Raised("Ridge_W_Top", -16f, -2f, -13f, 2f, tier, tier),
+            Raised("Ridge_E", 10f, -5f, 16f, 5f, 0f, tier), Raised("Ridge_E_Top", 13f, -2f, 16f, 2f, tier, tier),
+            Raised("Perch_S", -8.5f, -13.5f, -3.5f, -10f, 0f, tier), Raised("Perch_N", 3.5f, 10f, 8.5f, 13.5f, 0f, tier),
+            Raised("Crates_SE", 9f, -12f, 11f, -10f, 0f, crates), Raised("Crates_NW", -11f, 10f, -9f, 12f, 0f, crates),
+        };
+        m.PlayerSpawns = new List<Vector3> { new Vector3(-6f, tier, -11f), new Vector3(-1.5f, 0f, -11.5f), new Vector3(2f, 0f, -8f), new Vector3(6f, 0f, -8.5f) };
+        m.EnemySpawns = new List<Vector3>
+        {
+            new Vector3(-5f, 0f, 10f), new Vector3(5f, tier, 10.5f), new Vector3(-2f, 0f, 8f), new Vector3(2f, 0f, 8f),
+            new Vector3(-8f, 0f, 8.5f), new Vector3(9f, 0f, 7f), new Vector3(-3f, 0f, 12f), new Vector3(1f, 0f, 12f),
+        };
+    }
+
+    /// <summary>A small, mostly open field: a few pillars, two low walls and two crate stacks.</summary>
+    private static void FillOpenField(MapTemplate m)
+    {
+        m.DisplayName = "Open Field";
+        m.Description = "Little cover and almost no high ground: a straight fight.";
+        m.GroundSize = new Vector2(40f, 40f);
+        var lowWall = new Vector3(4f, 1f, 0.5f);
+        var pillar = new Vector3(1.2f, 3f, 1.2f);
+        var crates = new Vector3(2f, 0.9f, 2f);
+        m.Pieces = new List<MapPiece>
+        {
+            Cover("Pillar_W", -7f, 0f, pillar), Cover("Pillar_E", 7f, 0f, pillar),
+            Cover("LowWall_S", 0f, -6f, lowWall), Cover("LowWall_N", 0f, 6f, lowWall),
+            new MapPiece { Name = "Crates_W", Kind = MapPieceKind.Elevation, Position = new Vector3(-3f, 0f, 3f), Size = crates },
+            new MapPiece { Name = "Crates_E", Kind = MapPieceKind.Elevation, Position = new Vector3(3f, 0f, -3f), Size = crates },
+        };
+        m.PlayerSpawns = new List<Vector3>();
+        m.EnemySpawns = new List<Vector3>();
+        for (int i = 0; i < 4; i++)
+        {
+            m.PlayerSpawns.Add(new Vector3(-4.5f + 3f * i, 0f, -12f));
+            m.EnemySpawns.Add(new Vector3(-4.5f + 3f * i, 0f, 12f));
+        }
+        for (int i = 0; i < 4; i++) m.EnemySpawns.Add(new Vector3(-4.5f + 3f * i, 0f, 15f));
     }
 
     /// <summary>Puts the capsule on the unit's feet (the root is the sim position) and onto the Units layer,
@@ -338,7 +415,7 @@ public static class CombatTestSceneBuilder
         finally { PrefabUtility.UnloadPrefabContents(root); }
     }
 
-    private static void BakeNavMesh()
+    internal static void BakeNavMesh()
     {
         var surface = Object.FindFirstObjectByType<NavMeshSurface>();
         if (surface == null) { Debug.LogWarning("CombatTestSceneBuilder: no NavMeshSurface in the scene; skipping bake."); return; }

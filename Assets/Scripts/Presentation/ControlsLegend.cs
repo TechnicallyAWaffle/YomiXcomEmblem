@@ -18,16 +18,18 @@ namespace TacticsGame.Presentation
             { "Right-drag", "Rotate / tilt" },
             { "Q / E", "Rotate" },
             { "Scroll", "Zoom" },
-            { "F", "Center on the unit giving orders" },
+            { "Z", "Center on the unit giving orders" },
             { "Hover timeline", "Center on that unit" },
-            { "C", "Cinematic camera: key moments / all / off" },
+            { "C", "Cinematic camera: key moments / all / off / none" },
         };
 
         private static readonly string[,] OrderKeys =
         {
-            { "1 - 0", "Use ability (again: repeat a follow-up)" },
-            { "M", "Move" },
-            { "Hold Space", "Wait, with time running slowly" },
+            { "1 - 0, -, =", "Use ability (again: repeat a follow-up)" },
+            { "F", "Move" },
+            { "Hold Space", "Wait or keep charging (time slows)" },
+            { "1 / 2", "Mesmerize counter: strike / stop" },
+            { "1 / 2 / F", "Holding someone: headbutt / throw / move" },
             { "Left-click", "Pick target / point / dash spot" },
             { "Shift + order", "Queue several orders" },
             { "Enter", "Confirm the queued plan" },

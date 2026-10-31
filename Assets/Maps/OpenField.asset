@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e28427a253197334b818cdd26df77c81, type: 3}
+  m_Name: OpenField
+  m_EditorClassIdentifier: Apotheom.Presentation::TacticsGame.Presentation.MapTemplate
+  DisplayName: Open Field
+  Description: 'Little cover and almost no high ground: a straight fight.'
+  GroundSize: {x: 40, y: 40}
+  Pieces:
+  - Name: Pillar_W
+    Kind: 0
+    Position: {x: -7, y: 0, z: 0}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_E
+    Kind: 0
+    Position: {x: 7, y: 0, z: 0}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: LowWall_S
+    Kind: 0
+    Position: {x: 0, y: 0, z: -6}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: LowWall_N
+    Kind: 0
+    Position: {x: 0, y: 0, z: 6}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: Crates_W
+    Kind: 1
+    Position: {x: -3, y: 0, z: 3}
+    Size: {x: 2, y: 0.9, z: 2}
+    Yaw: 0
+  - Name: Crates_E
+    Kind: 1
+    Position: {x: 3, y: 0, z: -3}
+    Size: {x: 2, y: 0.9, z: 2}
+    Yaw: 0
+  PlayerSpawns:
+  - {x: -4.5, y: 0, z: -12}
+  - {x: -1.5, y: 0, z: -12}
+  - {x: 1.5, y: 0, z: -12}
+  - {x: 4.5, y: 0, z: -12}
+  EnemySpawns:
+  - {x: -4.5, y: 0, z: 12}
+  - {x: -1.5, y: 0, z: 12}
+  - {x: 1.5, y: 0, z: 12}
+  - {x: 4.5, y: 0, z: 12}
+  - {x: -4.5, y: 0, z: 15}
+  - {x: -1.5, y: 0, z: 15}
+  - {x: 1.5, y: 0, z: 15}
+  - {x: 4.5, y: 0, z: 15}

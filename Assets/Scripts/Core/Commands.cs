@@ -3,7 +3,9 @@ using UnityEngine;
 
 namespace TacticsGame.Core
 {
-    public enum CommandType { Action, Move, Wait }
+    // HoldGrapple / ReleaseGrapple: a unit holding someone with Subjugate keeps headbutting (until just after the next one)
+    // or throws now. Moving is the only other order it takes.
+    public enum CommandType { Action, Move, Wait, ContinueCharge, ReleaseCharge, HoldGrapple, ReleaseGrapple }
 
     /// <summary>One order for one unit. Build with the static helpers.</summary>
     public class UnitCommand
@@ -15,6 +17,10 @@ namespace TacticsGame.Core
         public Vector3 TargetPos;
         public float WaitSeconds = 0.5f;
         public bool WaitForRange;   // out of range when ordered: melee chases the target, ranged queues until it is in range
+        public bool Transcend;      // use the ability's Transcended version (ActionDefinition.CanTranscend), for its extra strain
+
+        /// <summary>This order, Transcended (ignored for actions that can't be).</summary>
+        public UnitCommand Transcended(bool transcend = true) { Transcend = transcend; return this; }
 
         public static UnitCommand UseAction(string unitId, ActionDefinition action, string targetUnitId = null)
         {
@@ -30,6 +36,24 @@ namespace TacticsGame.Core
         {
             return new UnitCommand { UnitId = unitId, Type = CommandType.Action, Action = action, TargetPos = pos };
         }
+        /// <summary>A unit and a point (ActionDefinition.DestinationRange: Wrinkles of Reality sends 'targetUnitId' to 'destination').
+        /// Out of range, it is queued like any ranged order.</summary>
+        public static UnitCommand UseActionOn(string unitId, ActionDefinition action, string targetUnitId, Vector3 destination)
+        {
+            return new UnitCommand { UnitId = unitId, Type = CommandType.Action, Action = action, TargetUnitId = targetUnitId, TargetPos = destination, WaitForRange = true };
+        }
+        public static UnitCommand HoldGrapple(string unitId) { return new UnitCommand { UnitId = unitId, Type = CommandType.HoldGrapple }; }
+        public static UnitCommand ReleaseGrapple(string unitId) { return new UnitCommand { UnitId = unitId, Type = CommandType.ReleaseGrapple }; }
+        /// <summary>A charging unit keeps charging for 'seconds', then is asked again.</summary>
+        public static UnitCommand ContinueCharge(string unitId, float seconds)
+        {
+            return new UnitCommand { UnitId = unitId, Type = CommandType.ContinueCharge, WaitSeconds = seconds };
+        }
+        /// <summary>Release a charging ability at a unit or a point (targeting happens now, not when the charge began).</summary>
+        public static UnitCommand ReleaseCharge(string unitId, string targetUnitId, Vector3 pos)
+        {
+            return new UnitCommand { UnitId = unitId, Type = CommandType.ReleaseCharge, TargetUnitId = targetUnitId, TargetPos = pos };
+        }
         public static UnitCommand MoveTo(string unitId, Vector3 pos)
         {
             return new UnitCommand { UnitId = unitId, Type = CommandType.Move, TargetPos = pos };
@@ -40,7 +64,7 @@ namespace TacticsGame.Core
         }
     }
 
-    public enum DecisionKind { Action, DodgeDash }
+    public enum DecisionKind { Action, DodgeDash, Charge }   // Charge: a charging unit must keep charging or release
 
     /// <summary>The sim is paused because a player unit needs input.</summary>
     public class DecisionRequest

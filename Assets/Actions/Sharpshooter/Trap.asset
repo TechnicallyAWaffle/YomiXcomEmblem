@@ -18,15 +18,18 @@ MonoBehaviour:
   Description: Toss out a trap that arms after a short delay. The first enemy to
     step in is immobilized and marked.
   Targeting: 4
-  Range: 10
+  Range: 12
   IsRanged: 0
-  Windup: 0.5
+  CannotTargetSelf: 0
+  DestinationRange: 0
+  Windup: 0.4
   Recovery: 0.4
   Cooldown: 12
   EnergyCost: 0
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  ConsumeOnResolve: 0
   Impact: 0
   Damage: 0
   BaseAccuracy: 0.9
@@ -36,7 +39,7 @@ MonoBehaviour:
   PiercesTerrain: 0
   BlockPierce: 0
   Shape: 1
-  AreaRadius: 1.2
+  AreaRadius: 1.5
   LineWidth: 1
   Heal: 0
   Displace: 0
@@ -57,6 +60,10 @@ MonoBehaviour:
     BreaksOnDamage: 0
     StunImmune: 0
     KeepsBlock: 0
+    DamageDealtMult: 1
+    StrainCostMult: 1
+    ForbidsActions: []
+    AppliesTo: 0
   - Id: marked
     Duration: 8
     DodgeBonus: 0
@@ -70,11 +77,24 @@ MonoBehaviour:
     BreaksOnDamage: 0
     StunImmune: 0
     KeepsBlock: 0
+    DamageDealtMult: 1
+    StrainCostMult: 1
+    ForbidsActions: []
+    AppliesTo: 0
+  TargetStatusesDuringWindup: []
   TrapArmDelay: 1.5
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
   IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
   ExtraCinematic: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 6
+  DataVersion: 9

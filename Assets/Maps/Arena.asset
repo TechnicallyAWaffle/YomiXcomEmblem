@@ -1,0 +1,133 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e28427a253197334b818cdd26df77c81, type: 3}
+  m_Name: Arena
+  m_EditorClassIdentifier: Apotheom.Presentation::TacticsGame.Presentation.MapTemplate
+  DisplayName: Arena
+  Description: Low walls and pillars in the middle, ridges down both flanks, a sniper
+    perch behind each side.
+  GroundSize: {x: 40, y: 50}
+  Pieces:
+  - Name: LowWall_SW
+    Kind: 0
+    Position: {x: -4, y: 0, z: -6.5}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: LowWall_SE
+    Kind: 0
+    Position: {x: 4, y: 0.25, z: -10.5}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: LowWall_NW
+    Kind: 0
+    Position: {x: -2.5, y: -0.15, z: 4.5}
+    Size: {x: 5.9196, y: 1.3596, z: 0.5}
+    Yaw: 0
+  - Name: LowWall_NE
+    Kind: 0
+    Position: {x: 4, y: 0, z: 5.5}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: Pillar_W
+    Kind: 0
+    Position: {x: -7, y: 0, z: 6.5}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_C
+    Kind: 0
+    Position: {x: 0.5, y: -0.25, z: 1}
+    Size: {x: 1.2, y: 4.4622717, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_E
+    Kind: 0
+    Position: {x: 8, y: 0, z: -0.5}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Ridge_W
+    Kind: 1
+    Position: {x: -17, y: 0, z: 0}
+    Size: {x: 6, y: 1.2, z: 10}
+    Yaw: 0
+  - Name: Ridge_W_Top
+    Kind: 1
+    Position: {x: -18.5, y: 1.2, z: 0}
+    Size: {x: 3, y: 1.2, z: 4}
+    Yaw: 0
+  - Name: Ridge_E
+    Kind: 1
+    Position: {x: 15.5, y: 0, z: 0}
+    Size: {x: 8.174999, y: 1.2, z: 16.282001}
+    Yaw: 0
+  - Name: Ridge_E_Top
+    Kind: 1
+    Position: {x: 17.5, y: 1.2, z: 0}
+    Size: {x: 4.4271, y: 1.2, z: 8.2352}
+    Yaw: 0
+  - Name: Perch_S
+    Kind: 1
+    Position: {x: -6, y: 0, z: -11.5}
+    Size: {x: 5, y: 1.2, z: 3.5}
+    Yaw: 0
+  - Name: Perch_N
+    Kind: 1
+    Position: {x: 6, y: -0.3, z: 15.5}
+    Size: {x: 5, y: 6.661154, z: 3.5}
+    Yaw: 0
+  - Name: Crates_SE
+    Kind: 1
+    Position: {x: 10, y: -0, z: -11}
+    Size: {x: 2, y: 0.9, z: 2}
+    Yaw: 0
+  - Name: Crates_NW
+    Kind: 1
+    Position: {x: -10, y: -0.1, z: 11}
+    Size: {x: 2, y: 2.1195898, z: 2}
+    Yaw: 0
+  - Name: Tower (2.4m)
+    Kind: 1
+    Position: {x: -13, y: -0.4, z: -9}
+    Size: {x: 6.5442, y: 6.426323, z: 0.99735}
+    Yaw: 0
+  - Name: Tower (2.4m)
+    Kind: 1
+    Position: {x: -10, y: 0.1, z: -3}
+    Size: {x: 0.87801003, y: 5.908477, z: 13.419542}
+    Yaw: 0
+  - Name: Ridge (1.2m)
+    Kind: 1
+    Position: {x: 4.5, y: -0.4, z: -4}
+    Size: {x: 13.762967, y: 3.6145782, z: 1.2934915}
+    Yaw: 0
+  - Name: Ledge (1.2m)
+    Kind: 1
+    Position: {x: -5, y: -0.1, z: -0.5}
+    Size: {x: 1.7837934, y: 2.05464, z: 2.156914}
+    Yaw: 0
+  - Name: Tall Wall
+    Kind: 0
+    Position: {x: 8.5, y: 0, z: 4}
+    Size: {x: 6.000001, y: 3, z: 0.50000006}
+    Yaw: 316.3
+  PlayerSpawns:
+  - {x: -6, y: 1.2, z: -11}
+  - {x: -1.5, y: 0, z: -11.5}
+  - {x: 2, y: 0, z: -8}
+  - {x: 6, y: 0, z: -8.5}
+  EnemySpawns:
+  - {x: -5, y: 0, z: 10}
+  - {x: 5, y: 0, z: 10.5}
+  - {x: -2, y: 0, z: 8}
+  - {x: 2, y: 0, z: 8}
+  - {x: -8, y: 0, z: 8.5}
+  - {x: 9, y: 0, z: 7}
+  - {x: -3, y: 0, z: 12}
+  - {x: 1, y: 0, z: 12}

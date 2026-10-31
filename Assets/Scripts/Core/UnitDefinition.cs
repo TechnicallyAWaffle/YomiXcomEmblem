@@ -25,18 +25,11 @@ namespace TacticsGame.Core
         public float BodyRadius = 0.4f;    // units block line of sight; bigger units block more
         [Tooltip("Always-available fallback attack (no cooldown or cost). Added after Actions.")]
         public ActionDefinition BasicAttack;
-        [Tooltip("The unit's universal option: Block or Dash (shared assets), never both. Added after BasicAttack.")]
+        [Tooltip("The universal Block (shared asset). Added after BasicAttack.")]
         [UnityEngine.Serialization.FormerlySerializedAs("Block")]
         public ActionDefinition Universal;
-        /// <summary>Default pick for the universal option: ranged units dash, melee units block.</summary>
-        public bool PrefersDash
-        {
-            get
-            {
-                var main = BasicAttack != null ? BasicAttack : (Actions.Count > 0 ? Actions[0] : null);
-                return main != null && main.IsRanged;
-            }
-        }
+        [Tooltip("The universal Dash (shared asset; key G). Every unit has it alongside Block.")]
+        public ActionDefinition Dash;
         public List<ActionDefinition> Actions = new List<ActionDefinition>();
         [Tooltip("Passive ids, see Core.Passives (e.g. strain_relief_on_dodge).")]
         public List<string> Passives = new List<string>();

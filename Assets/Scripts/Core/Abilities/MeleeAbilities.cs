@@ -6,6 +6,8 @@ namespace TacticsGame.Core
     // Melee Fighter abilities that need rules beyond data. The Fighter runs on strain, not energy. The rest are plain data:
     //   Evasive Strike - basic_attack with an "evasive" dodge status applied on windup.
     //   Battle Trance  - self_buff: relieves strain (negative StrainOnSelf) and grants the "trance" status Final Cut requires.
+    //   Wrath          - self_buff: the "wrath" status (StrainCostMult 0, DamageDealtMult, ForbidsActions block + battle_trance);
+    //                    the trance forbids wrath in turn.
     //   Strain relief on dodge - passive, see Passives.
 
     /// <summary>
@@ -45,35 +47,19 @@ namespace TacticsGame.Core
     }
 
     /// <summary>
-    /// Steady Strikes: a deliberate melee strike and a follow-up ability. Striking opens a short window ("steady_chain",
-    /// aimed at that target); striking the SAME target again inside it is the empowered follow-up: it costs
-    /// FollowupStrain, gains FollowupAccuracyBonus and pierces FollowupBlockPierce of block. The window closes after one
-    /// follow-up, so the next strike is a plain one again.
+    /// Steady Strikes: a deliberate melee strike. Transcended (hold its button; ActionDefinition.TranscendStrain extra
+    /// strain) it is the empowered blow: TranscendAccuracyBonus more hit chance (80% -> 100%) and it pierces
+    /// TranscendBlockPierce of block.
     /// </summary>
     public class SteadyStrikesBehavior : BasicAttackBehavior
     {
         public const string EmpoweredTag = "steady_empowered";
-        public const float FollowupStrain = 20f;
-        public const float FollowupAccuracyBonus = 0.2f;   // 80% -> 100%
-        public const float FollowupBlockPierce = 0.25f;
-        public const float FollowupWindow = 1.0f;          // seconds after recovery ends
-
-        private static bool IsFollowup(Unit actor, string targetId)
-        {
-            var chain = actor.GetStatus(StatusIds.SteadyChain);
-            return chain != null && targetId != null && chain.TargetId == targetId;
-        }
-
-        public override float StrainCost(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId)
-        {
-            return IsFollowup(actor, targetId) ? FollowupStrain : def.StrainOnSelf;
-        }
+        public const float TranscendAccuracyBonus = 0.2f;
+        public const float TranscendBlockPierce = 0.25f;
 
         public override void OnWindupStart(BattleSimulation sim, ActionInstance a)
         {
-            if (a.IsFree || !IsFollowup(a.Actor, a.TargetUnitId)) return;
-            a.Tag = EmpoweredTag;
-            sim.RemoveStatus(a.Actor, StatusIds.SteadyChain);
+            if (a.Transcended) a.Tag = EmpoweredTag;
         }
 
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
@@ -84,12 +70,9 @@ namespace TacticsGame.Core
             effects.Add(new AttackEffect
             {
                 Source = a.Actor, TargetId = target.Id, Definition = a.Definition, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag,
-                AccuracyBonus = empowered ? FollowupAccuracyBonus : 0f,
-                BlockPierceBonus = empowered ? FollowupBlockPierce : 0f,
+                AccuracyBonus = empowered ? TranscendAccuracyBonus : 0f,
+                BlockPierceBonus = empowered ? TranscendBlockPierce : 0f,
             });
-            if (empowered || a.IsFree) return;
-            float windowEnds = sim.Now + a.Definition.Recovery / a.Actor.EffectiveActionSpeed() + FollowupWindow;
-            sim.ApplyStatus(a.Actor, new StatusEffect { Id = StatusIds.SteadyChain, SourceId = a.Actor.Id, TargetId = target.Id, ExpiresAt = windowEnds }, a.Actor);
         }
     }
 
@@ -126,6 +109,75 @@ namespace TacticsGame.Core
                 Source = a.Actor, TargetId = target.Id, Definition = a.Definition,
                 DamageMultiplier = a.DamageMultiplier * (1f + missing),
                 Tag = a.Tag ?? PrimaryTag,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Phantom Strike: dash to the target (Range is the reach of the dash) and slash it, marking it (TargetStatusesOnHit).
+    /// The dash phases through walls and cover: it lands beside the target on the target's side of anything in between
+    /// (clamped outward from the target, so it never ends up inside a wall).
+    /// </summary>
+    public class PhantomStrikeBehavior : ActionBehavior
+    {
+        public const float StrikeReach = 2f;
+
+        public override bool ClosesDistance { get { return true; } }   // a chase goes the moment the dash can reach
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var target = sim.GetUnit(a.TargetUnitId);
+            if (target == null || !target.IsAlive) return;
+            var actor = a.Actor;
+            Vector3 from = target.Position - actor.Position; from.y = 0f;
+            from = from.sqrMagnitude > 1e-6f ? from.normalized : Vector3.forward;
+            Vector3 beside = target.Position - from * (actor.BodyRadius + target.BodyRadius + 0.3f);
+            Vector3 landed = sim.Paths.ClampDash(target.Position, beside);   // from the target out: walls between don't matter
+            sim.SlideUnitTo(actor, landed, BattleSimulation.DashDuration, target.Position);
+            if (Vector3.Distance(landed, target.Position) > StrikeReach) return;
+            effects.Add(new AttackEffect { Source = actor, TargetId = target.Id, Definition = a.Definition, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag, IgnoreRange = true });
+        }
+    }
+
+    /// <summary>
+    /// Fatebreak: Trance or Wrath only (RequiredStatus "trance|wrath", consumed when it lands). While it winds up the target
+    /// is heavily slowed (TargetStatusesDuringWindup, "fated"); then a massive blow that knocks the target DisplaceDistance
+    /// straight back (off ledges too, like Bash, but no wall bonus). Wrath's extra damage counts: it is taken as the blow lands.
+    /// </summary>
+    public class FatebreakBehavior : ActionBehavior
+    {
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var target = sim.GetUnit(a.TargetUnitId);
+            if (target == null || !target.IsAlive) return;
+            Vector3 dir = target.Position - a.Actor.Position; dir.y = 0f;
+            dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
+            Vector3 landed = sim.Paths.ClampDash(target.Position, target.Position + dir * a.Definition.DisplaceDistance);
+            effects.Add(new AttackEffect
+            {
+                Source = a.Actor, TargetId = target.Id, Definition = a.Definition, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag,
+                HasPush = a.Definition.DisplaceDistance > 0f, PushTo = landed,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Mesmerize: the "mesmerized" status (a big dodge bonus, SelfStatuses). The first attack dodged while it lasts ends it
+    /// and blinks the Fighter to the attacker for CounterStrikes rapid strikes (the LinkedAction), see
+    /// BattleSimulation.StartMesmerCounter. That replaces the usual dodge dash.
+    /// </summary>
+    public class MesmerizeBehavior : SelfBuffBehavior
+    {
+        public const int CounterStrikes = 4;
+
+        public override void Attach(BattleSimulation sim)
+        {
+            sim.Triggers.Subscribe(TriggerType.Dodged, ctx =>
+            {
+                var stance = ctx.Subject.GetStatus(StatusIds.Mesmerized);
+                if (stance == null || stance.LinkedAction == null || ctx.Other == null || !ctx.Other.IsAlive) return;
+                sim.RemoveStatus(ctx.Subject, StatusIds.Mesmerized);
+                sim.StartMesmerCounter(ctx.Subject, ctx.Other, stance.LinkedAction, CounterStrikes);
             });
         }
     }

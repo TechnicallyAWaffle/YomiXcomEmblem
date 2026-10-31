@@ -13,25 +13,28 @@ MonoBehaviour:
   m_Name: ShieldSlam
   m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
   Id: shield_slam
-  DisplayName: Shield Slam
+  DisplayName: Break Presence
   BehaviorId: basic_attack
-  Description: 'Heavy shield blow: a long stun that interrupts windups and builds
-    strain.'
+  Description: A slow, heavy blow that interrupts windups and cripples the target,
+    increasing their Strain and Stunning them for a long duration.
   Targeting: 2
   Range: 1.9
   IsRanged: 0
-  Windup: 0.7
+  CannotTargetSelf: 0
+  DestinationRange: 0
+  Windup: 0.75
   Recovery: 0.6
   Cooldown: 6
   EnergyCost: 0
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  ConsumeOnResolve: 0
   Impact: 1
   Damage: 18
   BaseAccuracy: 0.9
   StunDuration: 1.5
-  StrainOnTarget: 20
+  StrainOnTarget: 25
   StrainOnSelf: 0
   PiercesTerrain: 0
   BlockPierce: 0
@@ -44,11 +47,20 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  TargetStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
   IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
   ExtraCinematic: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 6
+  DataVersion: 9

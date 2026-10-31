@@ -20,7 +20,11 @@ namespace TacticsGame.Core
         public bool BreaksOnDamage;         // removed the moment the unit takes damage
         public bool StunImmune;             // stuns (and Unravel) don't land (Block)
         public bool KeepsBlock;             // its BlockBonus isn't worn down by hits (Brace)
-        public string TargetId;             // whom a follow-up chain is aimed at (Rapid Slices, Steady Strikes)
+        public bool NegatesDamage;          // hits that land deal no damage and no strain (Transcended Block)
+        public float DamageDealtMult = 1f;  // scales the damage of this unit's attacks (Wrath)
+        public float StrainCostMult = 1f;   // scales what this unit's abilities cost in strain (Wrath: 0)
+        public List<string> ForbidsActions; // action ids this unit can't use while it has the status (Wrath: Block, Battle Trance)
+        public string TargetId;            // whom a follow-up chain is aimed at (Rapid Slices, Steady Strikes)
         public int Stacks;                  // free counter for behaviors (Rapid Slices follow-ups used)
         public ActionDefinition LinkedAction; // the action a stance/reaction fires (Take Aim's Snipe, Retaliate's shot)
 
@@ -44,6 +48,14 @@ namespace TacticsGame.Core
         public bool BreaksOnDamage;
         public bool StunImmune;
         public bool KeepsBlock;
+        [UnityEngine.Tooltip("Scales the damage of the unit's attacks (Wrath).")]
+        public float DamageDealtMult = 1f;
+        [UnityEngine.Tooltip("Scales what the unit's abilities cost in strain (Wrath: 0 = free).")]
+        public float StrainCostMult = 1f;
+        [UnityEngine.Tooltip("Action ids the unit can't use while it has this status (Wrath: block, battle_trance).")]
+        public List<string> ForbidsActions = new List<string>();
+        [UnityEngine.Tooltip("In a list of statuses an ability puts on its target: whom this one lands on.")]
+        public StatusTarget AppliesTo = StatusTarget.Any;
 
         public StatusEffect Create(float now, string sourceId, ActionDefinition linkedAction = null)
         {
@@ -53,8 +65,28 @@ namespace TacticsGame.Core
                 DodgeBonus = DodgeBonus, BlockBonus = BlockBonus, IncomingAccuracyBonus = IncomingAccuracyBonus,
                 DodgeDistanceBonus = DodgeDistanceBonus, ActionSpeedMult = ActionSpeedMult, MoveSpeedMult = MoveSpeedMult,
                 Rooted = Rooted, Untargetable = Untargetable, BreaksOnDamage = BreaksOnDamage, StunImmune = StunImmune, KeepsBlock = KeepsBlock, LinkedAction = linkedAction,
+                DamageDealtMult = DamageDealtMult, StrainCostMult = StrainCostMult,
+                ForbidsActions = ForbidsActions != null && ForbidsActions.Count > 0 ? new List<string>(ForbidsActions) : null,
             };
         }
+
+        /// <summary>Does this status land on 'target' when 'source' puts it there (AppliesTo)?</summary>
+        public bool AppliesToUnit(Unit source, Unit target)
+        {
+            if (AppliesTo == StatusTarget.Any || source == null) return true;
+            return (target.Team == source.Team) == (AppliesTo == StatusTarget.Allies);
+        }
+    }
+
+    /// <summary>Subjugate in progress, kept on the grappler (see BattleSimulation.TickGrapples).</summary>
+    public class GrappleState
+    {
+        public string TargetId;
+        public ActionDefinition Definition;   // Subjugate: its LinkedAction is the headbutt
+        public float NextHeadbuttAt;
+        public float EndsAt;                  // the grab's stun runs out: the throw starts
+        public Vector3 Facing;                // the held unit is carried this way from the grappler
+        public bool Throwing;                 // the throw is winding up
     }
 
     public class ActiveMove
@@ -109,10 +141,32 @@ namespace TacticsGame.Core
         public float ChaseUntil, ChaseRepathAt;
         public UnitCommand Queued;
         public float QueuedUntil;
-        public bool Waiting;                  // in the recovery of a Wait order (a queued ranged ability may fire through it)
+        public bool Waiting;                  // in the recovery of a Wait (Focus) order (a queued ranged ability may fire through it)
+        public float FocusSince = -1f;        // sim time an unbroken run of Focus orders began (-1 = not focusing); see BattleSimulation.TickFocus
+        public bool FocusTranscended;         // the Focus under way was Transcended: it runs until the unit is Focused
         // Dash / shove / pull in progress: the unit slides From -> To over [GlideStart, GlideEnd) and can't start anything.
         public Vector3 GlideFrom, GlideTo;
         public float GlideStart, GlideEnd = -1f;
+        // Falling (shoved off a ledge, or knocked out of a jump): the glide above ends in a landing at FallLandAt that
+        // deals FallDamage, credited to FallSourceId. -1 = not falling.
+        public float FallLandAt = -1f;
+        public float FallDamage;
+        public string FallSourceId;
+        // Jump in progress while walking across a height change: From -> To over [JumpStart, JumpEnd). -1 = not jumping.
+        public Vector3 JumpFrom, JumpTo;
+        public float JumpStart, JumpEnd = -1f;
+        // Lifted (Amblivate): raised From -> To over [LiftStart, LiftRiseEnd), held there, dropped at LiftDropAt (a fall). -1 = not lifted.
+        public Vector3 LiftFrom, LiftTo;
+        public float LiftStart, LiftRiseEnd, LiftDropAt = -1f;
+        public string LiftSourceId;
+        // Subjugate: what this unit is holding (null = nothing), and who is holding this one (null = nobody).
+        public GrappleState Grapple;
+        public string HeldById;
+        public float ChargeDecisionAt;       // charging: when the unit next has to choose (keep charging or release)
+        // Mesmerize counter in progress: rapid strikes left at MesmerTargetId (each is a decision; anything else ends it).
+        public string MesmerTargetId;
+        public int MesmerStrikesLeft;
+        public ActionDefinition MesmerStrike;
         // The last ability this unit started (not moves or waits): a follow-up ability can be re-cast from it (see ActionDefinition.IsFollowup).
         public string LastActionId;
         public string LastActionTargetId;
@@ -131,9 +185,34 @@ namespace TacticsGame.Core
         public bool IsRooted { get { return Statuses.Exists(s => s.Rooted); } }
         public bool IsHidden { get { return Statuses.Exists(s => s.Untargetable); } }
         public bool IsStunImmune { get { return Statuses.Exists(s => s.StunImmune); } }
+        public bool IsJumping { get { return JumpEnd >= 0f; } }
+        public bool IsLifted { get { return LiftDropAt >= 0f; } }
 
-        /// <summary>Stunned units cannot dodge.</summary>
-        public float EffectiveDodge() { return Phase == UnitPhase.Stunned ? 0f : UnstunnedDodge(); }
+        /// <summary>Product of the statuses' DamageDealtMult: what this unit's attacks are scaled by.</summary>
+        public float DamageDealtMult()
+        {
+            float m = 1f;
+            foreach (var s in Statuses) m *= s.DamageDealtMult;
+            return m;
+        }
+
+        /// <summary>Product of the statuses' StrainCostMult: what this unit's strain costs are scaled by.</summary>
+        public float StrainCostMult()
+        {
+            float m = 1f;
+            foreach (var s in Statuses) m *= s.StrainCostMult;
+            return Mathf.Max(0f, m);
+        }
+
+        /// <summary>The status that forbids this action right now (ForbidsActions), or null.</summary>
+        public StatusEffect StatusForbidding(string actionId)
+        {
+            foreach (var s in Statuses) if (s.ForbidsActions != null && s.ForbidsActions.Contains(actionId)) return s;
+            return null;
+        }
+
+        /// <summary>Stunned and mid-jump units cannot dodge.</summary>
+        public float EffectiveDodge() { return Phase == UnitPhase.Stunned || IsJumping ? 0f : UnstunnedDodge(); }
 
         /// <summary>Dodge once any stun has worn off (previews of hits that land after the stun ends).</summary>
         public float UnstunnedDodge()
@@ -191,7 +270,8 @@ namespace TacticsGame.Core
             var actions = new List<ActionDefinition>(def.Actions);
             // Every unit can always fall back on its basic attack; it goes last so AI tries abilities first.
             if (def.BasicAttack != null && !actions.Contains(def.BasicAttack)) actions.Add(def.BasicAttack);
-            if (def.Universal != null && !actions.Contains(def.Universal)) actions.Add(def.Universal);
+            if (def.Universal != null && !actions.Contains(def.Universal)) actions.Add(def.Universal);   // Block
+            if (def.Dash != null && !actions.Contains(def.Dash)) actions.Add(def.Dash);
             actions.RemoveAll(a => a == null);
             return new Unit
             {
@@ -237,10 +317,11 @@ namespace TacticsGame.Core
         public List<Unit> Units = new List<Unit>();
         public List<Occluder> Occluders = new List<Occluder>();   // deployables/smoke/walls that block sight
         public List<Trap> Traps = new List<Trap>();
+        public TerrainMap Terrain = new TerrainMap();   // fixed for the whole battle: clones share it
 
         public BattleState Clone()
         {
-            var clone = new BattleState();
+            var clone = new BattleState { Terrain = Terrain };
             foreach (var u in Units) clone.Units.Add(u.Snapshot());
             foreach (var o in Occluders) clone.Occluders.Add(o.Clone());
             foreach (var t in Traps) clone.Traps.Add(t.Clone());

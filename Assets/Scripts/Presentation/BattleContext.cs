@@ -7,7 +7,8 @@ namespace TacticsGame.Presentation
     /// <summary>
     /// The one place scene and simulation meet. Drop on an empty "BattleSetup" object, then list
     /// each placed UnitView with its UnitDefinition and team. It builds the Core.BattleState for the
-    /// simulation (using each view's current position) and the Id -> UnitView registry for playback.
+    /// simulation (using each view's current position, plus every ElevationBlock in the scene as terrain) and the
+    /// Id -> UnitView registry for playback.
     /// </summary>
     public class BattleContext : MonoBehaviour
     {
@@ -35,6 +36,8 @@ namespace TacticsGame.Presentation
                 p.View.UnitId = id;
                 Registry[id] = p.View;
             }
+            foreach (var block in FindObjectsByType<ElevationBlock>(FindObjectsSortMode.InstanceID))
+                if (block.isActiveAndEnabled) state.Terrain.Blocks.Add(block.ToBlock());
             return state;
         }
     }

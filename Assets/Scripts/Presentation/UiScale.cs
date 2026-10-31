@@ -11,7 +11,7 @@ namespace TacticsGame.Presentation
     public static class UiScale
     {
         /// <summary>Overall UI size multiplier on top of the resolution scaling.</summary>
-        public static float UserScale = 1.1f;
+        public static float UserScale = 1.2f;
         /// <summary>Screen height the layout was designed for; taller screens scale up from it.</summary>
         public const float ReferenceHeight = 900f;
 

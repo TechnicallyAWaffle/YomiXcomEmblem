@@ -5,7 +5,8 @@ namespace TacticsGame.Presentation
     /// <summary>
     /// Orbit-style tactics camera around a focus point on the ground.
     ///   WASD / arrows: pan    Middle-drag: pan    Right-drag: rotate (and tilt)    Scroll: zoom    Q / E: rotate
-    /// FocusOn glides to a point and restores the starting rotation (used when a unit is ready for orders).
+    /// FocusOn glides to a point and restores the starting rotation (used when a unit is ready for orders). Everything is
+    /// eased: input moves a target view and the camera SmoothDamps toward it; the glide follows FocusCurve.
     /// Runs on unscaled time, so it keeps working while the world is frozen waiting for orders.
     /// Starts from wherever it is placed in the scene. Lives on the TacticalCam CinemachineCamera; the brain on the
     /// main camera blends between it and InteractionCamera's cinematic shots.
@@ -24,6 +25,10 @@ namespace TacticsGame.Presentation
         public float MaxPitch = 85f;
         [Tooltip("Seconds FocusOn takes to glide to its target.")]
         public float FocusTime = 0.45f;
+        [Tooltip("Easing of the FocusOn glide (0..1 over FocusTime).")]
+        public AnimationCurve FocusCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+        [Tooltip("Seconds the view takes to catch up with pans, zooms and turns (SmoothDamp easing). 0 = immediate.")]
+        public float SmoothTime = 0.12f;
         [Tooltip("Ground area the focus point is kept inside (XZ).")]
         public Vector2 BoundsMin = new Vector2(-20f, -25f);
         public Vector2 BoundsMax = new Vector2(20f, 25f);
@@ -45,6 +50,10 @@ namespace TacticsGame.Presentation
         private Vector3 lastMouse;
         private Vector3 rightPressAt;
 
+        // What is on screen: eases toward focus/distance/yaw/pitch above, which input and FocusOn set directly.
+        private Vector3 shownFocus, focusVelocity;
+        private float shownDistance, shownYaw, shownPitch, distanceVelocity, yawVelocity, pitchVelocity;
+
         // FocusOn glide
         private bool gliding;
         private float glideT;
@@ -63,7 +72,7 @@ namespace TacticsGame.Presentation
             focus.y = 0f;
             distance = Mathf.Clamp(t, MinDistance, MaxDistance);
             lastMouse = Input.mousePosition;
-            Apply();
+            Apply(true);
         }
 
         /// <summary>Glide to center 'point' and return to the starting rotation (zoom is kept). Any camera input cancels it.</summary>
@@ -85,7 +94,7 @@ namespace TacticsGame.Presentation
             if (gliding)
             {
                 glideT = Mathf.Min(1f, glideT + Time.unscaledDeltaTime / Mathf.Max(0.01f, FocusTime));
-                float s = Mathf.SmoothStep(0f, 1f, glideT);
+                float s = FocusCurve != null && FocusCurve.length > 0 ? FocusCurve.Evaluate(glideT) : Mathf.SmoothStep(0f, 1f, glideT);
                 focus = Vector3.Lerp(glideFromFocus, glideToFocus, s);
                 yaw = Mathf.Lerp(glideFromYaw, glideToYaw, s);
                 pitch = Mathf.Lerp(glideFromPitch, glideToPitch, s);
@@ -143,10 +152,24 @@ namespace TacticsGame.Presentation
             Apply();
         }
 
-        private void Apply()
+        /// <summary>Ease the shown view toward the target view (or jump straight there) and place the camera.</summary>
+        private void Apply(bool snap = false)
         {
-            transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
-            transform.position = focus - transform.forward * distance;
+            float dt = Time.unscaledDeltaTime;
+            if (snap || SmoothTime <= 0f)
+            {
+                shownFocus = focus; shownDistance = distance; shownYaw = yaw; shownPitch = pitch;
+                focusVelocity = Vector3.zero; distanceVelocity = yawVelocity = pitchVelocity = 0f;
+            }
+            else
+            {
+                shownFocus = Vector3.SmoothDamp(shownFocus, focus, ref focusVelocity, SmoothTime, Mathf.Infinity, dt);
+                shownDistance = Mathf.SmoothDamp(shownDistance, distance, ref distanceVelocity, SmoothTime, Mathf.Infinity, dt);
+                shownYaw = Mathf.SmoothDamp(shownYaw, yaw, ref yawVelocity, SmoothTime, Mathf.Infinity, dt);
+                shownPitch = Mathf.SmoothDamp(shownPitch, pitch, ref pitchVelocity, SmoothTime, Mathf.Infinity, dt);
+            }
+            transform.rotation = Quaternion.Euler(shownPitch, shownYaw, 0f);
+            transform.position = shownFocus - transform.forward * shownDistance;
         }
     }
 }

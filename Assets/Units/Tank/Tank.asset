@@ -17,23 +17,27 @@ MonoBehaviour:
   BaseDodge: 0.05
   BaseBlock: 0
   MaxStrain: 140
-  StrainRecoveryPerSecond: 6
-  StrainRecoveryDelay: 1.5
+  StrainRecoveryPerSecond: 5
+  StrainRecoveryDelay: 0.5
   MaxEnergy: 0
   StartingEnergy: 0
   ActionSpeed: 1
-  MoveSpeed: 3.5
+  MoveSpeed: 5
   DashDistance: 3
   EyeHeight: 1.6
   BodyHeight: 1.8
   BodyRadius: 0.5
   BasicAttack: {fileID: 11400000, guid: d8f654d5a3b83f44aad3670b1c064f53, type: 2}
   Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
   Actions:
   - {fileID: 11400000, guid: f2ff342cf93c51f4fbb36989923d3d5b, type: 2}
   - {fileID: 11400000, guid: d7ebf1ba5a75e72409928babfabda946, type: 2}
   - {fileID: 11400000, guid: 024417c845c21fb42be7c79f4a2b2127, type: 2}
   - {fileID: 11400000, guid: 89c425610acc93343802068419dad0d2, type: 2}
+  - {fileID: 11400000, guid: 5f766a43f40a66e4c95aab556b2e1338, type: 2}
+  - {fileID: 11400000, guid: 70b2a9303d8007d41bb3dbbb028c9be2, type: 2}
+  - {fileID: 11400000, guid: 5527f3bda48cdbe46b9023f9efc0e39e, type: 2}
   Passives: []
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
-  DataVersion: 6
+  DataVersion: 9

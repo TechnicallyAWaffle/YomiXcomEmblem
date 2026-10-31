@@ -32,6 +32,13 @@ namespace TacticsGame.Core
         TrapTriggered,      // actor = trap owner, target = victim, payload = trap id
         TrapRemoved,        // expired unsprung; payload = trap id
         QueuedActionChanged,   // an out-of-range order was set (target = its target) or cleared (target null); payload QueuedActionInfo
+        ChargeStarted,         // a charge ability began charging; payload ChargeInfo
+        Jump,                  // a walking unit jumps across a height change; payload JumpInfo (the walk resumes with a MoveStarted on landing)
+        Fall,                  // target was shoved off a ledge or knocked out of a jump (actor = who did it, may be null); payload FallInfo.
+                               // A Fall-flagged Dash plays the fall itself; the landing's fall damage is a Damage event with ActionId "fall"
+        StatusTimer,           // a timed status on target started, refreshed or was extended (actor = who applied it); payload StatusTimerInfo
+        Carry,                 // actor started (or stopped) carrying target (Subjugate); payload CarryInfo
+        Lift,                  // target is raised into the air and held there (Amblivate; actor = who did it); payload LiftInfo. A Fall drops it
     }
 
     /// <summary>
@@ -80,7 +87,7 @@ namespace TacticsGame.Core
     }
 
     // ---- Event payloads ----
-    public struct ActionStartedInfo { public string ActionId; public float Windup; public float Recovery; public Vector3 TargetPos; public bool Free; }   // Free: a reaction alongside the unit's own action
+    public struct ActionStartedInfo { public string ActionId; public float Windup; public float Recovery; public Vector3 TargetPos; public bool Free; public bool Transcended; }   // Free: a reaction alongside the unit's own action
     public struct ActionResolvedInfo { public string ActionId; public float Recovery; }
     public struct InterruptInfo { public string Reason; }
     public struct MoveInfo { public List<Vector3> Path; public float Speed; }
@@ -89,14 +96,25 @@ namespace TacticsGame.Core
         public string ActionId; public float Amount; public float BlockedAmount;
         public ImpactType Impact; public float RemainingHealth; public bool CausedUnravel;
     }
-    public struct MissInfo { public string Reason; } // "cover", "miss", "out_of_range"
-    public struct DashInfo { public Vector3 From; public Vector3 To; public float Duration; public bool Forced; public bool Settle; }  // Forced: shoved or pulled, not a dodge. Settle: a small shuffle out of another unit's body
+    // Reason: "cover" (would have hit in the open), "miss", "out_of_range", "hidden". HitCover: the shot struck the cover that
+    // saved the target, at CoverPoint (a point where a sight line to the target first meets that cover).
+    public struct MissInfo { public string Reason; public string ActionId; public bool HitCover; public Vector3 CoverPoint; }
+    // A timed status (re)started or was extended: it now runs out at ExpiresAt, Duration seconds after this event.
+    public struct StatusTimerInfo { public string Id; public float ExpiresAt; public float Duration; }
+    public struct DashInfo { public Vector3 From; public Vector3 To; public float Duration; public bool Forced; public bool Settle; public bool Fall; public bool Teleport; }  // Forced: shoved or pulled, not a dodge. Settle: a small shuffle out of another unit's body. Fall: drops to lower ground on the way. Teleport: gone from From, there at To
+    // Carrying: the target is held at Offset (metres in front of the carrier, along its facing) until a Carry with Carrying false,
+    // which leaves it at Position.
+    public struct CarryInfo { public bool Carrying; public float Offset; public Vector3 Position; }
+    public struct LiftInfo { public Vector3 From; public Vector3 To; public float RiseSeconds; public float DropAt; }
+    public struct JumpInfo { public Vector3 From; public Vector3 To; public float Duration; }   // the arc's height: TerrainMap.JumpY
+    public struct FallInfo { public float Height; public float Duration; public bool FromJump; }   // Duration: until it lands (the stun lasts a little longer)
     public struct StunInfo { public float Duration; }
     public struct MoveEndedInfo { public Vector3 Position; }
     public struct StrainInfo { public float Amount; public float Total; }
     public struct SpeedInfo { public float ActionSpeed; public float MoveSpeed; }
     public struct DeployableInfo { public string Id; public Vector3 Position; public float Radius; public float Height; public float ExpiresAt; }
     public struct EnergyInfo { public float Amount; public float Total; }
+    public struct ChargeInfo { public string ActionId; public float MaxSeconds; }
     public struct QueuedActionInfo { public string ActionId; public bool Chase; }   // Chase: melee, walking at the target
     public struct TrapInfo { public string Id; public Vector3 Position; public float Radius; public float ArmsAt; public Team OwnerTeam; }
 }

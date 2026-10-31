@@ -13,12 +13,14 @@ MonoBehaviour:
   m_Name: ChainHook
   m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
   Id: chain_hook
-  DisplayName: Chain Hook
+  DisplayName: Forced Accession
   BehaviorId: basic_attack
-  Description: Hook an enemy and drag them to you, stunning them briefly.
+  Description: Drag an enemy towards you, stunning them briefly.
   Targeting: 2
-  Range: 9
+  Range: 15
   IsRanged: 1
+  CannotTargetSelf: 0
+  DestinationRange: 0
   Windup: 0.6
   Recovery: 0.5
   Cooldown: 8
@@ -26,9 +28,10 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  ConsumeOnResolve: 0
   Impact: 0
   Damage: 6
-  BaseAccuracy: 0.85
+  BaseAccuracy: 0.9
   StunDuration: 0.8
   StrainOnTarget: 4
   StrainOnSelf: 0
@@ -43,11 +46,20 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  TargetStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
   IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
   ExtraCinematic: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 6
+  DataVersion: 9

@@ -17,7 +17,7 @@ MonoBehaviour:
   BehaviorId: basic_attack
   Description: A deliberate, steady melee strike.
   Targeting: 2
-  Range: 1.8
+  Range: 2
   IsRanged: 0
   Windup: 0.6
   Recovery: 0.5
@@ -46,7 +46,15 @@ MonoBehaviour:
   TrapArmDelay: 1
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
   IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
   ExtraCinematic: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0

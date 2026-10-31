@@ -165,8 +165,24 @@ namespace TacticsGame.Presentation
                     if (actor != null)
                     {
                         var d = (DashInfo)evt.Payload;
-                        actor.BeginMotion(new List<Vector3> { d.From, d.To }, Vector3.Distance(d.From, d.To) / Mathf.Max(0.01f, d.Duration), evt.SimTime);
+                        if (d.Teleport) actor.EndMotion(d.To);   // gone, and there
+                        else if (d.Fall) actor.BeginFall(d.From, d.To, d.Duration, evt.SimTime);
+                        else actor.BeginGlide(d.From, d.To, d.Duration, evt.SimTime);
                         if (!d.Forced) actor.PlayDodge();
+                    }
+                    break;
+                case TacticsGame.Core.EventType.Jump:
+                    if (actor != null) { var j = (JumpInfo)evt.Payload; actor.BeginJump(j.From, j.To, j.Duration, evt.SimTime); }
+                    break;
+                case TacticsGame.Core.EventType.Lift:
+                    if (target != null) { var l = (LiftInfo)evt.Payload; target.BeginLift(l.From, l.To, l.RiseSeconds, evt.SimTime); }
+                    break;
+                case TacticsGame.Core.EventType.Carry:
+                    if (target != null)
+                    {
+                        var c = (CarryInfo)evt.Payload;
+                        if (c.Carrying && actor != null) target.BeginCarry(actor, c.Offset);
+                        else target.EndCarry(c.Position);
                     }
                     break;
                 case TacticsGame.Core.EventType.ActionStarted:

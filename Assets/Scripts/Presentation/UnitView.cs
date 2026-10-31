@@ -30,6 +30,10 @@ namespace TacticsGame.Presentation
         private float motionSpeed;
         private float motionStart;
         private float motionLength;
+        // Timed two-point motions (dash/shove, jump, fall) run over motionSeconds instead of at a speed.
+        private enum TimedKind { None, Glide, Jump, Fall, Lift }
+        private TimedKind timedKind;
+        private float motionSeconds;
         private Quaternion initialRotation;
 
         // Placeholder poses: start times on the playback clock (-1 = not playing).
@@ -38,6 +42,10 @@ namespace TacticsGame.Presentation
         private Quaternion modelRot;
         private float windupStart = -1f, windupEnd = -1f, lungeStart = -1f, flinchStart = -1f, wobbleStart = -1f, stunnedUntil = -1f;
         private float flinchStrength = 1f;
+        // Carried by another unit (Subjugate): held in front of it until EndCarry.
+        private UnitView carrier;
+        private float carryOffset;
+        private const float CarryHeight = 0.45f;
         private bool lungeOnResolve, dead;
 
         private void Awake()
@@ -50,6 +58,7 @@ namespace TacticsGame.Presentation
         public void ResetTo(Unit unit)
         {
             motionPath = null;
+            carrier = null;
             transform.position = unit.Position;
             transform.rotation = initialRotation;
             windupStart = windupEnd = lungeStart = flinchStart = wobbleStart = stunnedUntil = -1f;
@@ -58,13 +67,50 @@ namespace TacticsGame.Presentation
             if (Animator != null) { Animator.Rebind(); Animator.Update(0f); }
         }
 
+        /// <summary>Walk the path at 'speed' (m/s over the ground, like the sim), feet on the terrain.</summary>
         public void BeginMotion(List<Vector3> path, float speed, float startSimTime)
         {
             motionPath = path;
             motionSpeed = speed;
             motionStart = startSimTime;
             motionLength = 0f;
-            for (int i = 1; i < path.Count; i++) motionLength += Vector3.Distance(path[i - 1], path[i]);
+            timedKind = TimedKind.None;
+            for (int i = 1; i < path.Count; i++) motionLength += FlatDistance(path[i - 1], path[i]);
+        }
+
+        /// <summary>A dash, shove or pull from 'from' to 'to' over 'seconds', feet on the terrain (a dash off a ledge steps down).</summary>
+        public void BeginGlide(Vector3 from, Vector3 to, float seconds, float startSimTime) { BeginTimed(TimedKind.Glide, from, to, seconds, startSimTime); }
+
+        /// <summary>A jump across a height change, along the sim's arc (TerrainMap.JumpY).</summary>
+        public void BeginJump(Vector3 from, Vector3 to, float seconds, float startSimTime) { BeginTimed(TimedKind.Jump, from, to, seconds, startSimTime); }
+
+        /// <summary>Knocked off a ledge or out of a jump: carried toward 'to' while dropping faster and faster onto it.</summary>
+        public void BeginFall(Vector3 from, Vector3 to, float seconds, float startSimTime) { BeginTimed(TimedKind.Fall, from, to, seconds, startSimTime); }
+
+        /// <summary>Raised straight up from 'from' to 'to' over 'seconds' (Amblivate), then held there until the next motion (its fall).</summary>
+        public void BeginLift(Vector3 from, Vector3 to, float seconds, float startSimTime) { BeginTimed(TimedKind.Lift, from, to, seconds, startSimTime); }
+
+        /// <summary>Held up in front of 'by' (Subjugate), 'offset' metres along its facing, until EndCarry.</summary>
+        public void BeginCarry(UnitView by, float offset)
+        {
+            carrier = by;
+            carryOffset = offset;
+            motionPath = null;
+        }
+
+        /// <summary>Put down where the simulation left it.</summary>
+        public void EndCarry(Vector3 position)
+        {
+            carrier = null;
+            transform.position = position;
+        }
+
+        private void BeginTimed(TimedKind kind, Vector3 from, Vector3 to, float seconds, float startSimTime)
+        {
+            motionPath = new List<Vector3> { from, to };
+            timedKind = kind;
+            motionStart = startSimTime;
+            motionSeconds = Mathf.Max(0.01f, seconds);
         }
 
         /// <summary>Stop scripted movement where the simulation says the unit ended up (a cancelled walk stops mid-path).</summary>
@@ -74,25 +120,61 @@ namespace TacticsGame.Presentation
             motionPath = null;
         }
 
+        private TerrainMap Terrain
+        {
+            get { return Director != null && Director.Timeline != null && Director.Timeline.InitialState != null ? Director.Timeline.InitialState.Terrain : null; }
+        }
+
+        private static float FlatDistance(Vector3 a, Vector3 b) { a.y = 0f; b.y = 0f; return Vector3.Distance(a, b); }
+
         private void Update()
         {
-            UpdateMotion();
+            if (carrier == null) UpdateMotion();
             UpdatePose();
+        }
+
+        // A carried unit follows its carrier after the carrier has moved this frame.
+        private void LateUpdate()
+        {
+            if (carrier == null) return;
+            Vector3 f = carrier.transform.forward; f.y = 0f;
+            f = f.sqrMagnitude > 1e-6f ? f.normalized : Vector3.forward;
+            transform.position = carrier.transform.position + f * carryOffset + Vector3.up * CarryHeight;
+            transform.rotation = Quaternion.LookRotation(-f);   // facing its captor
         }
 
         private void UpdateMotion()
         {
             if (motionPath == null || Director == null) return;
-            float traveled = Mathf.Clamp((Director.PlaybackClock - motionStart) * motionSpeed, 0f, motionLength);
+            var terrain = Terrain;
+            if (timedKind != TimedKind.None)
+            {
+                Vector3 from = motionPath[0], to = motionPath[1];
+                float k = Mathf.Clamp01((Director.PlaybackClock - motionStart) / motionSeconds);
+                Vector3 p = Vector3.Lerp(from, to, k);
+                float ground = terrain != null ? terrain.HeightAt(p) : p.y;
+                if (timedKind == TimedKind.Lift) { float e = k * k * (3f - 2f * k); p = Vector3.Lerp(from, to, e); transform.position = p; return; }
+                if (timedKind == TimedKind.Jump) p.y = TerrainMap.JumpY(from, to, k);
+                else if (timedKind == TimedKind.Fall) p.y = Mathf.Max(ground, from.y + (to.y - from.y) * k * k);
+                else if (terrain != null) p.y = ground;
+                transform.position = p;
+                // Shoves and falls keep the unit facing whoever hit it; dashes and jumps face where they go.
+                Vector3 dir = to - from; dir.y = 0f;
+                if (timedKind != TimedKind.Fall && dir.sqrMagnitude > 1e-6f) transform.rotation = Quaternion.LookRotation(dir);
+                return;
+            }
 
+            float traveled = Mathf.Clamp((Director.PlaybackClock - motionStart) * motionSpeed, 0f, motionLength);
             for (int i = 1; i < motionPath.Count; i++)
             {
-                float seg = Vector3.Distance(motionPath[i - 1], motionPath[i]);
+                float seg = FlatDistance(motionPath[i - 1], motionPath[i]);
                 if (traveled <= seg || i == motionPath.Count - 1)
                 {
                     float t = seg > 1e-5f ? Mathf.Clamp01(traveled / seg) : 1f;
                     Vector3 dir = motionPath[i] - motionPath[i - 1];
-                    transform.position = Vector3.Lerp(motionPath[i - 1], motionPath[i], t);
+                    Vector3 p = Vector3.Lerp(motionPath[i - 1], motionPath[i], t);
+                    if (terrain != null) p.y = terrain.HeightAt(p);   // the sim jumps the edges (a Jump event takes over there)
+                    transform.position = p;
                     if (dir.sqrMagnitude > 1e-6f) transform.rotation = Quaternion.LookRotation(new Vector3(dir.x, 0f, dir.z));
                     return;
                 }
@@ -200,6 +282,7 @@ namespace TacticsGame.Presentation
         public void PlayDeath()
         {
             motionPath = null;
+            carrier = null;
             ApplyPose(0f, 0f, 0f, 0f);
             dead = true;
             if (Animator == null)

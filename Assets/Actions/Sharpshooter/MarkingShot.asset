@@ -13,13 +13,14 @@ MonoBehaviour:
   m_Name: MarkingShot
   m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
   Id: marking_shot
-  DisplayName: Marking Shot
+  DisplayName: Mark of Death
   BehaviorId: basic_attack
-  Description: Fire a shot that marks the target (attacks hit it more easily) and
-    become undetectable for a short time. Taking damage reveals you.
+  Description: Fire a shot that MARKS the target, increasing accuracy towards them.
   Targeting: 2
-  Range: 18
+  Range: 20
   IsRanged: 1
+  CannotTargetSelf: 0
+  DestinationRange: 0
   Windup: 0.6
   Recovery: 0.4
   Cooldown: 10
@@ -27,6 +28,7 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  ConsumeOnResolve: 0
   Impact: 0
   Damage: 10
   BaseAccuracy: 0.85
@@ -41,27 +43,14 @@ MonoBehaviour:
   Heal: 0
   Displace: 0
   DisplaceDistance: 0
-  SelfStatuses:
-  - Id: hidden
-    Duration: 4
-    DodgeBonus: 0
-    BlockBonus: 0
-    IncomingAccuracyBonus: 0
-    DodgeDistanceBonus: 0
-    ActionSpeedMult: 1
-    MoveSpeedMult: 1
-    Rooted: 0
-    Untargetable: 1
-    BreaksOnDamage: 1
-    StunImmune: 0
-    KeepsBlock: 0
+  SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit:
   - Id: marked
     Duration: 8
     DodgeBonus: 0
     BlockBonus: 0
-    IncomingAccuracyBonus: 0.25
+    IncomingAccuracyBonus: 0.4
     DodgeDistanceBonus: 0
     ActionSpeedMult: 1
     MoveSpeedMult: 1
@@ -70,11 +59,24 @@ MonoBehaviour:
     BreaksOnDamage: 0
     StunImmune: 0
     KeepsBlock: 0
+    DamageDealtMult: 1
+    StrainCostMult: 1
+    ForbidsActions: []
+    AppliesTo: 0
+  TargetStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
   IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
   ExtraCinematic: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 6
+  DataVersion: 9

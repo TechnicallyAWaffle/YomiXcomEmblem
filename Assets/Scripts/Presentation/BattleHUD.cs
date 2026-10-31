@@ -23,13 +23,18 @@ namespace TacticsGame.Presentation
             public Team Team;
             public float Health, MaxHealth, Strain, MaxStrain, Energy, MaxEnergy;
             public readonly List<string> Statuses = new List<string>();
+            // Self-applied timed statuses (Trance, Focus under way...): when each runs out, and how long it ran from (for its bar).
+            public readonly Dictionary<string, StatusTimerInfo> Timers = new Dictionary<string, StatusTimerInfo>();
             public bool Dead;
             public string Activity = "";
             // Windup in progress (empty name = none): drawn as a filling bar with the ability name and time left.
             public string WindupName, WindupId;
             public float WindupEnd, WindupFull;
             public bool WindupHeavy;
+            public bool Charging;   // the bar is a charge building toward full power (WindupEnd = full)
             public string Order;   // out-of-range order in progress: "Slash > Brawler (chasing)" / "Snipe > Gunner (queued)"
+            public string Holding, HeldBy;   // Subjugate in progress: whom this unit holds / who holds it (names)
+            public bool Suspended;           // lifted into the air (Amblivate) until it falls
         }
 
         private readonly Dictionary<string, UnitReadout> units = new Dictionary<string, UnitReadout>();
@@ -71,6 +76,13 @@ namespace TacticsGame.Presentation
             }
         }
 
+        /// <summary>An ability's display name for the log (its id if it isn't a known action).</summary>
+        private string ActionName(string id)
+        {
+            ActionDefinition def;
+            return id != null && defs.TryGetValue(id, out def) && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : id;
+        }
+
         private string NameOf(string id)
         {
             UnitReadout r;
@@ -93,8 +105,9 @@ namespace TacticsGame.Presentation
                 {
                     var a = (ActionStartedInfo)evt.Payload;
                     if (actor == null) break;
-                    if (a.ActionId == "wait") { actor.Activity = "waiting"; break; }
-                    actor.Activity = a.ActionId + " (windup)";
+                    if (!a.Free) { actor.Charging = false; actor.WindupName = null; }   // a released charge (or anything new) ends the charge bar
+                    if (a.ActionId == "wait") { actor.Activity = a.Transcended ? "focusing (transcended)" : "focusing"; break; }
+                    actor.Activity = ActionName(a.ActionId) + " (windup)";
                     ActionDefinition def;
                     if (a.Windup > 0f && defs.TryGetValue(a.ActionId, out def))
                     {
@@ -106,7 +119,7 @@ namespace TacticsGame.Presentation
                         actor.WindupName = def.DisplayName;
                         actor.WindupHeavy = def.Impact == ImpactType.Heavy;
                     }
-                    Log(string.Format("{0} winds up {1} on {2}", actor.Name, a.ActionId, NameOf(evt.TargetId)));
+                    Log(string.Format("{0} {1}{2} on {3}", actor.Name, a.Transcended ? "TRANSCENDS " : "winds up ", ActionName(a.ActionId), NameOf(evt.TargetId)));
                     break;
                 }
                 case TacticsGame.Core.EventType.ActionResolved:
@@ -117,6 +130,7 @@ namespace TacticsGame.Presentation
                 case TacticsGame.Core.EventType.ActionInterrupted:
                     if (actor == null) break;
                     actor.Activity = "";
+                    actor.Charging = false;
                     actor.WindupName = null;
                     if (((InterruptInfo)evt.Payload).Reason != "dodge") actor.WindupId = null;   // a dodge retries it: remember which
                     Log(string.Format("{0}'s action is interrupted ({1})", actor.Name, ((InterruptInfo)evt.Payload).Reason));
@@ -131,17 +145,50 @@ namespace TacticsGame.Presentation
                 {
                     var d = (DamageInfo)evt.Payload;
                     if (target != null) target.Health = d.RemainingHealth;
-                    Log(string.Format("{0} hits {1} with {2} for {3:0}{4}{5}", NameOf(evt.ActorId), NameOf(evt.TargetId), d.ActionId, d.Amount,
+                    if (d.ActionId == "fall") { Log(string.Format("{0} hits the ground for {1:0}", NameOf(evt.TargetId), d.Amount)); break; }
+                    // A hit that does no damage by design (Subjugate's grab, Amblivate, Torrent of Strife): it still landed.
+                    if (d.Amount < 0.5f && d.BlockedAmount < 0.5f) { Log(string.Format("{0} catches {1} with {2}", NameOf(evt.ActorId), NameOf(evt.TargetId), ActionName(d.ActionId))); break; }
+                    Log(string.Format("{0} hits {1} with {2} for {3:0}{4}{5}", NameOf(evt.ActorId), NameOf(evt.TargetId), ActionName(d.ActionId), d.Amount,
                         d.BlockedAmount > 0.5f ? string.Format(" ({0:0} blocked)", d.BlockedAmount) : "",
                         d.Impact == ImpactType.Heavy ? " [HEAVY]" : ""));
                     break;
                 }
                 case TacticsGame.Core.EventType.Miss:
-                    Log(string.Format("{0} misses {1} ({2})", NameOf(evt.ActorId), NameOf(evt.TargetId), ((MissInfo)evt.Payload).Reason));
+                {
+                    var m = (MissInfo)evt.Payload;
+                    string with = m.ActionId != null ? " with " + ActionName(m.ActionId) : "";
+                    string why = m.Reason == "cover" ? (m.HitCover ? "hits cover" : "cover") : m.Reason == "out_of_range" ? "out of range" : m.Reason;
+                    Log(string.Format("{0} misses {1}{2} ({3})", NameOf(evt.ActorId), NameOf(evt.TargetId), with, why));
                     break;
+                }
                 case TacticsGame.Core.EventType.Dodge:
                     Log(string.Format("{0} dodges {1}", NameOf(evt.TargetId), NameOf(evt.ActorId)));
                     break;
+                case TacticsGame.Core.EventType.Carry:
+                {
+                    var c = (CarryInfo)evt.Payload;
+                    if (actor != null) actor.Holding = c.Carrying ? NameOf(evt.TargetId) : null;
+                    if (target != null) target.HeldBy = c.Carrying ? NameOf(evt.ActorId) : null;
+                    if (c.Carrying) Log(string.Format("{0} grabs {1}", NameOf(evt.ActorId), NameOf(evt.TargetId)));
+                    break;
+                }
+                case TacticsGame.Core.EventType.Lift:
+                    if (target != null) target.Suspended = true;
+                    Log(string.Format("{0} lifts {1} into the air", NameOf(evt.ActorId), NameOf(evt.TargetId)));
+                    break;
+                case TacticsGame.Core.EventType.Dash:
+                    if (actor == null || !((DashInfo)evt.Payload).Teleport) break;
+                    actor.Suspended = false;   // teleported out of the air: it lands on its feet
+                    Log(string.Format("{0} is teleported", actor.Name));
+                    break;
+                case TacticsGame.Core.EventType.Fall:
+                {
+                    var f = (FallInfo)evt.Payload;
+                    bool dropped = target != null && target.Suspended;   // let go from a lift, not shoved
+                    if (target != null) { target.Activity = "falling"; target.Suspended = false; }
+                    Log(string.Format("{0} {1} and falls {2:0.0}m", NameOf(evt.TargetId), f.FromJump ? "is knocked out of a jump" : dropped ? "is dropped" : "is knocked off a ledge", f.Height));
+                    break;
+                }
                 case TacticsGame.Core.EventType.Stun:
                     if (target != null) target.Activity = "stunned";
                     Log(string.Format("{0} is stunned for {1:0.0}s", NameOf(evt.TargetId), ((StunInfo)evt.Payload).Duration));
@@ -163,18 +210,40 @@ namespace TacticsGame.Presentation
                 {
                     var id = (string)evt.Payload;
                     if (target != null && !target.Statuses.Contains(id)) target.Statuses.Add(id);
-                    if (id != StatusIds.RapidChain) Log(string.Format("{0} is {1}", NameOf(evt.TargetId), id.Replace('_', ' ')));
+                    if (!StatusDisplay.IsHidden(id) && id != StatusIds.Focusing) Log(string.Format("{0} is {1}", NameOf(evt.TargetId), StatusDisplay.NameOf(id)));
                     break;
                 }
                 case TacticsGame.Core.EventType.StatusExpired:
-                    if (actor != null) actor.Statuses.Remove((string)evt.Payload);
+                    if (actor != null) { actor.Statuses.Remove((string)evt.Payload); actor.Timers.Remove((string)evt.Payload); }
                     break;
+                case TacticsGame.Core.EventType.StatusTimer:
+                {
+                    // Only statuses a unit put on itself get a countdown (its own buffs and stances).
+                    var t = (StatusTimerInfo)evt.Payload;
+                    if (target != null && evt.ActorId == evt.TargetId) target.Timers[t.Id] = t;
+                    break;
+                }
                 case TacticsGame.Core.EventType.TrapPlaced:
                     Log(string.Format("{0} sets a trap", NameOf(evt.ActorId)));
                     break;
                 case TacticsGame.Core.EventType.TrapTriggered:
                     Log(string.Format("{0} springs {1}'s trap", NameOf(evt.TargetId), NameOf(evt.ActorId)));
                     break;
+                case TacticsGame.Core.EventType.ChargeStarted:
+                {
+                    var c = (ChargeInfo)evt.Payload;
+                    ActionDefinition cd;
+                    if (actor == null) break;
+                    actor.Activity = "charging";
+                    actor.WindupName = defs.TryGetValue(c.ActionId, out cd) ? cd.DisplayName : c.ActionId;
+                    actor.WindupId = c.ActionId;
+                    actor.WindupFull = Mathf.Max(0.01f, c.MaxSeconds);
+                    actor.WindupEnd = evt.SimTime + c.MaxSeconds;
+                    actor.WindupHeavy = false;
+                    actor.Charging = true;
+                    Log(string.Format("{0} starts charging {1}", actor.Name, actor.WindupName));
+                    break;
+                }
                 case TacticsGame.Core.EventType.QueuedActionChanged:
                 {
                     if (actor == null) break;
@@ -187,7 +256,7 @@ namespace TacticsGame.Presentation
                     break;
                 }
                 case TacticsGame.Core.EventType.Death:
-                    if (target != null) { target.Dead = true; target.Health = 0f; target.Activity = ""; target.WindupName = null; target.Order = null; }
+                    if (target != null) { target.Dead = true; target.Health = 0f; target.Timers.Clear(); target.Activity = ""; target.WindupName = null; target.Order = null; target.Holding = target.HeldBy = null; target.Suspended = false; }
                     Log(string.Format("{0} is down", NameOf(evt.TargetId)));
                     break;
                 case TacticsGame.Core.EventType.BattleEnd:
@@ -221,10 +290,11 @@ namespace TacticsGame.Presentation
                 }
             }
 
-            GUILayout.BeginArea(new Rect(10, 10, 460, 40 + LogLines * 20), GUI.skin.box);
-            GUILayout.Label(string.Format("t = {0:0.00}s   playback x{1:0.00}", Director.PlaybackClock, Director.playbackSpeed));
-            foreach (var line in log) GUILayout.Label(line);
-            GUILayout.EndArea();
+            // Fixed rows rather than GUILayout: the log can change mid-frame (a battle starting clears it), which would break
+            // a layout measured earlier in the frame.
+            GUI.Box(new Rect(10, 10, 460, 40 + LogLines * 20), GUIContent.none);
+            GUI.Label(new Rect(16, 14, 448, 20), string.Format("t = {0:0.00}s   playback x{1:0.00}", Director.PlaybackClock, Director.playbackSpeed));
+            for (int i = 0; i < log.Count; i++) GUI.Label(new Rect(16, 36 + i * 20, 448, 20), log[i]);
 
             if (battleOver && Director.ReachedTarget && Controller != null && Controller.Sim != null)
             {
@@ -243,8 +313,12 @@ namespace TacticsGame.Presentation
             bool winding = !r.Dead && r.WindupName != null;
             GUI.Label(new Rect(x - 40, at.y - (winding ? 48 : 36), width + 80, 18), title, label);
             if (winding) DrawWindup(r, x, at.y, width);
-            else if (!string.IsNullOrEmpty(r.Activity) && !r.Dead)
-                GUI.Label(new Rect(x - 40, at.y - 20, width + 80, 18), r.Activity, label);
+            else if (!r.Dead)
+            {
+                // Held or holding (and hanging in the air) says more than the moment-to-moment activity.
+                string activity = r.HeldBy != null ? "held by " + r.HeldBy : r.Suspended ? "suspended" : r.Holding != null && (r.Activity == "" || r.Activity == "recovering") ? "holding " + r.Holding : r.Activity;
+                if (!string.IsNullOrEmpty(activity)) GUI.Label(new Rect(x - 40, at.y - 20, width + 80, 18), activity, label);
+            }
 
             Bar(new Rect(x, at.y, width, 7), r.MaxHealth > 0f ? r.Health / r.MaxHealth : 0f, new Color(0.3f, 0.9f, 0.3f));
             Bar(new Rect(x, at.y + 9, width, 4), r.MaxStrain > 0f ? r.Strain / r.MaxStrain : 0f, new Color(1f, 0.7f, 0.2f));
@@ -256,10 +330,21 @@ namespace TacticsGame.Presentation
             }
             if (r.Statuses.Count > 0 && !r.Dead)
             {
+                // Untimed statuses (and other units' debuffs) as one line of names; the unit's own timed ones as bars below.
                 var small = new GUIStyle(label) { alignment = TextAnchor.UpperCenter, fontSize = 12 };
-                var shown = r.Statuses.FindAll(s => s != StatusIds.RapidChain);
-                GUI.Label(new Rect(x - 40, below, width + 80, 16), string.Join(" · ", shown.ToArray()).Replace('_', ' '), small);
-                below += 12f;
+                var shown = r.Statuses.FindAll(s => !StatusDisplay.IsHidden(s) && !r.Timers.ContainsKey(s)).ConvertAll(StatusDisplay.NameOf);
+                if (shown.Count > 0)
+                {
+                    GUI.Label(new Rect(x - 40, below, width + 80, 16), string.Join(" · ", shown.ToArray()), small);
+                    below += 12f;
+                }
+                foreach (var id in r.Statuses)
+                {
+                    StatusTimerInfo t;
+                    if (StatusDisplay.IsHidden(id) || !r.Timers.TryGetValue(id, out t)) continue;
+                    DrawStatusTimer(id, t, x, below, width);
+                    below += 15f;
+                }
             }
             if (r.Order != null && !r.Dead)
             {
@@ -277,12 +362,13 @@ namespace TacticsGame.Presentation
         {
             float left = Mathf.Max(0f, r.WindupEnd - Director.PlaybackClock);
             float fill = r.WindupFull > 0f ? Mathf.Clamp01(1f - left / r.WindupFull) : 1f;
-            Color color = r.WindupHeavy ? new Color(1f, 0.55f, 0.15f) : new Color(0.45f, 0.85f, 1f);
+            Color color = r.Charging ? new Color(0.8f, 0.45f, 1f) : r.WindupHeavy ? new Color(1f, 0.55f, 0.15f) : new Color(0.45f, 0.85f, 1f);
             if (fill > 0.8f && Mathf.Repeat(Time.unscaledTime * 8f, 1f) < 0.5f) color = Color.Lerp(color, Color.white, 0.7f);
 
             var text = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerCenter, fontSize = 12, fontStyle = FontStyle.Bold };
             text.normal.textColor = color;
-            GUI.Label(new Rect(x - 40, y - 32, width + 80, 18), string.Format("{0}  {1:0.0}s", r.WindupName, left), text);
+            string label = r.Charging ? string.Format("{0}  {1:0}%", r.WindupName, fill * 100f) : string.Format("{0}  {1:0.0}s", r.WindupName, left);
+            GUI.Label(new Rect(x - 40, y - 32, width + 80, 18), label, text);
 
             var bar = new Rect(x - 5f, y - 13f, width + 10f, 8f);
             var old = GUI.color;
@@ -291,6 +377,24 @@ namespace TacticsGame.Presentation
             GUI.color = color;
             GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * fill, bar.height), Texture2D.whiteTexture);
             GUI.color = old;
+        }
+
+        /// <summary>
+        /// A self-applied timed status: "trance 3.4s" over a thin bar in its colour that drains as it runs out (or, for a
+        /// countdown like Focus under way, fills up to the moment it ends). Blinks in its last second.
+        /// </summary>
+        private void DrawStatusTimer(string id, StatusTimerInfo t, float x, float y, float width)
+        {
+            var look = StatusDisplay.Get(id);
+            float left = Mathf.Max(0f, t.ExpiresAt - Director.PlaybackClock);
+            float frac = t.Duration > 0f ? Mathf.Clamp01(left / t.Duration) : 0f;
+            Color color = look.Color;
+            if (!look.CountsUp && left < 1f && Mathf.Repeat(Time.unscaledTime * 6f, 1f) < 0.5f) color = Color.Lerp(color, Color.white, 0.6f);
+
+            var text = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.UpperCenter, fontSize = 11, fontStyle = FontStyle.Bold };
+            text.normal.textColor = color;
+            GUI.Label(new Rect(x - 40f, y - 2f, width + 80f, 14f), string.Format("{0} {1:0.0}s", StatusDisplay.NameOf(id), left), text);
+            Bar(new Rect(x + 10f, y + 11f, width - 20f, 3f), look.CountsUp ? 1f - frac : frac, color);
         }
 
         private static void Bar(Rect rect, float fill, Color color)

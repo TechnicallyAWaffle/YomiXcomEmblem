@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace TacticsGame.Core
@@ -125,6 +126,36 @@ namespace TacticsGame.Core
                 foreach (float lateral in LateralFractions)
                     if (!HardBlocked(eye, SamplePoint(target, h, lateral, side))) return true;
             return false;
+        }
+
+        /// <summary>
+        /// Where a shot that cover stopped hits that cover: one of the target's hidden sample points, picked by 'pick'
+        /// (0..1), and the first point along the attacker's sight line to it that walls or deployables block. False if no
+        /// sample is hard-blocked (only other bodies were in the way).
+        /// </summary>
+        public bool TryCoverPoint(Unit attacker, Unit target, float pick, out Vector3 point)
+        {
+            point = Vector3.zero;
+            Vector3 eye = attacker.Position + Vector3.up * attacker.EyeHeight;
+            Vector3 side = SideAxis(attacker, target);
+            var hidden = new List<Vector3>();
+            foreach (float h in HeightFractions)
+                foreach (float lateral in LateralFractions)
+                {
+                    Vector3 p = SamplePoint(target, h, lateral, side);
+                    if (HardBlocked(eye, p)) hidden.Add(p);
+                }
+            if (hidden.Count == 0) return false;
+            Vector3 aim = hidden[Mathf.Clamp((int)(pick * hidden.Count), 0, hidden.Count - 1)];
+            // Bisect for the first blocked point: blocked(eye -> x) is false before the cover and true from it on.
+            float lo = 0f, hi = 1f;
+            for (int i = 0; i < 16; i++)
+            {
+                float mid = (lo + hi) / 2f;
+                if (HardBlocked(eye, Vector3.Lerp(eye, aim, mid))) hi = mid; else lo = mid;
+            }
+            point = Vector3.Lerp(eye, aim, hi);
+            return true;
         }
 
         private static Vector3 SideAxis(Unit attacker, Unit target)

@@ -29,6 +29,7 @@ MonoBehaviour:
   BodyRadius: 0.4
   BasicAttack: {fileID: 0}
   Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
   Actions:
   - {fileID: 11400000, guid: 76cf0784c48b77c4a8c97f42e8e31968, type: 2}
   Passives: []

@@ -18,8 +18,10 @@ MonoBehaviour:
   Description: Enter intense focus, tracking your target. If you aren't interrupted
     by damage or crowd control, fire a shot that pierces terrain and 50% block.
   Targeting: 2
-  Range: 22
+  Range: 35
   IsRanged: 1
+  CannotTargetSelf: 0
+  DestinationRange: 0
   Windup: 2.2
   Recovery: 0.6
   Cooldown: 8
@@ -27,13 +29,14 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  ConsumeOnResolve: 0
   Impact: 1
-  Damage: 35
+  Damage: 40
   BaseAccuracy: 0.95
   StunDuration: 0.8
   StrainOnTarget: 20
   StrainOnSelf: 0
-  PiercesTerrain: 1
+  PiercesTerrain: 0
   BlockPierce: 0.5
   Shape: 0
   AreaRadius: 0
@@ -44,11 +47,20 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  TargetStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
   IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
   ExtraCinematic: 1
   InterruptedByDamage: 1
   InterruptedByStun: 1
-  DataVersion: 6
+  DataVersion: 9

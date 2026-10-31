@@ -13,20 +13,22 @@ MonoBehaviour:
   m_Name: Brace
   m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
   Id: brace
-  DisplayName: Brace
+  DisplayName: Manifested Fortitude
   BehaviorId: self_buff
-  Description: Raise your guard for +50% block for 5 seconds. Hits don't wear it
-    down.
+  Description: Raise your GUARD by 50% and become UNSTOPPABLE for a duration.
   Targeting: 1
   Range: 15
   IsRanged: 0
+  CannotTargetSelf: 0
+  DestinationRange: 0
   Windup: 0.3
   Recovery: 0.2
-  Cooldown: 10
+  Cooldown: 8
   EnergyCost: 0
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  ConsumeOnResolve: 0
   Impact: 0
   Damage: 0
   BaseAccuracy: 0.9
@@ -43,7 +45,7 @@ MonoBehaviour:
   DisplaceDistance: 0
   SelfStatuses:
   - Id: braced
-    Duration: 5
+    Duration: 2.5
     DodgeBonus: 0
     BlockBonus: 0.5
     IncomingAccuracyBonus: 0
@@ -53,15 +55,28 @@ MonoBehaviour:
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
-    StunImmune: 0
+    StunImmune: 1
     KeepsBlock: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
+    ForbidsActions: []
+    AppliesTo: 0
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  TargetStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
   IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
   ExtraCinematic: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 6
+  DataVersion: 9

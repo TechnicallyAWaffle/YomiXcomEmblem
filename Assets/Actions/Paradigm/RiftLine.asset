@@ -13,12 +13,14 @@ MonoBehaviour:
   m_Name: RiftLine
   m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
   Id: rift_line
-  DisplayName: Rift Line
+  DisplayName: Pierce The Veil
   BehaviorId: area_attack
   Description: Deal damage in a line that pierces terrain and 25% block.
   Targeting: 4
   Range: 14
   IsRanged: 1
+  CannotTargetSelf: 0
+  DestinationRange: 0
   Windup: 0.9
   Recovery: 0.6
   Cooldown: 6
@@ -26,6 +28,7 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  ConsumeOnResolve: 0
   Impact: 0
   Damage: 20
   BaseAccuracy: 0.9
@@ -43,11 +46,20 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  TargetStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
   IsFollowup: 0
+  CanTranscend: 0
+  TranscendStrain: 15
   ExtraCinematic: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 6
+  DataVersion: 9
