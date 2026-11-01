@@ -25,7 +25,7 @@ namespace TacticsGame.Presentation
 
         private static readonly string[,] OrderKeys =
         {
-            { "1 - 0, -, =", "Use ability (again: repeat a follow-up)" },
+            { "1 - 0, -, =, [, ]", "Use ability (again: repeat a follow-up)" },
             { "F", "Move" },
             { "Hold Space", "Wait or keep charging (time slows)" },
             { "1 / 2", "Mesmerize counter: strike / stop" },

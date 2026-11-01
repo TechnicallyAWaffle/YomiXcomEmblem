@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: dash
   DisplayName: Dash
   BehaviorId: dash
+  Roles: 0
   Description: Dash to a location. Transcend to dash further and faster.
   Targeting: 4
   Range: 1000
@@ -35,11 +36,22 @@ MonoBehaviour:
   StunDuration: 0
   StrainOnTarget: 0
   StrainOnSelf: 10
+  HealthCost: 0
+  UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
   BlockPierce: 0
+  StunnedDamageMultiplier: 1
   Shape: 0
   AreaRadius: 0
   LineWidth: 1
+  AreaHeight: 0
+  AuraStatuses: []
+  AuraSeconds: 0
+  ChannelSeconds: 0
+  ChannelNeedsSight: 0
+  AirRiseSeconds: 0.75
+  AirHoldSeconds: 0.75
+  AirSlamSeconds: 0.5
   Heal: 0
   Displace: 0
   DisplaceDistance: 0
@@ -47,6 +59,7 @@ MonoBehaviour:
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
   TargetStatusesDuringWindup: []
+  SelfStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
@@ -56,10 +69,21 @@ MonoBehaviour:
   ChargeHealthPerSecond: 0
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
+  ChargeHealMultiplier: 1
   IsFollowup: 0
+  ChainFollowups: 0
+  ChainCostMultiplier: 1
+  ChainWindow: 1
   CanTranscend: 1
   TranscendStrain: 15
+  TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 0
+    Color: {r: 1, g: 1, b: 1, a: 1}
+    Width: 0.06
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 9
+  Params: []
+  DataVersion: 15

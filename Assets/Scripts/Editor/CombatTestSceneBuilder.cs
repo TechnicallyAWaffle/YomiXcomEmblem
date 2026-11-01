@@ -47,29 +47,10 @@ public static class CombatTestSceneBuilder
             a.Windup = 0.6f; a.Recovery = 0.5f;
             a.Impact = ImpactType.Light; a.Damage = 14f; a.BaseAccuracy = 0.85f; a.StunDuration = 0.15f; a.StrainOnTarget = 5f;
         });
-        var strike = GetOrCreate<ActionDefinition>("Assets/Actions/HeavyStrike.asset", a =>
-        {
-            a.Id = "heavy_strike"; a.DisplayName = "Heavy Strike"; a.BehaviorId = "basic_attack";
-            a.Targeting = TargetType.Enemy; a.Range = 1.8f; a.IsRanged = false;
-            a.Windup = 0.9f; a.Recovery = 0.7f;
-            a.Impact = ImpactType.Heavy; a.Damage = 28f; a.BaseAccuracy = 0.95f; a.StunDuration = 0.8f; a.StrainOnTarget = 25f;
-        });
-
+        SquadAssets.ApplyVisuals(rifle);
+        // The Gunner and Brawler (Assets/Units/Gunner, Brawler) became the Caster and Brutebeast (SquadAssets.CreateEnemies);
+        // their old assets are no longer used.
         var unitPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(UnitPrefabPath);
-        var gunner = GetOrCreate<UnitDefinition>("Assets/Units/Gunner/Gunner.asset", u =>
-        {
-            u.DisplayName = "Gunner"; u.MaxHealth = 80f; u.BaseDodge = 0.15f; u.BaseBlock = 0f; u.MoveSpeed = 4f;
-            u.Actions = new List<ActionDefinition> { rifle }; u.ViewPrefab = unitPrefab;
-        });
-        var brawler = GetOrCreate<UnitDefinition>("Assets/Units/Brawler/Brawler.asset", u =>
-        {
-            u.DisplayName = "Brawler"; u.MaxHealth = 130f; u.BaseDodge = 0.05f; u.BaseBlock = 0.2f; u.MoveSpeed = 5f;
-            u.Actions = new List<ActionDefinition> { strike }; u.ViewPrefab = unitPrefab;
-        });
-
-        // The builder owns these two: they get the universal Block and Dash like everyone.
-        SquadAssets.EnsureUniversal(gunner);
-        SquadAssets.EnsureUniversal(brawler);
 
         var playerMat = GetOrCreateMaterial("Assets/Materials/Team_Player.mat", new Color(0.25f, 0.5f, 1f));
         var enemyMat = GetOrCreateMaterial("Assets/Materials/Team_Enemy.mat", new Color(1f, 0.3f, 0.25f));
@@ -79,8 +60,8 @@ public static class CombatTestSceneBuilder
         FixUnitPrefab(unitLayer);
         unitPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(UnitPrefabPath);
         SquadAssets.ApplyDescription(rifle, "RifleShot");
-        SquadAssets.ApplyDescription(strike, "HeavyStrike");
         var squad = SquadAssets.Create(unitPrefab, rifle);
+        var enemies = SquadAssets.CreateEnemies(unitPrefab);
 
         // ---- Scene
         foreach (var go in scene.GetRootGameObjects())
@@ -131,10 +112,10 @@ public static class CombatTestSceneBuilder
             Place(unitsRoot, unitPrefab, "Player_Paradigm", squad.Paradigm, Team.Player, Spawn(map, Team.Player, 1, new Vector3(-1.5f, 0f, -11.5f)), playerMat),
             Place(unitsRoot, unitPrefab, "Player_Tank", squad.Tank, Team.Player, Spawn(map, Team.Player, 2, new Vector3(2f, 0f, -8f)), playerMat),
             Place(unitsRoot, unitPrefab, "Player_Fighter", squad.Melee, Team.Player, Spawn(map, Team.Player, 3, new Vector3(6f, 0f, -8.5f)), playerMat),
-            Place(unitsRoot, unitPrefab, "Enemy_Gunner_A", gunner, Team.Enemy, Spawn(map, Team.Enemy, 0, new Vector3(-5f, 0f, 10f)), enemyMat),
-            Place(unitsRoot, unitPrefab, "Enemy_Gunner_B", gunner, Team.Enemy, Spawn(map, Team.Enemy, 1, new Vector3(5f, 0f, 10f)), enemyMat),
-            Place(unitsRoot, unitPrefab, "Enemy_Brawler_A", brawler, Team.Enemy, Spawn(map, Team.Enemy, 2, new Vector3(-2f, 0f, 8f)), enemyMat),
-            Place(unitsRoot, unitPrefab, "Enemy_Brawler_B", brawler, Team.Enemy, Spawn(map, Team.Enemy, 3, new Vector3(2f, 0f, 8f)), enemyMat),
+            Place(unitsRoot, unitPrefab, "Enemy_Caster_A", enemies.Caster, Team.Enemy, Spawn(map, Team.Enemy, 0, new Vector3(-5f, 0f, 10f)), enemyMat),
+            Place(unitsRoot, unitPrefab, "Enemy_Caster_B", enemies.Caster, Team.Enemy, Spawn(map, Team.Enemy, 1, new Vector3(5f, 0f, 10f)), enemyMat),
+            Place(unitsRoot, unitPrefab, "Enemy_Brutebeast_A", enemies.Brutebeast, Team.Enemy, Spawn(map, Team.Enemy, 2, new Vector3(-2f, 0f, 8f)), enemyMat),
+            Place(unitsRoot, unitPrefab, "Enemy_Brutebeast_B", enemies.Brutebeast, Team.Enemy, Spawn(map, Team.Enemy, 3, new Vector3(2f, 0f, 8f)), enemyMat),
         };
 
         context.Placements = placements;
@@ -205,17 +186,46 @@ public static class CombatTestSceneBuilder
         timeline.CameraRig = rig;
         EditorUtility.SetDirty(timeline);
 
-        // Pre-battle screen: it starts the battle once the player has picked enemies and loadouts.
+        // The launcher spawns the squad and the enemies and starts the battle; the pre-battle screen is a UI over it and the roster.
+        var launcher = controller.GetComponent<BattleLauncher>();
+        if (launcher == null) launcher = controller.gameObject.AddComponent<BattleLauncher>();
+        launcher.Controller = controller;
+        launcher.Context = context;
+        launcher.Maps = loader;
+        launcher.FallbackUnitPrefab = unitPrefab;
+        launcher.PlayerMaterial = playerMat;
+        launcher.EnemyMaterial = enemyMat;
+        EditorUtility.SetDirty(launcher);
+
+        var catalog = WriteCatalog(new[] { squad.Sharpshooter, squad.Melee, squad.Tank, squad.Paradigm,
+                                           enemies.Sniper, enemies.Assassin, enemies.Skirmisher, enemies.Healer, enemies.Caster, enemies.Brutebeast });
+        var firstContact = GetOrCreate<EncounterDefinition>(EncountersFolder + "/FirstContact.asset", e =>
+        {
+            e.DisplayName = "First Contact";
+            e.Description = "Two Casters and two Brutebeasts hold the arena. Wounds carry over.";
+            e.Map = arena;
+            e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Caster, Count = 2 });
+            e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Brutebeast, Count = 2 });
+            e.Spec.Rewards.Currency = 100;
+        });
+
+        // Pre-battle screen: it starts the battle once the player has picked an encounter (or enemies) and loadouts.
         var setup = controller.GetComponent<PreBattleSetup>();
         if (setup == null) setup = controller.gameObject.AddComponent<PreBattleSetup>();
         setup.Controller = controller;
         setup.Context = context;
-        setup.EnemyClasses = new List<UnitDefinition> { gunner, brawler, squad.Sharpshooter, squad.Melee, squad.Tank, squad.Paradigm };
-        setup.BlockAction = SquadAssets.UniversalBlock();
-        setup.DashAction = SquadAssets.UniversalDash();
-        setup.FallbackUnitPrefab = unitPrefab;
-        setup.EnemyMaterial = enemyMat;
+        setup.Launcher = launcher;
+        setup.Catalog = catalog;
+        setup.EnemyClasses = new List<UnitDefinition> { enemies.Caster, enemies.Brutebeast, enemies.Sniper, enemies.Assassin, enemies.Skirmisher, enemies.Healer };
         setup.Maps = loader;
+        // Every encounter in the project is on offer (ones already listed keep their order).
+        setup.Encounters.RemoveAll(e => e == null);
+        if (!setup.Encounters.Contains(firstContact)) setup.Encounters.Add(firstContact);
+        foreach (string guid in AssetDatabase.FindAssets("t:EncounterDefinition"))
+        {
+            var e = AssetDatabase.LoadAssetAtPath<EncounterDefinition>(AssetDatabase.GUIDToAssetPath(guid));
+            if (e != null && !setup.Encounters.Contains(e)) setup.Encounters.Add(e);
+        }
         // Every map template in the project is on offer (ones already listed keep their order).
         setup.MapChoices.RemoveAll(m => m == null);
         foreach (string guid in AssetDatabase.FindAssets("t:MapTemplate"))
@@ -307,6 +317,32 @@ public static class CombatTestSceneBuilder
     // ------------------------------------------------------------------ starter maps
 
     internal const string ArenaMapPath = "Assets/Maps/Arena.asset";
+    internal const string EncountersFolder = "Assets/Encounters";
+    internal const string CatalogPath = "Assets/Resources/" + ContentCatalog.ResourceName + ".asset";
+
+    /// <summary>
+    /// The content catalog saves resolve ids with (Resources/ContentCatalog): these classes, plus every other unit and every
+    /// upgrade in the project. Ones already listed stay (and keep their order).
+    /// </summary>
+    private static ContentCatalog WriteCatalog(UnitDefinition[] classes)
+    {
+        var catalog = GetOrCreate<ContentCatalog>(CatalogPath, c => { });
+        catalog.Units.RemoveAll(u => u == null);
+        catalog.Upgrades.RemoveAll(u => u == null);
+        foreach (var u in classes) if (u != null && !catalog.Units.Contains(u)) catalog.Units.Add(u);
+        foreach (string guid in AssetDatabase.FindAssets("t:UnitDefinition"))
+        {
+            var u = AssetDatabase.LoadAssetAtPath<UnitDefinition>(AssetDatabase.GUIDToAssetPath(guid));
+            if (u != null && !catalog.Units.Contains(u)) catalog.Units.Add(u);
+        }
+        foreach (string guid in AssetDatabase.FindAssets("t:UpgradeDefinition"))
+        {
+            var u = AssetDatabase.LoadAssetAtPath<UpgradeDefinition>(AssetDatabase.GUIDToAssetPath(guid));
+            if (u != null && !catalog.Upgrades.Contains(u)) catalog.Upgrades.Add(u);
+        }
+        EditorUtility.SetDirty(catalog);
+        return catalog;
+    }
     internal const string OpenFieldMapPath = "Assets/Maps/OpenField.asset";
 
     private static Vector3 Spawn(MapTemplate map, Team team, int index, Vector3 fallback)
@@ -445,15 +481,58 @@ public static class CombatTestSceneBuilder
         finally { Object.DestroyImmediate(fresh); }
     }
 
+    /// <summary>
+    /// The asset at 'path', created with 'init' if there is none. An asset moved since it was made is still found (see
+    /// FindMoved), and a new one goes into a moved folder of the same name if 'path''s own folder is gone, so reorganising
+    /// the Assets folders never makes the builder write a second copy.
+    /// </summary>
     internal static T GetOrCreate<T>(string path, System.Action<T> init) where T : ScriptableObject
     {
-        var existing = AssetDatabase.LoadAssetAtPath<T>(path);
+        var existing = AssetDatabase.LoadAssetAtPath<T>(path) ?? FindMoved<T>(path);
         if (existing != null) return existing;
+        path = WhereToCreate(path);
         EnsureFolder(System.IO.Path.GetDirectoryName(path).Replace('\\', '/'));
         var asset = ScriptableObject.CreateInstance<T>();
         init(asset);
         AssetDatabase.CreateAsset(asset, path);
         return asset;
+    }
+
+    /// <summary>A T with the file name of 'path' in a folder named like 'path''s (Assets/Actions/Tank/Bash.asset moved to
+    /// Assets/Actions/Player Units/Tank/Bash.asset), if there is exactly one; else null.</summary>
+    private static T FindMoved<T>(string path) where T : Object
+    {
+        string file = System.IO.Path.GetFileNameWithoutExtension(path);
+        string folder = System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(path));
+        var found = new List<string>();
+        foreach (var guid in AssetDatabase.FindAssets(file + " t:" + typeof(T).Name))
+        {
+            string p = AssetDatabase.GUIDToAssetPath(guid);
+            if (System.IO.Path.GetFileNameWithoutExtension(p) == file && System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(p)) == folder) found.Add(p);
+        }
+        return found.Count == 1 ? AssetDatabase.LoadAssetAtPath<T>(found[0]) : null;
+    }
+
+    /// <summary>Where to create an asset meant for 'path': there, unless its folder doesn't exist but exactly one folder of that
+    /// name does elsewhere under the same top folder (Assets/Actions): the folder was moved, so the asset goes in it.</summary>
+    private static string WhereToCreate(string path)
+    {
+        string dir = System.IO.Path.GetDirectoryName(path).Replace('\\', '/');
+        if (AssetDatabase.IsValidFolder(dir)) return path;
+        string[] parts = dir.Split('/');
+        string top = parts.Length >= 3 ? parts[0] + "/" + parts[1] : null;
+        if (top == null || !AssetDatabase.IsValidFolder(top)) return path;
+        string name = System.IO.Path.GetFileName(dir);
+        var found = new List<string>();
+        var pending = new Stack<string>();
+        pending.Push(top);
+        while (pending.Count > 0)
+            foreach (var sub in AssetDatabase.GetSubFolders(pending.Pop()))
+            {
+                if (System.IO.Path.GetFileName(sub) == name) found.Add(sub);
+                pending.Push(sub);
+            }
+        return found.Count == 1 ? found[0] + "/" + System.IO.Path.GetFileName(path) : path;
     }
 
     private static Material GetOrCreateMaterial(string path, Color color)

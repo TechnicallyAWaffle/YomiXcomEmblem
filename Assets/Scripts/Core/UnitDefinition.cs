@@ -7,6 +7,8 @@ namespace TacticsGame.Core
     [CreateAssetMenu(menuName = "TacticsGame/Unit Definition")]
     public class UnitDefinition : ScriptableObject
     {
+        [Tooltip("Stable id for saves (rosters name classes by it). Empty: the asset's name.")]
+        public string Id = "";
         public string DisplayName;
         public float MaxHealth = 100f;
         public float BaseDodge = 0.1f;
@@ -14,7 +16,7 @@ namespace TacticsGame.Core
         public float MaxStrain = 100f;
         [Tooltip("Strain shed per second once the unit has gone StrainRecoveryDelay seconds without gaining any.")]
         public float StrainRecoveryPerSecond = 6f;
-        public float StrainRecoveryDelay = 1.5f;
+        public float StrainRecoveryDelay = 0.5f;
         public float MaxEnergy = 0f;       // 0 = this unit doesn't use energy
         public float StartingEnergy = 0f;
         public float ActionSpeed = 1f;     // scales windup/recovery (2 = twice as fast)
@@ -33,6 +35,10 @@ namespace TacticsGame.Core
         public List<ActionDefinition> Actions = new List<ActionDefinition>();
         [Tooltip("Passive ids, see Core.Passives (e.g. strain_relief_on_dodge).")]
         public List<string> Passives = new List<string>();
+        [Tooltip("How the AI plays this unit: a UnitAIs profile (sniper, assassin, skirmisher, healer). Empty = the general BasicEnemyAI.")]
+        public string AIProfile = "";
+        [Tooltip("How the AI plays it, as data: a style and its tuned numbers. Overrides AIProfile when set.")]
+        public AIProfileDefinition AI;
         public GameObject ViewPrefab;
         [HideInInspector] public int DataVersion;   // which SquadAssets data revision this asset was last written with
     }

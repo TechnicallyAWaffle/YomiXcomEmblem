@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
+  m_Name: Melee
+  m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
+  DisplayName: Fighter
+  MaxHealth: 100
+  BaseDodge: 0.35
+  BaseBlock: 0
+  MaxStrain: 100
+  StrainRecoveryPerSecond: 6
+  StrainRecoveryDelay: 0.5
+  MaxEnergy: 0
+  StartingEnergy: 0
+  ActionSpeed: 1
+  MoveSpeed: 7.5
+  DashDistance: 3.5
+  EyeHeight: 1.6
+  BodyHeight: 1.8
+  BodyRadius: 0.4
+  BasicAttack: {fileID: 11400000, guid: aea5c64cb2a8d6a45af9c284f93ac5d5, type: 2}
+  Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
+  Actions:
+  - {fileID: 11400000, guid: 75bf72b01ddd8b742992a083ad15700c, type: 2}
+  - {fileID: 11400000, guid: b39804455d66a104c8314500ee330270, type: 2}
+  - {fileID: 11400000, guid: d758801727242194dbd6f99521bfcbb0, type: 2}
+  - {fileID: 11400000, guid: d6136dcc489e5284d8b3f71bedbb9e13, type: 2}
+  - {fileID: 11400000, guid: 3e38bc8d895694b418649d7a6fa26929, type: 2}
+  - {fileID: 11400000, guid: 21b5f4e1b93dd154e8c4d5db83dedcd6, type: 2}
+  - {fileID: 11400000, guid: c61c8afcd9c12a243866e184ae07dd91, type: 2}
+  - {fileID: 11400000, guid: 470fadec892047c4c9cd8241a05bd965, type: 2}
+  - {fileID: 11400000, guid: d02dafc6b2de1bd4a82420ff33e94c39, type: 2}
+  - {fileID: 11400000, guid: b6ec1bbfd8c979249b653c9bf64dbd25, type: 2}
+  - {fileID: 11400000, guid: 8d503594631c6304eab71912f968b659, type: 2}
+  - {fileID: 11400000, guid: 054e55497b7ae0f498e94895d8fad8f5, type: 2}
+  - {fileID: 11400000, guid: be7126f513a662f4aa3e4698e74ddd43, type: 2}
+  Passives:
+  - strain_relief_on_dodge
+  AIProfile: 
+  AI: {fileID: 0}
+  ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  DataVersion: 15

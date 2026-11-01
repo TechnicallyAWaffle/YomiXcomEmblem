@@ -1,0 +1,123 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b4d3416328b1ad3438229e3e79cfcc50, type: 3}
+  m_Name: MentalCurrents
+  m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
+  Id: mental_currents
+  DisplayName: Mental Currents
+  BehaviorId: self_buff
+  Roles: 0
+  Description: Gain bonus dodge and bonus movement speed for a brief duration
+  Targeting: 1
+  Range: 15
+  IsRanged: 0
+  CannotTargetSelf: 0
+  DestinationRange: 0
+  Windup: 0.1
+  Recovery: 0
+  Cooldown: 6
+  EnergyCost: 0
+  EnergyGain: 0
+  RequiredStatus: 
+  ConsumesRequiredStatus: 0
+  ConsumeOnResolve: 0
+  Impact: 0
+  Damage: 0
+  BaseAccuracy: 0.9
+  StunDuration: 0
+  StrainOnTarget: 0
+  StrainOnSelf: 0
+  HealthCost: 0
+  UnravelsOverMaxStrain: 0
+  PiercesTerrain: 0
+  BlockPierce: 0
+  StunnedDamageMultiplier: 1
+  Shape: 0
+  AreaRadius: 0
+  LineWidth: 1
+  AreaHeight: 0
+  AuraStatuses: []
+  AuraSeconds: 0
+  ChannelSeconds: 0
+  ChannelNeedsSight: 0
+  AirRiseSeconds: 0.75
+  AirHoldSeconds: 0.75
+  AirSlamSeconds: 0.5
+  Heal: 0
+  Displace: 0
+  DisplaceDistance: 0
+  SelfStatuses:
+  - Id: mental_currents
+    Duration: 2
+    Modifiers:
+    - Stat: 4
+      Op: 0
+      Value: 0.5
+    - Stat: 7
+      Op: 1
+      Value: 1.4
+    ActionModifiers: []
+    Flags: 0
+    ForbidsActions: []
+    AppliesTo: 0
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
+    DodgeBonus: 0
+    BlockBonus: 0
+    IncomingAccuracyBonus: 0
+    DodgeDistanceBonus: 0
+    ActionSpeedMult: 1
+    MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
+    Rooted: 0
+    Untargetable: 0
+    BreaksOnDamage: 0
+    StunImmune: 0
+    KeepsBlock: 0
+    Unstoppable: 0
+    RedirectsHits: 0
+  SelfStatusesOnWindup: 1
+  TargetStatusesOnHit: []
+  TargetStatusesDuringWindup: []
+  SelfStatusesDuringWindup: []
+  TrapArmDelay: 1
+  TrapLifetime: 30
+  LinkedAction: {fileID: 0}
+  IsCharge: 0
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 0
+  ChargeHealthPerSecond: 0
+  ChargeDamageMultiplier: 1
+  ChargeStunMultiplier: 1
+  ChargeHealMultiplier: 1
+  IsFollowup: 0
+  ChainFollowups: 0
+  ChainCostMultiplier: 1
+  ChainWindow: 1
+  CanTranscend: 0
+  TranscendStrain: 15
+  TranscendWindupMultiplier: 1
+  ExtraCinematic: 0
+  Visuals:
+    Kind: 8
+    Color: {r: 0.45, g: 0.95, b: 0.85, a: 1}
+    Width: 0.06
+    Pierce: 0
+  InterruptedByDamage: 0
+  InterruptedByStun: 0
+  Params: []
+  DataVersion: 15

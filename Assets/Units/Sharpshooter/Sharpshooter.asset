@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
   m_Name: Sharpshooter
   m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
   DisplayName: Sharpshooter
   MaxHealth: 85
   BaseDodge: 0.15
@@ -35,9 +36,13 @@ MonoBehaviour:
   - {fileID: 11400000, guid: e79c27fd67d2ac148b4b5e5c8a38c6ab, type: 2}
   - {fileID: 11400000, guid: 8aa261cb29640e24e9fcf974f6f309b0, type: 2}
   - {fileID: 11400000, guid: 804269327a3dc114caac234d2c14f839, type: 2}
+  - {fileID: 11400000, guid: 992fdcefa6a270e4a9b45a54fdff68d7, type: 2}
   - {fileID: 11400000, guid: d53286b3cd683b94a893056620996001, type: 2}
   - {fileID: 11400000, guid: a4f4773e49e3ea44481848ca112f8fa6, type: 2}
   - {fileID: 11400000, guid: 96c0392ca5dad4f4aafab48f5a26b021, type: 2}
+  - {fileID: 11400000, guid: 8a94c10ea8430dd4fb371a848fa41435, type: 2}
   Passives: []
+  AIProfile: 
+  AI: {fileID: 0}
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
-  DataVersion: 9
+  DataVersion: 15

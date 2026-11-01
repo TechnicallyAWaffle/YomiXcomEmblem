@@ -44,6 +44,10 @@ namespace TacticsGame.Presentation
         {
             Timeline = timeline;
             unitRegistry = registry;
+            // Status looks set on this battle's abilities (StatusSpec.Look) replace the built-in ones.
+            var actions = new List<ActionDefinition>();
+            if (timeline != null && timeline.InitialState != null) foreach (var u in timeline.InitialState.Units) actions.AddRange(u.Actions);
+            StatusDisplay.Register(actions);
             ResetPlayback();
         }
 
@@ -177,6 +181,13 @@ namespace TacticsGame.Presentation
                 case TacticsGame.Core.EventType.Lift:
                     if (target != null) { var l = (LiftInfo)evt.Payload; target.BeginLift(l.From, l.To, l.RiseSeconds, evt.SimTime); }
                     break;
+                case TacticsGame.Core.EventType.AerialSlam:
+                {
+                    var s = (AerialSlamInfo)evt.Payload;
+                    if (actor != null) actor.BeginAerialSlam(s, true);
+                    if (target != null) target.BeginAerialSlam(s, false);
+                    break;
+                }
                 case TacticsGame.Core.EventType.Carry:
                     if (target != null)
                     {

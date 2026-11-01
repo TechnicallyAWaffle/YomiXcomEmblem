@@ -76,7 +76,7 @@ namespace TacticsGame.Presentation
 
         private readonly List<DecisionRequest> pending = new List<DecisionRequest>();
         private readonly List<PlannedOrder> plan = new List<PlannedOrder>();
-        private readonly BasicEnemyAI ai = new BasicEnemyAI();
+        private readonly IUnitAI ai = new AIRouter();   // Auto plays a unit the way its AI profile would
         private readonly List<Vector3> pathScratch = new List<Vector3>();
         private BattleSimulation sim;
         private System.Action onComplete;
@@ -180,9 +180,10 @@ namespace TacticsGame.Presentation
             if (unit.Grapple != null)
             {
                 // Holding someone: keep headbutting, throw, or move (carrying them). Nothing else.
-                if (mode == Mode.Grapple && (key == KeyCode.Alpha1 || key == KeyCode.Keypad1)) { GrappleHold(unit); return true; }
+                bool awaiting = sim.AwaitingThrow(unit);
+                if (mode == Mode.Grapple && !awaiting && (key == KeyCode.Alpha1 || key == KeyCode.Keypad1)) { GrappleHold(unit); return true; }
                 if (mode == Mode.Grapple && (key == KeyCode.Alpha2 || key == KeyCode.Keypad2)) { GrappleThrow(unit); return true; }
-                if (key == KeyCode.F) { mode = Mode.PickMove; selected = null; message = null; return true; }
+                if (key == KeyCode.F && !awaiting) { mode = Mode.PickMove; selected = null; message = null; return true; }
                 return false;
             }
 
@@ -352,19 +353,22 @@ namespace TacticsGame.Presentation
             else ChooseAction(unit, def);
         }
 
-        /// <summary>0-based ability slot for the number row (and keypad): 1..9, 0 for the tenth, then - and =. -1 if none.</summary>
+        /// <summary>0-based ability slot for the number row (and keypad): 1..9, 0 for the tenth, then -, =, [, ] and \. -1 if none.</summary>
         private static int AbilitySlot(KeyCode key)
         {
             if (key >= KeyCode.Alpha1 && key <= KeyCode.Alpha9) return key - KeyCode.Alpha1;
             if (key == KeyCode.Alpha0) return 9;
             if (key == KeyCode.Minus) return 10;
             if (key == KeyCode.Equals) return 11;
+            if (key == KeyCode.LeftBracket) return 12;
+            if (key == KeyCode.RightBracket) return 13;
+            if (key == KeyCode.Backslash) return 14;
             if (key >= KeyCode.Keypad1 && key <= KeyCode.Keypad9) return key - KeyCode.Keypad1;
             if (key == KeyCode.Keypad0) return 9;
             return -1;
         }
 
-        private static string SlotKey(int slot) { return slot < 9 ? (slot + 1).ToString() : slot == 9 ? "0" : slot == 10 ? "-" : slot == 11 ? "=" : null; }
+        private static string SlotKey(int slot) { return slot < 9 ? (slot + 1).ToString() : slot == 9 ? "0" : slot == 10 ? "-" : slot == 11 ? "=" : slot == 12 ? "[" : slot == 13 ? "]" : slot == 14 ? "\\" : null; }
 
         private static string FollowupKeyName(Unit unit, ActionDefinition def)
         {
@@ -615,7 +619,7 @@ namespace TacticsGame.Presentation
                     {
                         bool dash = selected.BehaviorId == "dash";
                         Vector3 point = dash ? hit.point : AimPoint(unit, screenPos, hit, clickedUnit);
-                        if (selected.Shape != AreaShape.Line && Vector3.Distance(from, point) > selected.Range) { message = "Out of range."; return; }
+                        if (selected.Shape != AreaShape.Line && Vector3.Distance(from, point) > unit.ActionStat(selected, ActionStat.Range)) { message = "Out of range."; return; }
                         AddOrder(UnitCommand.UseActionAt(unit.Id, selected, point).Transcended(selectedTranscend), selected.DisplayName + (dash ? "" : " (point)"),
                             dash ? sim.DashDestination(PlannedUnit(unit), point, selectedTranscend) : from);
                     }
@@ -648,6 +652,13 @@ namespace TacticsGame.Presentation
                     sim.SubmitDodgeDashTo(unit.Id, clickedUnit != null && clickedUnit.Id == unit.Id ? unit.Position : hit.point);
                     Next();
                     break;
+
+                case Mode.Grapple:
+                    // Holding someone: a click throws them that way.
+                    if (unit.Grapple == null) return;
+                    sim.SubmitCommand(UnitCommand.ReleaseGrapple(unit.Id, clickedUnit != null ? clickedUnit.Position : hit.point));
+                    Next();
+                    break;
             }
         }
 
@@ -674,7 +685,28 @@ namespace TacticsGame.Presentation
         private static float FlatDistance(Vector3 a, Vector3 b) { a.y = 0f; b.y = 0f; return Vector3.Distance(a, b); }
 
         private void GrappleHold(Unit unit) { sim.SubmitCommand(UnitCommand.HoldGrapple(unit.Id)); Next(); }
-        private void GrappleThrow(Unit unit) { sim.SubmitCommand(UnitCommand.ReleaseGrapple(unit.Id)); Next(); }
+        /// <summary>Throw now: toward the point under the cursor if there is one, else the way the unit faces.</summary>
+        private void GrappleThrow(Unit unit)
+        {
+            Vector3? at = ThrowAim();
+            sim.SubmitCommand(at.HasValue ? UnitCommand.ReleaseGrapple(unit.Id, at.Value) : UnitCommand.ReleaseGrapple(unit.Id));
+            Next();
+        }
+
+        /// <summary>Where a throw would be aimed: the unit or ground under the cursor (null: none, throw the way it faces).</summary>
+        private Vector3? ThrowAim() { return hovered != null ? hovered.Position : hoverOnGround ? hoverPoint : (Vector3?)null; }
+
+        /// <summary>The way a throw from 'unit' would go now: toward the cursor, else its facing.</summary>
+        private Vector3 ThrowDirection(Unit unit)
+        {
+            Vector3? at = ThrowAim();
+            if (at.HasValue)
+            {
+                Vector3 d = at.Value - unit.Position; d.y = 0f;
+                if (d.sqrMagnitude > 1e-4f) return d.normalized;
+            }
+            return sim.GrappleFacing(unit);
+        }
 
         /// <summary>
         /// Combo timing: seconds the target stays stunned after this ability would land (negative = the stun wears off
@@ -690,7 +722,7 @@ namespace TacticsGame.Presentation
 
         private static bool IsOffensive(ActionDefinition def)
         {
-            return def.Damage > 0f && (def.Targeting == TargetType.Enemy || def.BehaviorId == "area_attack");
+            return def.Damage > 0f && ActionBehaviors.Get(def.BehaviorId).RollsToHit(def);
         }
 
         /// <summary>What an attack on this unit would look like right now. Mirrors the sim's hit roll; it's a preview, not the roll.</summary>
@@ -708,9 +740,9 @@ namespace TacticsGame.Presentation
             float exposure = (def.IsRanged && !def.PiercesTerrain) ? sim.Visibility.GetExposure(planned, target, false) : 1f;
             float height = sim.HeightAccuracyBonus(planned, target, def);
             float bonus = height;
-            if (def == selected && selectedTranscend && def.BehaviorId == "steady_strikes") bonus += SteadyStrikesBehavior.TranscendAccuracyBonus;
-            foreach (var s in target.Statuses) bonus += s.IncomingAccuracyBonus;
-            float hitChance = Mathf.Clamp01(def.BaseAccuracy * exposure + bonus);
+            bonus += ActionBehaviors.Get(def.BehaviorId).PreviewAccuracyBonus(def, def == selected && selectedTranscend);
+            bonus += target.IncomingAccuracyBonus();
+            float hitChance = Mathf.Clamp01(planned.ActionStat(def, ActionStat.Accuracy) * exposure + bonus);
             // Dodge at the moment it lands: none if the target is still stunned then (a combo).
             float? combo = ComboMargin(planned, def, target);
             float dodge = combo.HasValue && combo.Value >= 0f ? 0f : target.UnstunnedDodge();
@@ -832,6 +864,22 @@ namespace TacticsGame.Presentation
             if (mode == Mode.PickDestination) hoverPoint = DestinationPoint(hit);
         }
 
+        /// <summary>
+        /// A range ring of 'range' around 'from', drawn at the height of 'at' (the point or unit being aimed at), so it stays
+        /// visible on raised or lower ground and shows the real reach there. Range is a 3D distance, so at a different height the
+        /// ring is narrower (sqrt(range^2 - height^2)); 'flat' reaches (dashes, destinations) are measured across the ground
+        /// and keep their radius. The ring at the unit's own height stays, faint, for reference.
+        /// </summary>
+        private void RangeRing(Vector3 from, float range, Vector3? at, bool flat, Color color, float width)
+        {
+            float dy = at.HasValue ? at.Value.y - from.y : 0f;
+            if (Mathf.Abs(dy) < 0.1f) { markers.Circle(from, range, color, width, 96); return; }
+            float r = flat ? range : Mathf.Sqrt(Mathf.Max(0f, range * range - dy * dy));
+            var faint = color; faint.a *= 0.3f;
+            markers.Circle(from, range, faint, width * 0.6f, 96);
+            markers.Circle(new Vector3(from.x, at.Value.y, from.z), r, color, width, 96);
+        }
+
         private void DrawMarkers(Unit unit)
         {
             Vector3 from = PlannedPosition(unit);
@@ -859,8 +907,9 @@ namespace TacticsGame.Presentation
                     {
                         // Dash: its reach, and where it would land from where the unit will be.
                         var dasher = PlannedUnit(unit);
-                        if (selectedTranscend) markers.Circle(from, sim.DashReach(dasher), RangeColor, 0.03f, 64);   // the plain reach, for comparison
-                        markers.Circle(from, sim.DashReach(dasher, selectedTranscend), selectedTranscend ? TranscendColor : RangeColor, 0.05f, 64);
+                        Vector3? dashAt = hoverOnGround ? hoverPoint : (Vector3?)null;
+                        if (selectedTranscend) RangeRing(from, sim.DashReach(dasher), dashAt, true, RangeColor, 0.03f);   // the plain reach, for comparison
+                        RangeRing(from, sim.DashReach(dasher, selectedTranscend), dashAt, true, selectedTranscend ? TranscendColor : RangeColor, 0.05f);
                         if (hoverOnGround)
                         {
                             Vector3 to = sim.DashDestination(dasher, hoverPoint, selectedTranscend);
@@ -869,7 +918,9 @@ namespace TacticsGame.Presentation
                         }
                         break;
                     }
-                    if (selected.Shape != AreaShape.Line) markers.Circle(from, selected.Range, selectedTranscend ? TranscendColor : RangeColor, 0.06f, 96);
+                    // Reach is measured in 3D, so the ring follows the height of whatever is being aimed at (see RangeRing).
+                    Vector3? aimedAt = selected.Targeting == TargetType.Position ? (hoverOnGround ? hoverPoint : (Vector3?)null) : hovered != null ? hovered.Position : hoverOnGround ? hoverPoint : (Vector3?)null;
+                    if (selected.Shape != AreaShape.Line) RangeRing(from, unit.ActionStat(selected, ActionStat.Range), aimedAt, false, selectedTranscend ? TranscendColor : RangeColor, 0.06f);
                     if (selected.Targeting == TargetType.Position)
                     {
                         if (hoverOnGround) DrawAreaPreview(unit, from);
@@ -905,7 +956,7 @@ namespace TacticsGame.Presentation
                     var who = destinationFor;
                     if (who == null) break;
                     Color aim = selectedTranscend ? TranscendColor : SelectionColor;
-                    markers.Circle(who.Position, selected.DestinationRange, RangeColor, 0.05f, 96);
+                    RangeRing(who.Position, selected.DestinationRange, hoverOnGround ? hoverPoint : (Vector3?)null, true, RangeColor, 0.05f);
                     markers.Circle(who.Position, who.BodyRadius + 0.3f, ValidTargetColor, 0.1f);
                     Highlight(who, ValidTargetColor, true);
                     if (!hoverOnGround) break;
@@ -921,8 +972,11 @@ namespace TacticsGame.Presentation
                     var held = unit.Grapple != null ? sim.GetUnit(unit.Grapple.TargetId) : null;
                     if (held == null) break;
                     Highlight(held, InvalidTargetColor, true);
-                    Vector3 throwTo = held.Position + sim.GrappleFacing(unit) * sim.GrappleThrowDistance;
-                    markers.Segment(held.Position, throwTo, InvalidTargetColor, 0.06f);
+                    // It swings round to the side it is thrown toward (the cursor), then flies GrappleThrowDistance that way.
+                    Vector3 dir = ThrowDirection(unit);
+                    Vector3 throwFrom = unit.Position + dir * BattleSimulation.CarryOffset(unit, held);
+                    Vector3 throwTo = sim.Paths.ClampDash(throwFrom, throwFrom + dir * sim.GrappleThrowDistance);
+                    markers.Segment(throwFrom, throwTo, InvalidTargetColor, 0.06f);
                     markers.Circle(throwTo, held.BodyRadius, InvalidTargetColor, 0.05f);
                     break;
                 }
@@ -1036,15 +1090,15 @@ namespace TacticsGame.Presentation
                 dir.Normalize();
                 Vector3 side = Vector3.Cross(Vector3.up, dir) * (selected.LineWidth / 2f);
                 // Ramps from the caster to the aimed elevation, then level (see BattleSimulation.LineHeightAt).
-                float aimDist = Mathf.Min(Vector3.Distance(Flat(from), Flat(hoverPoint)), selected.Range);
-                Vector3 bend = LinePoint(from, dir, aimDist), end = LinePoint(from, dir, selected.Range);
+                float aimDist = Mathf.Min(Vector3.Distance(Flat(from), Flat(hoverPoint)), unit.ActionStat(selected, ActionStat.Range));
+                Vector3 bend = LinePoint(from, dir, aimDist), end = LinePoint(from, dir, unit.ActionStat(selected, ActionStat.Range));
                 markers.Polyline(new[] { from + side, bend + side, end + side, end - side, bend - side, from - side, from + side }, SelectionColor, 0.05f);
                 markers.Circle(hoverPoint, 0.3f, SelectionColor, 0.05f, 24);
             }
             else
             {
-                bool inRange = Vector3.Distance(from, hoverPoint) <= selected.Range;
-                float radius = selected.AreaRadius > 0f ? selected.AreaRadius : 0.5f;
+                bool inRange = Vector3.Distance(from, hoverPoint) <= unit.ActionStat(selected, ActionStat.Range);
+                float radius = selected.AreaRadius > 0f ? unit.ActionStat(selected, ActionStat.AreaRadius) : 0.5f;
                 markers.Circle(hoverPoint, radius, inRange ? SelectionColor : InvalidTargetColor, 0.06f, 64);
                 if (!inRange || selected.Shape != AreaShape.Circle) return;
             }
@@ -1062,7 +1116,9 @@ namespace TacticsGame.Presentation
 
         private void OnGUI()
         {
+            GUI.depth = -5;   // in front of the HUD's health and strain bars and the combat text, so the ability popup is never covered
             UiScale.Begin();
+            if (UiDeclutter.On) return;   // Alt: only the battle and its bars (release to give orders)
             DrawHoldTimer();
             var unit = Active ? Current : null;
             if (unit == null) { BottomReserved = 0f; return; }
@@ -1110,6 +1166,7 @@ namespace TacticsGame.Presentation
             y += 24f;
 
             ClearTip();
+            tipUnit = unit;   // the popup shows this unit's numbers (upgrades and statuses included)
             bool changed;
             switch (mode)
             {
@@ -1124,7 +1181,7 @@ namespace TacticsGame.Presentation
             // While picking a target, keep the chosen ability's description up so its rules are in view.
             if ((mode == Mode.PickTarget || mode == Mode.PickDestination) && selected != null)
             {
-                tipTitle = selected.DisplayName; tipBody = selected.Description; tipStats = null; tipSections = ActionStats(selected); tipWarning = null;
+                tipTitle = selected.DisplayName; tipBody = selected.Description; tipStats = null; tipSections = ActionStats(selected, tipUnit); tipWarning = null;
                 tipAnchor = new Rect(panelRect.x, panelRect.y, 0f, 0f);
             }
             DrawTip();   // last, so it draws over the panel
@@ -1152,7 +1209,7 @@ namespace TacticsGame.Presentation
                             unit.ActiveAction != null ? sim.Now - unit.ActiveAction.StartedAt : 0f, sim.ChargeLevel(unit) * 100f);
                 {
                     string name = (selectedTranscend ? "TRANSCENDED " : "") + selected.DisplayName;
-                    float range = selected.BehaviorId == "dash" ? sim.DashReach(PlannedUnit(unit), selectedTranscend) : selected.Range;
+                    float range = selected.BehaviorId == "dash" ? sim.DashReach(PlannedUnit(unit), selectedTranscend) : unit.ActionStat(selected, ActionStat.Range);
                     return selected.Targeting == TargetType.Position
                         ? string.Format("{0}: click a point for {1} (range {2:0.#}m)", unit.DisplayName, name, range)
                         : string.Format("{0}: click a target for {1} (range {2:0.#}m)", unit.DisplayName, name, range);
@@ -1166,7 +1223,8 @@ namespace TacticsGame.Presentation
                 case Mode.Grapple:
                 {
                     var g = unit.Grapple;
-                    return g == null ? unit.DisplayName : string.Format("{0}: holding {1}!  next headbutt in {2:0.0}s, thrown in {3:0.0}s", unit.DisplayName, HeldName(unit),
+                    if (g != null && g.AwaitingThrow) return string.Format("{0}: the grab is up! Click where to throw {1} (2: toward the cursor, or the way you face)", unit.DisplayName, HeldName(unit));
+                    return g == null ? unit.DisplayName : string.Format("{0}: holding {1}!  next headbutt in {2:0.0}s, thrown in {3:0.0}s (click to aim it)", unit.DisplayName, HeldName(unit),
                         Mathf.Max(0f, g.NextHeadbuttAt - sim.Now), Mathf.Max(0f, g.EndsAt - sim.Now));
                 }
                 case Mode.Mesmer:
@@ -1194,10 +1252,10 @@ namespace TacticsGame.Presentation
                     if (plan.Count > 0) return "Keep adding orders (Shift), or Confirm / Enter to send the plan.";
                     var followup = Current != null ? Followup(Current) : null;
                     if (followup != null) return "Press " + FollowupKeyName(Current, followup) + " again: " + followup.DisplayName + " on the same target. Hold Space to focus.";
-                    return "Keys 1-0, - and = abilities, G dash; hold one to Transcend it. Shift queues orders. Hold Space to focus (sheds strain).";
+                    return "Keys 1-0, - = [ ] abilities, G dash; hold one to Transcend it. Shift queues orders. Hold Space to focus (sheds strain).";
                 }
                 case Mode.Mesmer: return "Keep striking, or stop and give a normal order. Any other order ends the counter.";
-                case Mode.Grapple: return "1 keep headbutting, 2 throw now (the way you face), F move while carrying them.";
+                case Mode.Grapple: return "1 keep headbutting, click or 2 throw now (toward the cursor), F move while carrying them.";
                 case Mode.PickDestination: return "Click a point inside the ring. Right-click or Esc to pick another unit.";
                 default:
                     return releasing ? "Hold Space to keep charging (time runs slowly). Click to release it there."
@@ -1435,97 +1493,76 @@ namespace TacticsGame.Presentation
         private static string Mult(float m) { return "x" + m.ToString("0.##"); }
 
         /// <summary>A status the ability grants or inflicts, as its own section: how long, and what it changes.</summary>
-        private static TipSection StatusSection(string who, StatusSpec s, bool duringWindup = false)
+        /// <param name="lasts">Overrides the "Lasts" cell (a dome's statuses last while inside it).</param>
+        private static TipSection StatusSection(string who, StatusSpec s, bool duringWindup = false, string lasts = null)
         {
             string whom = s.AppliesTo == StatusTarget.Allies ? " (ally)" : s.AppliesTo == StatusTarget.Enemies ? " (enemy)" : "";
             var sec = new TipSection { Title = string.Format("{0}{1}: {2}", who, whom, StatusDisplay.NameOf(s.Id).ToUpperInvariant()) };
-            sec.Add("Lasts", duringWindup ? "the windup" : Secs(s.Duration));
-            if (Mathf.Abs(s.ActionSpeedMult - 1f) > 1e-3f) sec.Add("Action speed", Mult(s.ActionSpeedMult));
-            if (Mathf.Abs(s.MoveSpeedMult - 1f) > 1e-3f) sec.Add("Move speed", Mult(s.MoveSpeedMult));
-            if (Mathf.Abs(s.DamageDealtMult - 1f) > 1e-3f) sec.Add("Damage dealt", Mult(s.DamageDealtMult));
-            if (Mathf.Abs(s.StrainCostMult - 1f) > 1e-3f) sec.Add("Strain costs", s.StrainCostMult <= 0f ? "none" : Mult(s.StrainCostMult));
-            if (s.BlockBonus > 0f) sec.Add("Block", string.Format("+{0:0}%", s.BlockBonus * 100f));
-            if (s.DodgeBonus > 0f) sec.Add("Dodge", string.Format("+{0:0}%", s.DodgeBonus * 100f));
-            if (s.DodgeDistanceBonus > 0f) sec.Add("Dash distance", string.Format("+{0:0.#}m", s.DodgeDistanceBonus));
-            if (s.IncomingAccuracyBonus > 0f) sec.Add("Hit chance vs", string.Format("+{0:0}%", s.IncomingAccuracyBonus * 100f));
-            if (s.StunImmune) sec.Add("Stun", "immune");
-            if (s.Rooted) sec.Add("Movement", "rooted");
-            if (s.Untargetable) sec.Add("Enemies", "can't target");
-            if (s.KeepsBlock) sec.Notes.Add("Hits don't wear its block down.");
-            if (s.BreaksOnDamage) sec.Notes.Add("Ends on taking damage.");
+            sec.Add("Lasts", lasts ?? (duringWindup ? "the windup" : Secs(s.Duration)));
+            if (s.Modifiers != null) foreach (var m in s.Modifiers) sec.Add(StatText.Name(m.Stat), StatText.Change(m));
+            if (s.ActionModifiers != null) foreach (var m in s.ActionModifiers) sec.Add(StatText.Label(m, id => id.Replace('_', ' ')), StatText.Change(m));
+            var flagCells = new List<KeyValuePair<string, string>>();
+            StatText.Describe(s.Flags, flagCells, sec.Notes);
+            foreach (var c in flagCells) sec.Add(c.Key, c.Value);
             if (s.ForbidsActions != null && s.ForbidsActions.Count > 0) sec.Notes.Add("Can't use meanwhile: " + string.Join(", ", s.ForbidsActions.Select(id => id.Replace('_', ' ')).ToArray()) + ".");
             return sec;
         }
 
         /// <summary>
         /// The ability popup's numbers, grouped: how it is used (aim, timing, cooldown), what it does, what it costs, then a
-        /// section per status it grants or inflicts, and its special rules. Ranges are left out: the targeting rings show them.
+        /// section per status it grants or inflicts. Ranges are left out: the targeting rings show them. With 'who', its numbers are that unit's.
         /// </summary>
-        private static List<TipSection> ActionStats(ActionDefinition def)
+        private List<TipSection> ActionStats(ActionDefinition def, Unit who = null)
         {
+            // The numbers of the unit being ordered (its upgrades and statuses in), or the ability's own without one.
+            System.Func<ActionStat, float> V = s => who != null ? who.ActionStat(def, s) : Stats.Base(def, s);
             var sections = new List<TipSection>();
             var use = new TipSection { Title = "USE" };
             use.Add("Target", TargetKind(def));
-            if (def.Shape == AreaShape.Circle && def.AreaRadius > 0f) use.Add("Radius", string.Format("{0:0.#}m", def.AreaRadius));
+            if (def.Shape == AreaShape.Circle && V(ActionStat.AreaRadius) > 0f) use.Add("Radius", string.Format("{0:0.#}m", V(ActionStat.AreaRadius)));
             if (def.Shape == AreaShape.Line && def.Targeting == TargetType.Position) use.Add("Width", string.Format("{0:0.#}m", def.LineWidth));
+            if (def.Shape == AreaShape.Circle && def.AreaHeight > 0f) use.Add("Dome height", string.Format("{0:0.#}m", def.AreaHeight));
             if (def.IsCharge) use.Add("Charge", "up to " + Secs(def.MaxChargeSeconds));
-            use.Add("Windup", Secs(def.Windup));
-            use.Add("Recovery", Secs(def.Recovery));
-            if (def.Cooldown > 0f) use.Add("Cooldown", Secs(def.Cooldown));
+            if (def.ChannelSeconds > 0f) use.Add("Channel", "up to " + Secs(def.ChannelSeconds));
+            else if (def.AuraSeconds > 0f) use.Add("Dome lasts", Secs(def.AuraSeconds));
+            use.Add("Windup", Secs(V(ActionStat.Windup)));
+            use.Add("Recovery", Secs(V(ActionStat.Recovery)));
+            if (V(ActionStat.Cooldown) > 0f) use.Add("Cooldown", Secs(V(ActionStat.Cooldown)));
             sections.Add(use);
 
+            // What it does: its behavior words it (ActionBehavior.Describe), so special rules need no case here.
+            var behavior = ActionBehaviors.Get(def.BehaviorId);
+            var tip = new AbilityTip(def, who, sim);
+            behavior.Describe(tip);
             var effect = new TipSection { Title = "EFFECT" };
-            bool rolls = (def.Targeting == TargetType.Enemy && def.BehaviorId != "stutter") || def.BehaviorId == "area_attack" || def.BehaviorId == "bash" || def.BehaviorId == "lance";
-            bool grab = def.BehaviorId == "subjugate";
-            if (grab && def.LinkedAction != null) effect.Add("Headbutts", string.Format("{0:0} / 0.5s", def.LinkedAction.Damage));
-            if (def.Damage > 0f && (rolls || grab)) effect.Add(grab ? "Throw" : "Damage", string.Format("{0:0} {1}", def.Damage, def.Impact == ImpactType.Heavy ? "heavy" : "light"));
-            else if (rolls && def.Impact == ImpactType.Heavy) effect.Add("Impact", "heavy");
-            if (rolls && def.BaseAccuracy < 0.995f) effect.Add("Accuracy", string.Format("{0:0}%", def.BaseAccuracy * 100f));
-            if (def.StunDuration > 0f && (rolls || grab)) effect.Add(grab ? "Hold" : "Stun", Secs(def.StunDuration));
-            if (def.StrainOnTarget > 0f && (rolls || grab)) effect.Add("Target strain", string.Format("+{0:0}", def.StrainOnTarget));
-            if (def.Heal > 0f) effect.Add("Heal", def.Heal.ToString("0"));
-            if (def.DisplaceDistance > 0f)
-            {
-                if (def.BehaviorId == "levitate") effect.Add("Lift", string.Format("{0:0.#}m", def.DisplaceDistance));
-                else if (def.Displace == DisplaceMode.TowardSource) effect.Add("Pull", string.Format("{0:0.#}m", def.DisplaceDistance));
-                else if (def.Displace == DisplaceMode.AwayFromEnemies) effect.Add("Moves them", string.Format("{0:0.#}m", def.DisplaceDistance));
-                else effect.Add("Knockback", string.Format("{0:0.#}m", def.DisplaceDistance));
-            }
-            if (def.BehaviorId == "teleport") effect.Add("Teleport", "to a point");
-            if (def.IsCharge && def.ChargeDamageMultiplier > 1f) effect.Add("Full charge", Mult(def.ChargeDamageMultiplier) + " dmg");
+            foreach (var c in tip.Effect) effect.Add(c.Key, c.Value);
             if (effect.Cells.Count > 0) sections.Add(effect);
 
             var cost = new TipSection { Title = "COST" };
-            if (def.StrainOnSelf > 0f) cost.Add("Strain", "+" + def.StrainOnSelf.ToString("0"));
-            if (def.StrainOnSelf < 0f) cost.Add("Strain", "sheds " + (-def.StrainOnSelf).ToString("0"));
-            if (def.EnergyCost > 0f) cost.Add("Energy", def.EnergyCost.ToString("0"));
+            if (V(ActionStat.StrainOnSelf) > 0f) cost.Add("Strain", "+" + V(ActionStat.StrainOnSelf).ToString("0"));
+            if (V(ActionStat.StrainOnSelf) < 0f) cost.Add("Strain", "sheds " + (-V(ActionStat.StrainOnSelf)).ToString("0"));
+            if (V(ActionStat.EnergyCost) > 0f) cost.Add("Energy", V(ActionStat.EnergyCost).ToString("0"));
             if (def.EnergyGain > 0f) cost.Add("Energy gain", "+" + def.EnergyGain.ToString("0"));
             if (def.IsCharge && def.ChargeStrainPerSecond > 0f) cost.Add("Charging", string.Format("+{0:0} strain/s", def.ChargeStrainPerSecond));
+            if (V(ActionStat.HealthCost) > 0f) cost.Add("Health", "-" + V(ActionStat.HealthCost).ToString("0"));
             if (def.CanTranscend) cost.Add("Transcend", string.Format("+{0:0} strain", def.TranscendStrain));
             if (cost.Cells.Count > 0) sections.Add(cost);
 
             foreach (var s in def.SelfStatuses) if (s != null) sections.Add(StatusSection("YOU", s));
-            foreach (var s in def.TargetStatusesOnHit) if (s != null) sections.Add(StatusSection(def.BehaviorId == "trap" ? "SPRUNG BY" : "TARGET", s));
+            foreach (var s in def.TargetStatusesOnHit) if (s != null) sections.Add(StatusSection(tip.TargetStatusesTitle, s));
             if (def.TargetStatusesDuringWindup != null)
                 foreach (var s in def.TargetStatusesDuringWindup) if (s != null) sections.Add(StatusSection("TARGET", s, true));
-
-            var rules = new TipSection { Title = "RULES" };
-            var required = def.RequiredStatuses();
-            if (required.Length > 0)
-                rules.Notes.Add("Needs " + string.Join(" or ", required.Select(StatusDisplay.NameOf).ToArray()) + (def.ConsumesRequiredStatus ? ", and ends it." : "."));
-            if (def.IsFollowup) rules.Notes.Add("Follow-up: press its key again to repeat it on the same target.");
-            if (def.CanTranscend) rules.Notes.Add("Hold its key or button to Transcend it.");
-            if (def.InterruptedByDamage) rules.Notes.Add("Broken by any hit while winding up.");
-            else if (def.InterruptedByStun) rules.Notes.Add("Broken by any stun while winding up.");
-            if (def.PiercesTerrain) rules.Notes.Add("Ignores cover.");
-            if (def.BlockPierce > 0f) rules.Notes.Add(string.Format("Pierces {0:0}% of block.", def.BlockPierce * 100f));
-            if (rules.Notes.Count > 0) sections.Add(rules);
+            if (def.SelfStatusesDuringWindup != null)
+                foreach (var s in def.SelfStatusesDuringWindup) if (s != null) sections.Add(StatusSection("YOU", s, true));
+            if (def.AuraStatuses != null)
+                foreach (var s in def.AuraStatuses) if (s != null) sections.Add(StatusSection("IN DOME", s, false, "while inside"));
             return sections;
         }
 
         // Hover tooltip for the button under the mouse, rebuilt every OnGUI event. Abilities fill tipSections; the plain
         // buttons (Move, Focus...) give a line of tipStats instead.
         private string tipTitle, tipBody, tipStats, tipWarning;
+        private Unit tipUnit;
         private List<TipSection> tipSections;
         private Rect tipAnchor;
 
@@ -1539,7 +1576,7 @@ namespace TacticsGame.Presentation
         {
             if (!button.Contains(Event.current.mousePosition)) return;
             SetTip(button, def.DisplayName, string.IsNullOrEmpty(def.Description) ? null : def.Description, null, warning);
-            tipSections = ActionStats(def);
+            tipSections = ActionStats(def, tipUnit);
         }
 
         private void ClearTip() { tipTitle = null; }
@@ -1750,14 +1787,19 @@ namespace TacticsGame.Presentation
             var throwRect = new Rect(x + 230f, y, 170f, 28f);
             var moveRect = new Rect(x + 410f, y, 200f, 28f);
             SetTip(holdRect, "Keep headbutting", "Stand and keep hold: headbutt again, then choose again.");
-            SetTip(throwRect, "Throw now", "Let go early: wind up the throw and hurl them the way you face.");
+            bool awaiting = sim.AwaitingThrow(unit);
+            SetTip(throwRect, "Throw now", "Wind up the throw and hurl them toward the cursor (or click the ground to throw that way).");
             SetTip(moveRect, "Move", "Walk somewhere, carrying them. You keep headbutting on the way.");
             var old = GUI.backgroundColor;
             GUI.backgroundColor = FollowupColor;
+            GUI.enabled = !awaiting;   // the grab is up: throwing is all that's left
             bool hold = GUI.Button(holdRect, "1  Keep headbutting");
             GUI.backgroundColor = old;
-            bool toss = GUI.Button(throwRect, "2  Throw now");
+            GUI.enabled = true;
+            bool toss = GUI.Button(throwRect, "2  Throw");
+            GUI.enabled = !awaiting;
             bool move = GUI.Button(moveRect, "F  Move (carrying)");
+            GUI.enabled = true;
             y += 34f;
             if (hold) { GrappleHold(unit); return true; }
             if (toss) { GrappleThrow(unit); return true; }

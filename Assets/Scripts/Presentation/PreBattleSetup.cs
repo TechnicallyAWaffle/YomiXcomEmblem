@@ -6,76 +6,77 @@ using TacticsGame.Core;
 namespace TacticsGame.Presentation
 {
     /// <summary>
-    /// Pre-battle screen. Before the battle starts it lets the player set:
-    ///   - the map (any of MapChoices; MapLoader builds it right away, with the units stood on its spawns),
-    ///   - how many enemies (1-MaxEnemies) and each one's class (any of EnemyClasses),
-    ///   - for each squad member, which of its class abilities it brings.
-    /// The basic attack, Block and Dash always come along. Start Battle swaps the enemy units placed in the scene for freshly spawned
-    /// ones, gives everyone runtime copies of their definitions with the chosen loadout (the assets are untouched), and
-    /// starts the BattleController. After the battle, New Battle reloads the scene back to this screen.
-    /// Uses GUILayout, so anything that changes the set of controls (adding an enemy row, closing the panel) ends the
-    /// GUI pass right away with GUIUtility.ExitGUI; the next frame lays out the new set.
+    /// Pre-battle screen: a UI over the squad roster (SquadRoster, saved between sessions by RosterSave) and the
+    /// BattleLauncher. Before the battle it lets the player pick:
+    ///   - an encounter (any of Encounters: its map, enemies and rewards), or Custom: the map (any of MapChoices) and how
+    ///     many enemies of which class (any of EnemyClasses);
+    ///   - for each squad member, which of its class abilities it brings (kept on the roster).
+    /// It shows each member's wounds (carried over from earlier battles; down members sit out until the squad rests) and the
+    /// squad's currency and upgrades in stock. Start Battle hands the roster and the encounter to the launcher; afterwards
+    /// the result is shown and New Battle reloads the scene back here (the roster, saved, carries over).
+    /// The squad of a fresh roster is the squad placed in the scene. Uses GUILayout, so anything that changes the set of
+    /// controls ends the GUI pass right away with GUIUtility.ExitGUI; the next frame lays out the new set.
     /// </summary>
     public class PreBattleSetup : MonoBehaviour
     {
         public BattleController Controller;
         public BattleContext Context;
-        [Tooltip("Classes enemies can be. The first entries are the defaults for the starting lineup.")]
+        public BattleLauncher Launcher;
+        [Tooltip("Resolves the roster's classes and upgrades. Empty: Resources/ContentCatalog, else the scene's squad and EnemyClasses.")]
+        public ContentCatalog Catalog;
+        [Tooltip("Encounters to pick from (missions). Custom battles use the map and enemy pickers instead.")]
+        public List<EncounterDefinition> Encounters = new List<EncounterDefinition>();
+        [Tooltip("Classes a custom battle's enemies can be. The first entries are the defaults for the starting lineup.")]
         public List<UnitDefinition> EnemyClasses = new List<UnitDefinition>();
-        public ActionDefinition BlockAction, DashAction;
-        [Tooltip("Used for enemies whose definition has no ViewPrefab.")]
-        public GameObject FallbackUnitPrefab;
-        public Material EnemyMaterial;
         public int MaxEnemies = 8;
         [Tooltip("Builds the chosen map. Leave empty to fight on whatever is in the scene.")]
         public MapLoader Maps;
-        [Tooltip("Maps the player can pick from (Map Builder adds saved maps here). The scene's current map is selected first.")]
+        [Tooltip("Maps a custom battle can be on (Map Builder adds saved maps here). The scene's current map is selected first.")]
         public List<MapTemplate> MapChoices = new List<MapTemplate>();
-        [Tooltip("Enemies past the map's enemy spawns line up in rows behind them: spacing between units and between rows. " +
-                 "EnemyRowCenter is the first row's centre when there is no map.")]
-        public Vector3 EnemyRowCenter = new Vector3(0f, 0f, 9f);
-        public float EnemySpacing = 4f, EnemyRowSpacing = 3f;
-        public int EnemiesPerRow = 4;
+        [Tooltip("Keep the roster between sessions (RosterSave). Off: every play starts with a fresh squad.")]
+        public bool SaveRoster = true;
 
-        private int mapIndex;
+        private int mapIndex, encounterIndex = -1;   // -1: a custom battle
         private bool mapDirty;   // build the chosen map next Update (not mid-GUI)
         private static MapTemplate lastMap;
+        private static int lastEncounter = -1;
 
-        private class SquadLoadout
+        private class MemberLoadout
         {
-            public BattleContext.Placement Placement;
+            public RosterMember Member;
+            public UnitDefinition Definition;
             public List<ActionDefinition> Options = new List<ActionDefinition>();
             public List<bool> Enabled = new List<bool>();
         }
 
-        private readonly List<SquadLoadout> squad = new List<SquadLoadout>();
+        private SquadRoster roster;
+        private readonly List<MemberLoadout> squad = new List<MemberLoadout>();
         private readonly List<int> enemyClass = new List<int>();
         private bool open;
         private Vector2 scroll;
         private GUIStyle head, small;
-        private string shownTooltip = "";
+        private string shownTooltip = "", resultText;
 
         private void Start()
         {
-            if (Controller == null || Context == null) return;
+            if (Controller == null || Context == null || Launcher == null) return;
             open = true;
-            // Start on the map picked last time (New Battle reloads the scene), else the one built in the scene.
+            if (Catalog == null) Catalog = Resources.Load<ContentCatalog>(ContentCatalog.ResourceName);
+            if (Catalog == null) Catalog = SceneCatalog();
+            // The squad's own classes are never enemies (older scenes still list them).
+            EnemyClasses.RemoveAll(c => c == null || Context.Placements.Exists(p => p.Team == Team.Player && p.Definition == c));
             MapChoices.RemoveAll(m => m == null);
+            Encounters.RemoveAll(e => e == null);
+            // Start on what was picked last time (New Battle reloads the scene), else the map built in the scene.
             mapIndex = Mathf.Max(0, MapChoices.IndexOf(lastMap != null && MapChoices.Contains(lastMap) ? lastMap : Maps != null ? Maps.Current : null));
+            encounterIndex = lastEncounter < Encounters.Count ? lastEncounter : -1;
             mapDirty = true;
-            foreach (var p in Context.Placements)
-            {
-                if (p.Team != Team.Player || p.Definition == null) continue;
-                var s = new SquadLoadout { Placement = p };
-                foreach (var a in p.Definition.Actions)
-                {
-                    if (a == null || a == p.Definition.BasicAttack) continue;
-                    s.Options.Add(a);
-                    s.Enabled.Add(true);
-                }
-                squad.Add(s);
-            }
-            // Start from the enemies already placed in the scene.
+
+            roster = SaveRoster ? RosterSave.Load() : null;
+            if (roster == null || roster.Members.Count == 0) roster = NewRoster();
+            BuildLoadouts();
+
+            // A custom battle starts from the enemies already placed in the scene.
             foreach (var p in Context.Placements)
             {
                 if (p.Team != Team.Enemy || p.Definition == null) continue;
@@ -83,6 +84,56 @@ namespace TacticsGame.Presentation
                 AddEnemy(index >= 0 ? index : 0);
             }
             if (enemyClass.Count == 0) AddEnemy(0);
+            Launcher.OnEncounterFinished += Finished;
+        }
+
+        private void OnDestroy() { if (Launcher != null) Launcher.OnEncounterFinished -= Finished; }
+
+        /// <summary>A fresh squad: the classes of the squad placed in the scene, in order.</summary>
+        private SquadRoster NewRoster()
+        {
+            var classes = new List<UnitDefinition>();
+            foreach (var p in Context.Placements) if (p.Team == Team.Player && p.Definition != null) classes.Add(p.Definition);
+            return SquadRoster.New(classes);
+        }
+
+        /// <summary>No catalog asset: one made of the scene's squad and the enemy classes (no upgrades).</summary>
+        private ContentCatalog SceneCatalog()
+        {
+            var c = ScriptableObject.CreateInstance<ContentCatalog>();
+            foreach (var p in Context.Placements) if (p.Definition != null && !c.Units.Contains(p.Definition)) c.Units.Add(p.Definition);
+            foreach (var e in EnemyClasses) if (e != null && !c.Units.Contains(e)) c.Units.Add(e);
+            return c;
+        }
+
+        private void BuildLoadouts()
+        {
+            squad.Clear();
+            foreach (var m in roster.Members)
+            {
+                var def = Catalog.Unit(m.Class);
+                if (def == null) continue;
+                var s = new MemberLoadout { Member = m, Definition = def };
+                foreach (var a in def.Actions)
+                {
+                    if (a == null || a == def.BasicAttack) continue;
+                    s.Options.Add(a);
+                    s.Enabled.Add(!m.HasLoadout || m.Loadout.Contains(a.Id));
+                }
+                squad.Add(s);
+            }
+        }
+
+        /// <summary>The ability toggles into the roster (a member bringing everything keeps no list).</summary>
+        private void StoreLoadouts()
+        {
+            foreach (var s in squad)
+            {
+                bool all = !s.Enabled.Contains(false);
+                s.Member.HasLoadout = !all;
+                s.Member.Loadout.Clear();
+                if (!all) for (int i = 0; i < s.Options.Count; i++) if (s.Enabled[i]) s.Member.Loadout.Add(s.Options[i].Id);
+            }
         }
 
         private void AddEnemy(int classIndex)
@@ -91,6 +142,8 @@ namespace TacticsGame.Presentation
             classIndex = Mathf.Clamp(classIndex, 0, EnemyClasses.Count - 1);
             enemyClass.Add(classIndex);
         }
+
+        private EncounterDefinition ChosenEncounter { get { return encounterIndex >= 0 && encounterIndex < Encounters.Count ? Encounters[encounterIndex] : null; } }
 
         private void OnGUI()
         {
@@ -104,23 +157,30 @@ namespace TacticsGame.Presentation
             if (!open)
             {
                 bool over = Controller != null && Controller.Sim != null && Controller.Sim.Outcome != BattleOutcome.InProgress;
-                if (over && GUI.Button(new Rect(UiScale.Width / 2f - 90f, 140f, 180f, 36f), "New Battle"))
+                if (!over) return;
+                if (resultText != null)
+                {
+                    var style = new GUIStyle(head) { alignment = TextAnchor.UpperCenter, wordWrap = true };
+                    GUI.Label(new Rect(UiScale.Width / 2f - 300f, 186f, 600f, 60f), resultText, style);
+                }
+                if (GUI.Button(new Rect(UiScale.Width / 2f - 90f, 140f, 180f, 36f), "New Battle"))
                     SceneManager.LoadScene(SceneManager.GetActiveScene().name);
                 return;
             }
 
-            float w = Mathf.Min(980f, UiScale.Width - 40f), h = Mathf.Min(640f, UiScale.Height - 40f);
+            float w = Mathf.Min(980f, UiScale.Width - 40f), h = Mathf.Min(660f, UiScale.Height - 40f);
             var area = new Rect((UiScale.Width - w) / 2f, (UiScale.Height - h) / 2f, w, h);
             GUI.Box(area, GUIContent.none);
             GUI.Box(area, GUIContent.none);   // doubled for a more opaque background with the default skin
             GUILayout.BeginArea(new Rect(area.x + 14f, area.y + 10f, area.width - 28f, area.height - 20f));
             GUILayout.Label("Battle Setup", head);
-            DrawMapPicker();
+            DrawEncounterPicker();
+            if (ChosenEncounter == null) DrawMapPicker();
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.BeginHorizontal();
 
             GUILayout.BeginVertical(GUILayout.Width((w - 50f) * 0.42f));
-            DrawEnemies();
+            if (ChosenEncounter == null) DrawEnemies(); else DrawEncounter(ChosenEncounter);
             GUILayout.EndVertical();
             GUILayout.Space(16f);
             GUILayout.BeginVertical();
@@ -130,8 +190,52 @@ namespace TacticsGame.Presentation
             GUILayout.EndHorizontal();
             GUILayout.EndScrollView();
             GUILayout.Space(6f);
+            GUI.enabled = squad.Exists(s => !s.Member.Down);
             if (GUILayout.Button("Start Battle", GUILayout.Height(40f))) { Begin(); GUIUtility.ExitGUI(); }
+            GUI.enabled = true;
             GUILayout.EndArea();
+        }
+
+        // ------------------------------------------------------------------ encounter and map
+
+        /// <summary>Encounter: &lt; Custom / name &gt; and its description.</summary>
+        private void DrawEncounterPicker()
+        {
+            var e = ChosenEncounter;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Battle", head, GUILayout.Width(60f));
+            GUI.enabled = Encounters.Count > 0;
+            if (GUILayout.Button("<", GUILayout.Width(28f))) { SetEncounter(encounterIndex - 1); GUIUtility.ExitGUI(); }
+            GUILayout.Label(e != null ? e.Title : "Custom", head, GUILayout.Width(220f));
+            if (GUILayout.Button(">", GUILayout.Width(28f))) { SetEncounter(encounterIndex + 1); GUIUtility.ExitGUI(); }
+            GUI.enabled = true;
+            string done = e != null && roster.CompletedEncounters.Contains(e.EncounterId) ? "  (won before)" : "";
+            GUILayout.Label(e != null ? e.Description + done : "Pick the map and the enemies yourself.", small);
+            GUILayout.EndHorizontal();
+            GUILayout.Space(2f);
+        }
+
+        /// <summary>Cycle through Custom (-1) and the encounters.</summary>
+        private void SetEncounter(int index)
+        {
+            int n = Encounters.Count + 1;
+            encounterIndex = ((index + 1) % n + n) % n - 1;
+            lastEncounter = encounterIndex;
+            mapDirty = true;
+        }
+
+        private void DrawEncounter(EncounterDefinition e)
+        {
+            GUILayout.Label("Enemies", head);
+            foreach (var entry in e.Spec.Enemies)
+                if (entry != null && entry.Unit != null)
+                    GUILayout.Label(string.Format("{0} x{1}{2}", entry.Unit.DisplayName, Mathf.Max(1, entry.Count), entry.Upgrades != null && entry.Upgrades.Count > 0 ? "  (upgraded)" : ""));
+            GUILayout.Space(6f);
+            GUILayout.Label("Map: " + (e.Map != null ? e.Map.Title : "(the scene as it is)"), small);
+            var r = e.Spec.Rewards;
+            int ups = r != null && r.Upgrades != null ? r.Upgrades.Count : 0;
+            GUILayout.Label(string.Format("Rewards: {0} currency{1}", r != null ? r.Currency : 0, ups > 0 ? ", " + ups + " upgrade" + (ups == 1 ? "" : "s") : ""), small);
+            GUILayout.Label(e.Spec.CarryOverWounds ? "Wounds carry over afterwards." : "Wounds don't carry over.", small);
         }
 
         /// <summary>Map: &lt; name &gt; and its description. Always the same controls, so switching never upsets GUILayout.</summary>
@@ -181,7 +285,7 @@ namespace TacticsGame.Presentation
                 if (GUILayout.Button(">", GUILayout.Width(28f))) SetEnemyClass(i, enemyClass[i] + 1);
                 GUILayout.EndHorizontal();
             }
-            GUILayout.Label("Enemy classes cycle through every class, the squad's included. Everyone has Block and Dash (G).", small);
+            GUILayout.Label("Enemy classes cycle through the enemy types. Everyone has Block and Dash (G).", small);
         }
 
         private void SetEnemyClass(int i, int classIndex)
@@ -190,16 +294,30 @@ namespace TacticsGame.Presentation
             enemyClass[i] = ((classIndex % n) + n) % n;
         }
 
+        // ------------------------------------------------------------------ squad
+
         private void DrawSquad()
         {
-            GUILayout.Label("Your squad", head);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Your squad", head, GUILayout.Width(150f));
+            GUILayout.Label(string.Format("Currency {0}   Upgrades in stock {1}", roster.Currency, roster.OwnedUpgrades.Count), small, GUILayout.Width(260f));
+            if (GUILayout.Button("Rest", GUILayout.Width(60f))) { roster.Rest(); Save(); }
+            if (GUILayout.Button("New squad", GUILayout.Width(90f)))
+            {
+                roster = NewRoster();
+                BuildLoadouts();
+                Save();
+                GUIUtility.ExitGUI();
+            }
+            GUILayout.EndHorizontal();
             foreach (var s in squad)
             {
-                var def = s.Placement.Definition;
+                var def = s.Definition;
                 GUILayout.BeginHorizontal();
-                GUILayout.Label(def.DisplayName, head, GUILayout.Width(170f));
+                GUILayout.Label(string.IsNullOrEmpty(s.Member.Name) ? def.DisplayName : s.Member.Name, head, GUILayout.Width(170f));
+                GUILayout.Label(s.Member.Down ? "DOWN: sits out until the squad rests" : s.Member.Wounds > 0.005f ? string.Format("wounded: {0:0}% health", (1f - s.Member.Wounds) * 100f) : "fit", small);
                 GUILayout.EndHorizontal();
-                if (def.BasicAttack != null) GUILayout.Label("Basic attack: " + def.BasicAttack.DisplayName + " (always)", small);
+                if (def.BasicAttack != null) GUILayout.Label("Basic attack: " + def.BasicAttack.DisplayName + " (always)" + (s.Member.Upgrades.Count > 0 ? "   Upgrades: " + s.Member.Upgrades.Count : ""), small);
                 GUILayout.BeginHorizontal();
                 for (int i = 0; i < s.Options.Count; i++)
                 {
@@ -215,131 +333,66 @@ namespace TacticsGame.Presentation
             if (Event.current.type == UnityEngine.EventType.Repaint) shownTooltip = GUI.tooltip ?? "";
         }
 
-        /// <summary>Applies the loadout, swaps in the chosen enemies and starts the battle.</summary>
+        private void Save() { if (SaveRoster) RosterSave.Save(roster); }
+
+        // ------------------------------------------------------------------ the battle
+
+        /// <summary>Stores the loadouts and sends the squad in: the chosen encounter, or a custom one from the pickers.</summary>
         private void Begin()
         {
             open = false;
-            ApplyMap(true);
-            var placements = new List<BattleContext.Placement>();
-            foreach (var s in squad)
-            {
-                var p = s.Placement;
-                var chosen = new List<ActionDefinition>();
-                for (int i = 0; i < s.Options.Count; i++) if (s.Enabled[i]) chosen.Add(s.Options[i]);
-                p.Definition = Loadout(p.Definition, chosen);
-                placements.Add(p);
-            }
-
-            foreach (var p in Context.Placements)
-                if (p.Team == Team.Enemy && p.View != null) Destroy(p.View.gameObject);
-
-            for (int i = 0; i < enemyClass.Count; i++)
-            {
-                var def = EnemyClasses[enemyClass[i]];
-                var prefab = def.ViewPrefab != null ? def.ViewPrefab : FallbackUnitPrefab;
-                if (prefab == null) continue;
-                var pos = EnemyStart(i, enemyClass.Count);
-                var go = Instantiate(prefab, pos, Facing(Team.Enemy, pos), Context.transform);
-                go.name = "Enemy_" + def.DisplayName + "_" + (i + 1);
-                if (EnemyMaterial != null) foreach (var r in go.GetComponentsInChildren<Renderer>()) r.sharedMaterial = EnemyMaterial;
-                var view = go.GetComponent<UnitView>();
-                if (view == null) { Destroy(go); continue; }
-                placements.Add(new BattleContext.Placement
-                {
-                    View = view, Team = Team.Enemy,
-                    Definition = Loadout(def, new List<ActionDefinition>(def.Actions)),
-                });
-            }
-
-            Context.Placements = placements;
-            Controller.StartBattle();
+            StoreLoadouts();
+            Save();
+            var encounter = ChosenEncounter;
+            if (encounter != null) { Launcher.Launch(roster, Catalog, encounter); return; }
+            var spec = new EncounterSpec { Id = "", CarryOverWounds = false };   // a custom battle is practice: no wounds, no rewards
+            foreach (int i in enemyClass) spec.Enemies.Add(new EnemyEntry { Unit = EnemyClasses[i], Count = 1 });
+            Launcher.Launch(roster, Catalog, ChosenMap, spec, null);
         }
 
-        // ------------------------------------------------------------------ maps
+        private void Finished(EncounterResult result)
+        {
+            Save();
+            var text = result.Won ? "Victory" : result.Outcome == BattleOutcome.Draw ? "Draw" : "Defeat";
+            if (result.CurrencyEarned > 0) text += "   +" + result.CurrencyEarned + " currency";
+            if (result.UpgradesEarned.Count > 0) text += "   +" + result.UpgradesEarned.Count + " upgrade" + (result.UpgradesEarned.Count == 1 ? "" : "s");
+            if (result.MembersDown.Count > 0) text += "   " + result.MembersDown.Count + " down";
+            resultText = text;
+        }
 
-        private MapTemplate ChosenMap { get { return MapChoices.Count > 0 ? MapChoices[Mathf.Clamp(mapIndex, 0, MapChoices.Count - 1)] : null; } }
+        // ------------------------------------------------------------------ the map preview behind the panel
+
+        private MapTemplate ChosenMap
+        {
+            get
+            {
+                if (ChosenEncounter != null) return ChosenEncounter.Map;
+                return MapChoices.Count > 0 ? MapChoices[Mathf.Clamp(mapIndex, 0, MapChoices.Count - 1)] : null;
+            }
+        }
 
         private void Update()
         {
-            if (!mapDirty) return;
+            if (!mapDirty || !open) return;
             mapDirty = false;
-            ApplyMap(false);
+            ApplyMap();
         }
 
         /// <summary>Build the chosen map if it isn't the one in the scene, and stand the units placed in the scene on its
-        /// spawns (a preview behind the panel). 'force' places them even when the map didn't change.</summary>
-        private void ApplyMap(bool force)
+        /// spawns (a preview behind the panel; the launcher spawns the real units).</summary>
+        private void ApplyMap()
         {
             var map = ChosenMap;
-            if (Maps == null || map == null) return;
-            bool changed = Maps.Current != map;
-            if (changed) Maps.Load(map);
-            if (!changed && !force) return;
-            int player = 0, enemy = 0, enemies = Context.Placements.FindAll(p => p.Team == Team.Enemy).Count;
+            if (Maps == null || map == null || Maps.Current == map) return;
+            Maps.Load(map);
+            int player = 0, enemy = 0;
+            int players = Context.Placements.FindAll(p => p.Team == Team.Player).Count, enemies = Context.Placements.Count - players;
             foreach (var p in Context.Placements)
             {
                 if (p.View == null) continue;
-                Vector3 pos;
-                if (p.Team == Team.Player)
-                {
-                    if (player >= map.PlayerSpawns.Count) { player++; continue; }
-                    pos = map.PlayerSpawns[player++];
-                }
-                else pos = EnemyStart(enemy++, enemies);
-                p.View.transform.SetPositionAndRotation(pos, Facing(p.Team, pos));
+                Vector3 pos = p.Team == Team.Player ? Launcher.StartBattle(Team.Player, player++, players) : Launcher.StartBattle(Team.Enemy, enemy++, enemies);
+                p.View.transform.SetPositionAndRotation(pos, Launcher.Facing(p.Team, pos));
             }
-        }
-
-        /// <summary>Where the i-th of 'count' enemies starts: the map's enemy spawns in order, then rows behind them
-        /// (away from the squad), or EnemyRowCenter's rows when there is no map.</summary>
-        private Vector3 EnemyStart(int i, int count)
-        {
-            var map = Maps != null ? Maps.Current : null;
-            var spawns = map != null ? map.EnemySpawns : null;
-            if (spawns != null && i < spawns.Count) return spawns[i];
-            int k = spawns != null ? i - spawns.Count : i, overflow = spawns != null ? count - spawns.Count : count;
-            Vector3 center = EnemyRowCenter, away = Vector3.forward;
-            if (spawns != null && spawns.Count > 0)
-            {
-                Vector3 enemies = Centroid(spawns);
-                away = map.PlayerSpawns.Count > 0 ? enemies - Centroid(map.PlayerSpawns) : Vector3.forward;
-                away.y = 0f;
-                away = away.sqrMagnitude > 1e-4f ? away.normalized : Vector3.forward;
-                center = enemies + away * EnemyRowSpacing;
-            }
-            Vector3 side = Vector3.Cross(Vector3.up, away);
-            int perRow = Mathf.Max(1, EnemiesPerRow);
-            int row = k / perRow, col = k % perRow;
-            int inRow = Mathf.Min(perRow, overflow - row * perRow);
-            return center + side * ((col - (inRow - 1) / 2f) * EnemySpacing) + away * (row * EnemyRowSpacing);
-        }
-
-        /// <summary>Face the other team's start (or straight across the field without a map).</summary>
-        private Quaternion Facing(Team team, Vector3 from)
-        {
-            var map = Maps != null ? Maps.Current : null;
-            var other = map != null ? map.Spawns(team == Team.Player ? Team.Enemy : Team.Player) : null;
-            Vector3 look = other != null && other.Count > 0 ? Centroid(other) - from : (team == Team.Player ? Vector3.forward : Vector3.back);
-            look.y = 0f;
-            return Quaternion.LookRotation(look.sqrMagnitude > 1e-4f ? look : Vector3.forward);
-        }
-
-        private static Vector3 Centroid(List<Vector3> points)
-        {
-            Vector3 sum = Vector3.zero;
-            foreach (var p in points) sum += p;
-            return sum / Mathf.Max(1, points.Count);
-        }
-
-        /// <summary>A runtime copy of 'def' with these abilities plus Block and Dash; the asset itself is left untouched.</summary>
-        private UnitDefinition Loadout(UnitDefinition def, List<ActionDefinition> actions)
-        {
-            var copy = Instantiate(def);
-            copy.name = def.name;   // unit ids are built from it
-            copy.Actions = actions;
-            copy.Universal = BlockAction != null ? BlockAction : def.Universal;
-            copy.Dash = DashAction != null ? DashAction : def.Dash;
-            return copy;
         }
     }
 }

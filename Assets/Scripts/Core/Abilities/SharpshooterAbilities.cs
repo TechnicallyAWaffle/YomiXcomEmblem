@@ -11,6 +11,9 @@ namespace TacticsGame.Core
     /// <summary>Snipe: aim, then fire. Cancels if the target leaves line of sight (or goes hidden) during the windup.</summary>
     public class SnipeBehavior : BasicAttackBehavior
     {
+        // A snipe is saved for marked targets; it marks nothing itself.
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return (base.DefaultRoles(def) & ~AbilityRole.Mark) | AbilityRole.Snipe; }
+
         public override bool OnWindupTick(BattleSimulation sim, ActionInstance a)
         {
             var target = sim.GetUnit(a.TargetUnitId);
@@ -26,8 +29,6 @@ namespace TacticsGame.Core
     /// </summary>
     public class TakeAimBehavior : SelfBuffBehavior
     {
-        public const float ReactionWindup = 0.1f;
-
         public override void Attach(BattleSimulation sim)
         {
             sim.Triggers.Subscribe(TriggerType.ActionStarted, ctx =>
@@ -40,7 +41,7 @@ namespace TacticsGame.Core
                     if (stance == null || stance.LinkedAction == null) continue;
                     if (!sim.InReach(aimer, stance.LinkedAction, actor)) continue;
                     sim.RemoveStatus(aimer, StatusIds.TakeAim);
-                    sim.QueueFreeAction(aimer, stance.LinkedAction, actor.Id, ReactionWindup);
+                    sim.QueueFreeAction(aimer, stance.LinkedAction, actor.Id, sim.ReactionWindup);
                 }
             });
         }
@@ -64,6 +65,8 @@ namespace TacticsGame.Core
     /// <summary>Trap: toss a trap at the target point. It arms after TrapArmDelay and applies TargetStatusesOnHit (rooted + marked).</summary>
     public class TrapBehavior : ActionBehavior
     {
+        public override void Describe(AbilityTip tip) { base.Describe(tip); tip.TargetStatusesTitle = "SPRUNG BY"; }
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             var def = a.Definition;
@@ -73,11 +76,48 @@ namespace TacticsGame.Core
                 Trap = new Trap
                 {
                     OwnerId = a.Actor.Id, OwnerTeam = a.Actor.Team, Position = a.TargetPos,
-                    Radius = def.AreaRadius > 0f ? def.AreaRadius : 1f,
+                    Radius = def.AreaRadius > 0f ? a.Stat(ActionStat.AreaRadius) : 1f,
                     ArmsAt = sim.Now + def.TrapArmDelay, ExpiresAt = sim.Now + def.TrapLifetime,
                     Statuses = new List<StatusSpec>(def.TargetStatusesOnHit),
                 },
             });
+        }
+    }
+
+    /// <summary>
+    /// Skyward Demise (leap): leap toward the target point (up to Range across, over the nearest walkable ground there) and
+    /// DisplaceDistance metres up, and hover there (BattleSimulation.HoverUnit) for as long as the longest of its
+    /// SelfStatuses lasts (its damage boost). The unit can act but not move up there. The hover ends early once an ability
+    /// used from the air lands, or when damage knocks it down (a fall); its SelfStatuses come off when it ends.
+    /// </summary>
+    public class LeapBehavior : ActionBehavior
+    {
+        protected override void DescribeMovement(AbilityTip tip)
+        {
+            if (tip.V(ActionStat.DisplaceDistance) > 0f) tip.Add("Leap height", AbilityTip.Metres(tip.V(ActionStat.DisplaceDistance)));
+        }
+
+        public override bool MovesUser { get { return true; } }
+
+        public override bool CanStart(BattleSimulation sim, Unit actor, UnitCommand cmd, out string reason)
+        {
+            reason = actor.IsRooted ? "immobilized" : null;
+            return reason == null;
+        }
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var actor = a.Actor;
+            var def = a.Definition;
+            if (actor.IsRooted) return;
+            Vector3 d = a.TargetPos - actor.Position; d.y = 0f;
+            float reach = a.Stat(ActionStat.Range);
+            if (d.magnitude > reach) d = d.normalized * reach;
+            Vector3 to = sim.WalkablePointNear(actor.Position + d) + Vector3.up * a.Stat(ActionStat.DisplaceDistance);
+            float lasts = 0f;
+            var ids = new List<string>();
+            foreach (var s in def.SelfStatuses) { lasts = Mathf.Max(lasts, s.Duration); ids.Add(s.Id); }
+            sim.HoverUnit(actor, to, sim.Now + lasts, ids);
         }
     }
 }
