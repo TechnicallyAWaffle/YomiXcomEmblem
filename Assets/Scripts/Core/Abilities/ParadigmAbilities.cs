@@ -9,6 +9,8 @@ namespace TacticsGame.Core
     /// <summary>Stutter: a near-instant jolt that breaks the target's windup or charge. No damage, no hit roll; costs the user strain.</summary>
     public class StutterBehavior : ActionBehavior
     {
+        public override bool RollsToHit(ActionDefinition def) { return false; }   // no hit roll, no damage: it just interrupts
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             var target = sim.GetUnit(a.TargetUnitId);
@@ -40,6 +42,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class TeleportBehavior : ActionBehavior
     {
+        public override void Describe(AbilityTip tip) { base.Describe(tip); tip.Add("Teleport", "to a point"); }
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             var target = sim.GetUnit(a.TargetUnitId);
@@ -57,12 +61,17 @@ namespace TacticsGame.Core
     /// </summary>
     public class LevitateBehavior : ActionBehavior
     {
+        protected override void DescribeMovement(AbilityTip tip)
+        {
+            if (tip.V(ActionStat.DisplaceDistance) > 0f) tip.Add("Lift", AbilityTip.Metres(tip.V(ActionStat.DisplaceDistance)));
+        }
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             var target = sim.GetUnit(a.TargetUnitId);
             if (target == null || !target.IsAlive) return;
             var actor = a.Actor;
-            float height = a.Definition.DisplaceDistance;
+            float height = a.Stat(ActionStat.DisplaceDistance);
             effects.Add(new AttackEffect
             {
                 Source = actor, TargetId = target.Id, Definition = a.Definition, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag,
@@ -77,6 +86,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class LanceBehavior : ActionBehavior
     {
+        public override bool RollsToHit(ActionDefinition def) { return true; }
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             var def = a.Definition;

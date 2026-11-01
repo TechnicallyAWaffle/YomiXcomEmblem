@@ -18,6 +18,8 @@ namespace TacticsGame.Core
         public float WaitSeconds = 0.5f;
         public bool WaitForRange;   // out of range when ordered: melee chases the target, ranged queues until it is in range
         public bool Transcend;      // use the ability's Transcended version (ActionDefinition.CanTranscend), for its extra strain
+        public bool Aimed;          // ReleaseGrapple: throw toward TargetPos
+        public bool NoFocus;        // Wait: a pause, not a Focus (UnitCommand.Idle)
 
         /// <summary>This order, Transcended (ignored for actions that can't be).</summary>
         public UnitCommand Transcended(bool transcend = true) { Transcend = transcend; return this; }
@@ -44,6 +46,8 @@ namespace TacticsGame.Core
         }
         public static UnitCommand HoldGrapple(string unitId) { return new UnitCommand { UnitId = unitId, Type = CommandType.HoldGrapple }; }
         public static UnitCommand ReleaseGrapple(string unitId) { return new UnitCommand { UnitId = unitId, Type = CommandType.ReleaseGrapple }; }
+        /// <summary>Throw now, toward 'toward' (the held unit swings round to that side first) instead of the way the holder faces.</summary>
+        public static UnitCommand ReleaseGrapple(string unitId, Vector3 toward) { return new UnitCommand { UnitId = unitId, Type = CommandType.ReleaseGrapple, TargetPos = toward, Aimed = true }; }
         /// <summary>A charging unit keeps charging for 'seconds', then is asked again.</summary>
         public static UnitCommand ContinueCharge(string unitId, float seconds)
         {
@@ -58,9 +62,15 @@ namespace TacticsGame.Core
         {
             return new UnitCommand { UnitId = unitId, Type = CommandType.Move, TargetPos = pos };
         }
+        /// <summary>Focus: stand still and rest off strain (see BattleSimulation.StartWait).</summary>
         public static UnitCommand Wait(string unitId, float seconds)
         {
             return new UnitCommand { UnitId = unitId, Type = CommandType.Wait, WaitSeconds = seconds };
+        }
+        /// <summary>Hold still for a moment without Focusing (an AI's pause between moves): breaks a run of Focus instead of adding to it.</summary>
+        public static UnitCommand Idle(string unitId, float seconds)
+        {
+            return new UnitCommand { UnitId = unitId, Type = CommandType.Wait, WaitSeconds = seconds, NoFocus = true };
         }
     }
 

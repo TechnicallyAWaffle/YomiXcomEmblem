@@ -9,7 +9,7 @@ namespace TacticsGame.Core
     /// back (the recovery ends), so the unit can block again (Block is a follow-up: Space) or punish.
     /// Blocking is always allowed: past max strain it just leaves you at max (and so open to Unravel, which pierces Block).
     /// A Heavy hit that lands on the guard puts Block on cooldown for BattleSimulation.HeavyBlockCooldown.
-    /// Transcended: the guard stops all damage (and strain, and Unravel) from every hit, pierce or not, and heavy hits
+    /// Transcended: the guard stops all damage (and strain) from every hit, pierce or not, but not Unravel, and heavy hits
     /// don't put it on cooldown.
     /// </summary>
     public class BlockBehavior : SelfBuffBehavior
@@ -23,9 +23,15 @@ namespace TacticsGame.Core
                 var u = ctx.Subject;
                 var guard = u.GetStatus(StatusIds.Blocking);
                 if (guard == null) return;
-                if (ctx.Impact == ImpactType.Heavy && !guard.NegatesDamage)
+                if (ctx.Impact == ImpactType.Heavy && !guard.Has(StatusFlags.NegatesDamage))
                     foreach (var a in u.Actions)
-                        if (a.BehaviorId == "block") u.CooldownReadyAt[a.Id] = Mathf.Max(sim.Now + sim.HeavyBlockCooldown, u.CooldownReadyAt.TryGetValue(a.Id, out var at) ? at : 0f);
+                    {
+                        if (a.BehaviorId != "block") continue;
+                        float until = Mathf.Max(sim.Now + sim.HeavyBlockCooldown, u.CooldownReadyAt.TryGetValue(a.Id, out var at) ? at : 0f);
+                        u.CooldownReadyAt[a.Id] = until;
+                        // No effect of its own: it shows (on the HUD, over the unit) that Block is down until then.
+                        sim.ApplyStatus(u, new StatusEffect { Id = StatusIds.GuardBroken, SourceId = u.Id, ExpiresAt = until  }, u);
+                    }
                 if (u.IsAlive && u.Phase == UnitPhase.Recovery) sim.EndRecoveryNow(u);
             });
         }
@@ -34,7 +40,7 @@ namespace TacticsGame.Core
         {
             if (!a.Transcended) return;
             var guard = a.Actor.GetStatus(StatusIds.Blocking);   // put up as the windup started (SelfStatusesOnWindup)
-            if (guard != null) guard.NegatesDamage = true;
+            if (guard != null) guard.Flags |= StatusFlags.NegatesDamage;
         }
     }
 
@@ -45,6 +51,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class DashBehavior : ActionBehavior
     {
+        public override bool MovesUser { get { return true; } }   // not while airborne
+
         public override bool CanStart(BattleSimulation sim, Unit actor, UnitCommand cmd, out string reason)
         {
             reason = actor.IsRooted ? "immobilized" : null;

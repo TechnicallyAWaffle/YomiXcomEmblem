@@ -15,7 +15,7 @@ namespace TacticsGame.Core
     /// Actions that come due on the same tick resolve simultaneously: all effects
     /// are computed against a snapshot of dodge/block taken before any of them apply.
     /// </summary>
-    public class BattleSimulation
+    public partial class BattleSimulation
     {
         public const float TickLength = 0.025f;
         public const float UnravelStunSeconds = 4f;
@@ -57,7 +57,7 @@ namespace TacticsGame.Core
         public float FallGravity = 12f;            // m/s^2: how long a fall takes (gentler than real gravity, so it reads)
         public float FallLandingSeconds = 0.25f;
         public float FallDamageBase = 3f;
-        public float FallDamagePerMeter = 6f;
+        public float FallDamagePerMeter = 3f;      // was 6: an 8m drop (Skyward Demise) did 51
         /// <summary>Ranged attacks from at least HighGroundMinHeight above their target get this much extra hit chance.</summary>
         public float HighGroundAccuracyBonus = 0.15f;
         public float HighGroundMinHeight = 0.75f;
@@ -103,7 +103,7 @@ namespace TacticsGame.Core
             rng = new System.Random(seed);
             Visibility = new SimVisibility(staticOcclusion ?? new NoStaticOcclusion(), State);
             Paths = terrainPaths = new TerrainPaths(paths ?? new StraightLinePathService(), State.Terrain);
-            EnemyAI = enemyAI ?? new BasicEnemyAI();
+            EnemyAI = enemyAI ?? new AIRouter();   // each unit's AIProfile (UnitAIs), else BasicEnemyAI
             Outcome = BattleOutcome.InProgress;
 
             // Reactions, stances and passives subscribe to Triggers once per battle.
@@ -272,7 +272,7 @@ namespace TacticsGame.Core
             {
                 if (target == null || !target.IsAlive || target.Team == actor.Team) { reason = "invalid target"; return false; }
                 if (!IsTargetableBy(target, actor)) { reason = "target hidden"; return false; }
-                if (Vector3.Distance(actor.Position, target.Position) > def.Range) { reason = "out of range"; return false; }
+                if (Vector3.Distance(actor.Position, target.Position) > actor.ActionStat(def, ActionStat.Range)) { reason = "out of range"; return false; }
                 if (def.IsRanged && !def.PiercesTerrain && !Visibility.HasLineOfSight(actor, target)) { reason = "no line of sight"; return false; }
             }
             else if (def.Targeting == TargetType.Ally || def.Targeting == TargetType.AnyUnit)
@@ -281,7 +281,7 @@ namespace TacticsGame.Core
                 if (def.Targeting == TargetType.Ally && target.Team != actor.Team) { reason = "invalid target"; return false; }
                 if (def.CannotTargetSelf && target.Id == actor.Id) { reason = "can't target yourself"; return false; }
                 if (!IsTargetableBy(target, actor)) { reason = "target hidden"; return false; }
-                if (Vector3.Distance(actor.Position, target.Position) > def.Range) { reason = "out of range"; return false; }
+                if (Vector3.Distance(actor.Position, target.Position) > actor.ActionStat(def, ActionStat.Range)) { reason = "out of range"; return false; }
                 if (def.Targeting == TargetType.AnyUnit && def.IsRanged && !HasSightOf(actor, def, target)) { reason = "no line of sight"; return false; }
             }
             return true;
@@ -292,14 +292,16 @@ namespace TacticsGame.Core
         {
             reason = null;
             float readyAt;
-            if (actor.CooldownReadyAt.TryGetValue(def.Id, out readyAt) && readyAt > Now) { reason = "cooldown"; return false; }
+            var behavior = ActionBehaviors.Get(def.BehaviorId);
+            if (actor.CooldownReadyAt.TryGetValue(def.Id, out readyAt) && readyAt > Now && !behavior.IgnoresCooldown(this, actor, def, targetId)) { reason = "cooldown"; return false; }
+            if (def.HealthCost > 0f && actor.Health <= actor.ActionStat(def, ActionStat.HealthCost) + 1e-4f) { reason = "not enough health"; return false; }
             var required = def.RequiredStatuses();
             if (required.Length > 0 && !System.Array.Exists(required, actor.HasStatus)) { reason = "needs " + string.Join(" or ", required); return false; }
             var forbidding = actor.StatusForbidding(def.Id);
             if (forbidding != null) { reason = "not during " + forbidding.Id.Replace('_', ' '); return false; }
             if (EnergyCostOf(actor, def) > actor.Energy + 1e-4f) { reason = "not enough energy"; return false; }
             float strain = StrainCostOf(actor, def, targetId, transcend);
-            if (strain > 0f && actor.Strain + strain > actor.MaxStrain + 1e-4f && !ActionBehaviors.Get(def.BehaviorId).AllowsStrainOverflow) { reason = "too much strain"; return false; }
+            if (strain > 0f && actor.Strain + strain > actor.MaxStrain + 1e-4f && !behavior.AllowsStrainOverflow && !def.UnravelsOverMaxStrain) { reason = "too much strain"; return false; }
             return true;
         }
 
@@ -311,6 +313,13 @@ namespace TacticsGame.Core
         {
             float cost = ActionBehaviors.Get(def.BehaviorId).StrainCost(this, actor, def, targetId) + (transcend && def.CanTranscend ? def.TranscendStrain : 0f);
             return cost > 0f ? cost * actor.StrainCostMult() : cost;
+        }
+
+        /// <summary>Seconds 'def' would wind up for if 'actor' started it now: its behavior's windup (Flowing Death shortens with
+        /// stacks) at the actor's action speed.</summary>
+        public float WindupOf(Unit actor, ActionDefinition def)
+        {
+            return ActionBehaviors.Get(def.BehaviorId).WindupSeconds(this, actor, def) / actor.EffectiveActionSpeed();
         }
 
         /// <summary>Seconds a walk along 'path' takes the unit: ground distance at its speed now, plus any jumps.</summary>
@@ -386,7 +395,7 @@ namespace TacticsGame.Core
                     Vector3 v = p - origin; v.y = 0f;
                     float along = Vector3.Dot(v, dir);
                     float side = (v - dir * along).magnitude;
-                    if (along < -u.BodyRadius || along > def.Range + u.BodyRadius || side > def.LineWidth / 2f + u.BodyRadius) continue;
+                    if (along < -u.BodyRadius || along > actor.ActionStat(def, ActionStat.Range) + u.BodyRadius || side > def.LineWidth / 2f + u.BodyRadius) continue;
                     // Ranged lines (spells, projectiles) fly at the aimed elevation; a melee sweep catches anyone in reach.
                     float h = def.IsRanged ? LineHeightAt(origin, targetPos, along) : p.y;
                     if (h >= p.y - LineReachDown && h <= p.y + u.BodyHeight * LineReachUp) hits.Add(u);
@@ -394,7 +403,7 @@ namespace TacticsGame.Core
                 else
                 {
                     Vector3 v = p - center; v.y = 0f;
-                    if (v.magnitude <= def.AreaRadius + u.BodyRadius) hits.Add(u);
+                    if (v.magnitude <= actor.ActionStat(def, ActionStat.AreaRadius) + u.BodyRadius) hits.Add(u);
                 }
             }
             return hits;
@@ -404,9 +413,9 @@ namespace TacticsGame.Core
         /// It runs alongside the actor's normal state: it does not require or change the actor's phase.</summary>
         public ActionInstance QueueFreeAction(Unit actor, ActionDefinition def, string targetId, float windupOverride = -1f, float damageMultiplier = 1f)
         {
-            if (!actor.IsAlive) return null;
+            if (!actor.IsAlive || actor.Phase == UnitPhase.Channeling) return null;   // a channel allows nothing else, reactions included
             var behavior = ActionBehaviors.Get(def.BehaviorId);
-            float windup = windupOverride >= 0f ? windupOverride : def.Windup / actor.EffectiveActionSpeed();
+            float windup = windupOverride >= 0f ? windupOverride : actor.ActionStat(def, ActionStat.Windup) / actor.EffectiveActionSpeed();
             var inst = new ActionInstance
             {
                 Actor = actor, Definition = def, Behavior = behavior, TargetUnitId = targetId,
@@ -430,7 +439,7 @@ namespace TacticsGame.Core
             Emit(EventType.StatusApplied, source != null ? source.Id : null, target.Id, status.Id);
             EmitStatusTimer(target, status, source);
             HandleSpeedChange(target, oldAction, oldMove);
-            if (status.Rooted && target.Phase == UnitPhase.Moving) EndMove(target);
+            if (status.Has(StatusFlags.Rooted) && target.Phase == UnitPhase.Moving) EndMove(target);
         }
 
         /// <summary>Statuses lasting at least this long count as "until removed" and get no timer.</summary>
@@ -443,6 +452,17 @@ namespace TacticsGame.Core
             if (status.ExpiresAt >= UntimedStatus) return;
             Emit(EventType.StatusTimer, source != null ? source.Id : null, target.Id,
                 new StatusTimerInfo { Id = status.Id, ExpiresAt = status.ExpiresAt, Duration = Mathf.Max(0f, status.ExpiresAt - Now) });
+        }
+
+        /// <summary>A status's ExpiresAt was changed in place (a chain kept going): announce the new end, without re-applying it.</summary>
+        public void RefreshStatusTimer(Unit target, StatusEffect status, Unit source) { EmitStatusTimer(target, status, source); }
+
+        /// <summary>Set a status's stack count (Flowing Death's chain) and tell the view (StatusStacks).</summary>
+        public void SetStacks(Unit u, StatusEffect status, int stacks)
+        {
+            if (status.Stacks == stacks) return;
+            status.Stacks = stacks;
+            Emit(EventType.StatusStacks, u.Id, u.Id, new StatusStacksInfo { Id = status.Id, Stacks = stacks });
         }
 
         public bool RemoveStatus(Unit u, string id)
@@ -465,10 +485,11 @@ namespace TacticsGame.Core
             Emit(EventType.EnergyChanged, u.Id, null, new EnergyInfo { Amount = u.Energy - before, Total = u.Energy });
         }
 
-        /// <summary>Shove a unit per def.Displace: away from its nearest enemy, or pulled toward 'source' (stopping at arm's length).</summary>
+        /// <summary>Shove a unit per def.Displace: away from its nearest enemy, knocked back from 'source', or pulled toward 'source' (stopping at arm's length).</summary>
         public void DisplaceUnit(Unit target, Unit source, ActionDefinition def)
         {
             if (target == null || !target.IsAlive || def.DisplaceDistance <= 0f) return;
+            float distance = source != null ? source.ActionStat(def, ActionStat.DisplaceDistance) : def.DisplaceDistance;
             Vector3 from = target.Position, to;
             if (def.Displace == DisplaceMode.TowardSource)
             {
@@ -476,7 +497,7 @@ namespace TacticsGame.Core
                 Vector3 d = from - source.Position; d.y = 0f;
                 float stop = source.BodyRadius + target.BodyRadius + 0.5f;
                 if (d.magnitude <= stop) return;
-                to = source.Position + d.normalized * Mathf.Max(stop, d.magnitude - def.DisplaceDistance);
+                to = source.Position + d.normalized * Mathf.Max(stop, d.magnitude - distance);
                 to.y = from.y;
             }
             else if (def.Displace == DisplaceMode.AwayFromEnemies)
@@ -485,7 +506,14 @@ namespace TacticsGame.Core
                 if (threat == null) return;
                 Vector3 away = from - threat.Position; away.y = 0f;
                 if (away.sqrMagnitude < 1e-6f) away = Vector3.forward;
-                to = from + away.normalized * def.DisplaceDistance;
+                to = from + away.normalized * distance;
+            }
+            else if (def.Displace == DisplaceMode.AwayFromSource)
+            {
+                if (source == null) return;
+                Vector3 away = from - source.Position; away.y = 0f;
+                if (away.sqrMagnitude < 1e-6f) away = Vector3.forward;
+                to = from + away.normalized * distance;
             }
             else return;
             Relocate(target, Paths.ClampDash(from, to), DisplaceDuration, true, source);
@@ -553,7 +581,7 @@ namespace TacticsGame.Core
                 }
                 else
                 {
-                    cmd = EnemyAI.Decide(this, unit) ?? (charging ? UnitCommand.ContinueCharge(unit.Id, 0.25f) : UnitCommand.Wait(unit.Id, 0.5f));
+                    cmd = EnemyAI.Decide(this, unit) ?? (charging ? UnitCommand.ContinueCharge(unit.Id, 0.25f) : UnitCommand.Idle(unit.Id, 0.5f));
                 }
 
                 if (cmd == null)
@@ -571,7 +599,7 @@ namespace TacticsGame.Core
                         decisions.Add(new DecisionRequest { Kind = kind, UnitId = unit.Id, Reason = reason });
                     }
                     else if (charging) TryStartCommand(unit, UnitCommand.ContinueCharge(unit.Id, 0.25f), out reason);
-                    else StartWait(unit, 0.5f);   // never let an AI stall the sim on a bad command
+                    else StartIdle(unit, 0.5f);   // never let an AI stall the sim on a bad command
                 }
             }
             return decisions;
@@ -589,11 +617,16 @@ namespace TacticsGame.Core
             // Holding someone (Subjugate): only moving, headbutting on (a Wait counts as that) or the throw.
             if (unit.Grapple != null)
             {
+                Vector3? aim = cmd.Type == CommandType.ReleaseGrapple && cmd.Aimed ? cmd.TargetPos : (Vector3?)null;
+                // The grab ran out on a player's unit and it was asked which way to throw: whatever the order, it throws now.
+                if (unit.Grapple.AwaitingThrow) { StartThrow(unit, aim); return true; }
                 if (cmd.Type == CommandType.HoldGrapple || cmd.Type == CommandType.Wait) { HoldGrapple(unit); return true; }
-                if (cmd.Type == CommandType.ReleaseGrapple) { StartThrow(unit); return true; }
+                if (cmd.Type == CommandType.ReleaseGrapple) { StartThrow(unit, aim); return true; }
                 if (cmd.Type != CommandType.Move) { reason = "grappling: move, keep headbutting or throw"; return false; }
             }
             else if (cmd.Type == CommandType.HoldGrapple || cmd.Type == CommandType.ReleaseGrapple) { reason = "not grappling"; return false; }
+            // Up in the air (Skyward Demise's hover, or lifted): no walking, dashing or other moves.
+            if (unit.IsLifted && (cmd.Type == CommandType.Move || (cmd.Action != null && ActionBehaviors.Get(cmd.Action.BehaviorId).MovesUser))) { reason = "in the air"; return false; }
 
             switch (cmd.Type)
             {
@@ -606,7 +639,8 @@ namespace TacticsGame.Core
 
                 case CommandType.Wait:
                     unit.LastActionId = null;   // a wait or a move breaks a follow-up chain
-                    StartWait(unit, cmd.WaitSeconds, cmd.Transcend);
+                    if (cmd.NoFocus) StartIdle(unit, cmd.WaitSeconds);
+                    else StartWait(unit, cmd.WaitSeconds, cmd.Transcend);
                     return true;
 
                 case CommandType.Move:
@@ -641,7 +675,7 @@ namespace TacticsGame.Core
                     }
                     // Point-targeted actions must land in range; a line only takes its direction from the point.
                     if (cmd.Action.Targeting == TargetType.Position && cmd.Action.Shape != AreaShape.Line &&
-                        Vector3.Distance(unit.Position, cmd.TargetPos) > cmd.Action.Range) { reason = "out of range"; return false; }
+                        Vector3.Distance(unit.Position, cmd.TargetPos) > unit.ActionStat(cmd.Action, ActionStat.Range)) { reason = "out of range"; return false; }
                     // A unit and a point: the point must be within DestinationRange of the unit.
                     if (cmd.Action.DestinationRange > 0f && FlatDistance(target.Position, cmd.TargetPos) > cmd.Action.DestinationRange + 1e-3f) { reason = "destination out of range"; return false; }
                     var behavior = ActionBehaviors.Get(cmd.Action.BehaviorId);
@@ -665,7 +699,7 @@ namespace TacticsGame.Core
             if (unit.FocusSince < 0f)
             {
                 unit.FocusSince = Now;
-                ApplyStatus(unit, new StatusEffect { Id = StatusIds.Focusing, SourceId = unit.Id, ExpiresAt = Now + FocusDelay }, unit);
+                ApplyStatus(unit, new StatusEffect { Id = StatusIds.Focusing, SourceId = unit.Id, ExpiresAt = Now + FocusDelay  }, unit);
             }
             unit.FocusTranscended = transcend && !unit.HasStatus(StatusIds.Focused);
             if (unit.FocusTranscended)
@@ -674,9 +708,25 @@ namespace TacticsGame.Core
                 if (TranscendFocusStrain > 0f) AddStrain(unit, TranscendFocusStrain);
             }
             unit.Waiting = true;
+            unit.Idling = false;
             unit.Phase = UnitPhase.Recovery;
             unit.PhaseEndsAt = Now + seconds;
             Emit(EventType.ActionStarted, unit.Id, null, new ActionStartedInfo { ActionId = "wait", Windup = 0f, Recovery = seconds, Transcended = unit.FocusTranscended });
+        }
+
+        /// <summary>
+        /// An Idle order: stand still for 'seconds' without Focusing (it ends a run of Focus). Otherwise like a Wait: a hit
+        /// hands the unit back at once, and a queued ranged order can fire through it.
+        /// </summary>
+        private void StartIdle(Unit unit, float seconds)
+        {
+            if (unit.Grapple != null) { HoldGrapple(unit); return; }
+            if (unit.FocusSince >= 0f) BreakFocus(unit, false);
+            unit.Waiting = true;
+            unit.Idling = true;
+            unit.Phase = UnitPhase.Recovery;
+            unit.PhaseEndsAt = Now + seconds;
+            Emit(EventType.ActionStarted, unit.Id, null, new ActionStartedInfo { ActionId = "idle", Windup = 0f, Recovery = seconds });
         }
 
         /// <summary>Cut a recovery short: the unit is ready (and asked for orders) right now. Block uses it when the guard is hit.</summary>
@@ -732,14 +782,14 @@ namespace TacticsGame.Core
             {
                 if (!CanUse(unit, def, GetUnit(release.TargetUnitId), out reason, false)) return false;   // already paid for
             }
-            else if (def.Targeting == TargetType.Position && def.Shape != AreaShape.Line && Vector3.Distance(unit.Position, cmd.TargetPos) > def.Range)
+            else if (def.Targeting == TargetType.Position && def.Shape != AreaShape.Line && Vector3.Distance(unit.Position, cmd.TargetPos) > unit.ActionStat(def, ActionStat.Range))
             {
                 reason = "out of range"; return false;
             }
             float level = ChargeLevel(unit);
             unit.ActiveAction = null;
             unit.Phase = UnitPhase.Ready;
-            StartAction(unit, release, charged.Behavior, def.Windup / unit.EffectiveActionSpeed(), level);
+            StartAction(unit, release, charged.Behavior, WindupOf(unit, def), level);
             return true;
         }
 
@@ -773,10 +823,17 @@ namespace TacticsGame.Core
             Relocate(unit, to, duration, false, null, phaseFrom);
         }
 
+        /// <summary>Shove a unit to 'to' over 'duration', as a push does (forced: off a ledge it falls; a jump is broken). Charge's drag.</summary>
+        public void PushUnit(Unit unit, Vector3 to, float duration, Unit source)
+        {
+            if (unit == null || !unit.IsAlive || (to - unit.Position).sqrMagnitude <= 1e-4f) return;
+            Relocate(unit, to, duration, true, source);
+        }
+
         /// <summary>Break a unit's windup or charge, if it has one (Stutter). True if something was interrupted.</summary>
         public bool InterruptUnit(Unit unit, string reason)
         {
-            if (unit == null || !unit.IsAlive || unit.ActiveAction == null) return false;
+            if (unit == null || !unit.IsAlive || unit.ActiveAction == null || unit.IsUnstoppable) return false;
             if (unit.Phase != UnitPhase.Windup && unit.Phase != UnitPhase.Charging) return false;
             Interrupt(unit, reason);
             return true;
@@ -791,7 +848,7 @@ namespace TacticsGame.Core
         /// </summary>
         public void StartMesmerCounter(Unit unit, Unit attacker, ActionDefinition strike, int strikes)
         {
-            if (!unit.IsAlive || attacker == null || !attacker.IsAlive || strike == null) return;
+            if (!unit.IsAlive || attacker == null || !attacker.IsAlive || strike == null || unit.Phase == UnitPhase.Channeling || unit.InAerialSlam) return;
             if (unit.Phase == UnitPhase.Windup || unit.Phase == UnitPhase.Charging) Interrupt(unit, "mesmerize", false);
             HaltWalk(unit);
             ClearChase(unit);
@@ -848,8 +905,8 @@ namespace TacticsGame.Core
                 Facing = facing.sqrMagnitude > 1e-6f ? facing.normalized : Vector3.forward,
             };
             target.HeldById = unit.Id;
-            ApplyStatus(unit, new StatusEffect { Id = StatusIds.Grappling, SourceId = unit.Id, ExpiresAt = float.MaxValue, StunImmune = true }, unit);
-            ApplyStatus(target, new StatusEffect { Id = StatusIds.Grappled, SourceId = unit.Id, ExpiresAt = float.MaxValue }, unit);
+            ApplyStatus(unit, new StatusEffect { Id = StatusIds.Grappling, SourceId = unit.Id, ExpiresAt = float.MaxValue, Flags = StatusFlags.StunImmune }, unit);
+            ApplyStatus(target, new StatusEffect { Id = StatusIds.Grappled, SourceId = unit.Id, ExpiresAt = float.MaxValue  }, unit);
             PlaceHeld(unit, target);
             Emit(EventType.Carry, unit.Id, target.Id, new CarryInfo { Carrying = true, Offset = CarryOffset(unit, target), Position = target.Position });
             HoldGrapple(unit);
@@ -865,14 +922,21 @@ namespace TacticsGame.Core
             unit.PhaseEndsAt = Mathf.Max(Now + TickLength, Mathf.Min(g.NextHeadbuttAt, g.EndsAt));
         }
 
-        /// <summary>Let go into the throw: its windup starts now (the held unit stays stunned through it).</summary>
-        private void StartThrow(Unit unit)
+        /// <summary>Let go into the throw: its windup starts now (the held unit stays stunned through it). 'aim': throw toward
+        /// that point (the held unit swings round to that side), else the way the holder faces.</summary>
+        private void StartThrow(Unit unit, Vector3? aim = null)
         {
             var g = unit.Grapple;
             var held = g != null ? GetUnit(g.TargetId) : null;
             if (g == null || g.Throwing || held == null) return;
             HaltWalk(unit);
+            if (aim.HasValue)
+            {
+                Vector3 d = aim.Value - unit.Position; d.y = 0f;
+                if (d.sqrMagnitude > 1e-4f) { g.Facing = d.normalized; PlaceHeld(unit, held); }
+            }
             g.Throwing = true;
+            g.AwaitingThrow = false;
             unit.Waiting = false;
             var def = g.Definition;
             float speed = unit.EffectiveActionSpeed(), windup = GrappleThrowWindup / speed;
@@ -885,7 +949,7 @@ namespace TacticsGame.Core
             unit.Phase = UnitPhase.Windup;
             unit.PhaseEndsAt = inst.ResolveAt;
             ApplyStun(held, windup + DisplaceDuration, unit, true);
-            Emit(EventType.ActionStarted, unit.Id, held.Id, new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = def.Recovery / speed, TargetPos = held.Position });
+            Emit(EventType.ActionStarted, unit.Id, held.Id, new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = unit.ActionStat(def, ActionStat.Recovery) / speed, TargetPos = held.Position });
             Triggers.Fire(new TriggerContext { Type = TriggerType.ActionStarted, Sim = this, Subject = unit, Action = def });
         }
 
@@ -914,6 +978,9 @@ namespace TacticsGame.Core
             if (holder != null && holder.Grapple != null && holder.Grapple.TargetId == held.Id) EndGrapple(holder);
             held.HeldById = null;
         }
+
+        /// <summary>A player's grab ran out: its holder is being asked which way to throw.</summary>
+        public bool AwaitingThrow(Unit unit) { return unit.Grapple != null && unit.Grapple.AwaitingThrow; }
 
         /// <summary>The direction a unit holding someone is facing right now (where the throw goes).</summary>
         public Vector3 GrappleFacing(Unit unit) { return unit.Grapple != null ? unit.Grapple.Facing : Vector3.forward; }
@@ -945,7 +1012,26 @@ namespace TacticsGame.Core
                 }
                 PlaceHeld(u, held);
                 if (g.Throwing) continue;
-                if (Now + 1e-4f >= g.EndsAt) { StartThrow(u); continue; }
+                if (g.AwaitingThrow)
+                {
+                    if (held.Phase == UnitPhase.Stunned) held.PhaseEndsAt = Mathf.Max(held.PhaseEndsAt, Now + 0.25f);   // held on until the throw goes
+                    continue;
+                }
+                if (Now + 1e-4f >= g.EndsAt)
+                {
+                    // A player picks the throw's direction: the unit is handed back for that order (HoldGrapple/Wait throw ahead).
+                    // The AI throws the way it faces.
+                    if (u.Team == Team.Player)
+                    {
+                        g.AwaitingThrow = true;
+                        if (held.Phase == UnitPhase.Stunned) held.PhaseEndsAt = Mathf.Max(held.PhaseEndsAt, Now + 0.25f);
+                        if (u.Phase == UnitPhase.Recovery) EndRecoveryNow(u);
+                        else if (u.Phase == UnitPhase.Moving) { HaltWalk(u); Emit(EventType.UnitReady, u.Id, null); }   // stop to throw
+                        continue;
+                    }
+                    StartThrow(u);
+                    continue;
+                }
                 if (Now + 1e-4f >= g.NextHeadbuttAt)
                 {
                     g.NextHeadbuttAt += GrappleHeadbuttSeconds;
@@ -985,14 +1071,69 @@ namespace TacticsGame.Core
         {
             foreach (var u in State.Units)
             {
-                if (!u.IsLifted || !u.IsAlive) continue;
+                if (u.LiftDropAt < 0f || !u.IsAlive) continue;   // (an aerial slam moves itself: TickAerialSlams)
                 float k = Mathf.Clamp01((Now - u.LiftStart) / Mathf.Max(1e-4f, u.LiftRiseEnd - u.LiftStart));
                 u.Position = Vector3.Lerp(u.LiftFrom, u.LiftTo, k * k * (3f - 2f * k));
                 if (Now + 1e-4f < u.LiftDropAt) continue;
+                if (u.Hovering) { EndHover(u, false, null); continue; }
                 u.LiftDropAt = -1f;
                 Vector3 landing = Terrain.OnGround(u.Position);
                 StartFall(u, landing, u.Position.y - landing.y, 0f, GetUnit(u.LiftSourceId), false);
             }
+        }
+
+        /// <summary>Seconds a leap takes to rise to its hover point, and a hover's gentle way down.</summary>
+        public float HoverRiseSeconds = 0.5f, HoverDescendSeconds = 0.45f;
+
+        /// <summary>
+        /// Leap 'unit' up to 'to' (in the air) and hover there until 'until' (Skyward Demise). Unlike a lift it is free to act
+        /// up there, but not to move: walking, dashing and other moves are refused (see TryStartCommand). It glides back down
+        /// when the time is up, or once an ability it starts in the air has landed or been interrupted, and 'statuses' come off
+        /// it then. Damage knocks it down instead: a fall (StartFall) with its stun and fall damage.
+        /// </summary>
+        public void HoverUnit(Unit unit, Vector3 to, float until, List<string> statuses)
+        {
+            if (!unit.IsAlive || unit.IsLifted || unit.FallLandAt >= 0f) return;
+            if (unit.HeldById != null) ReleaseHeld(unit);
+            if (unit.Phase == UnitPhase.Moving) EndMove(unit, false);
+            unit.GlideEnd = -1f;
+            unit.LiftFrom = unit.Position;
+            unit.LiftTo = to;
+            unit.LiftStart = Now;
+            unit.LiftRiseEnd = Now + HoverRiseSeconds;
+            unit.LiftDropAt = Mathf.Max(unit.LiftRiseEnd, until);
+            unit.LiftSourceId = unit.Id;
+            unit.Hovering = true;
+            unit.HoverEndsAfterAction = false;
+            unit.HoverStatuses = statuses;
+            Emit(EventType.Lift, unit.Id, unit.Id,
+                new LiftInfo { From = unit.LiftFrom, To = unit.LiftTo, RiseSeconds = HoverRiseSeconds, DropAt = unit.LiftDropAt, Hover = true });
+        }
+
+        /// <summary>A hover ends: its statuses come off, and the unit glides down (or, knocked down by damage, falls).</summary>
+        private void EndHover(Unit u, bool knockedDown, Unit source)
+        {
+            if (!u.Hovering) return;
+            ClearHover(u);
+            u.LiftDropAt = -1f;
+            if (!u.IsAlive) return;
+            Vector3 ground = Terrain.OnGround(u.Position);
+            Vector3 landing = Terrain.OnGround(FreeSpotNear(u, ground, ground, false));   // not on top of whoever is below
+            if (knockedDown) { StartFall(u, landing, u.Position.y - landing.y, 0f, source, false); return; }
+            u.GlideFrom = u.Position;
+            u.GlideTo = landing;
+            u.GlideStart = Now;
+            u.GlideEnd = Now + HoverDescendSeconds;
+            Emit(EventType.Dash, u.Id, null, new DashInfo { From = u.Position, To = landing, Duration = HoverDescendSeconds, Fall = true });
+        }
+
+        private void ClearHover(Unit u)
+        {
+            if (!u.Hovering) return;
+            u.Hovering = false;
+            u.HoverEndsAfterAction = false;
+            if (u.HoverStatuses != null) foreach (var id in u.HoverStatuses) RemoveStatus(u, id);
+            u.HoverStatuses = null;
         }
 
         /// <summary>The walkable point nearest 'p' (the navmesh's, where there is one): where a teleport can land.</summary>
@@ -1008,8 +1149,9 @@ namespace TacticsGame.Core
         /// </summary>
         public void TeleportUnit(Unit unit, Vector3 to, Unit source)
         {
-            if (unit == null || !unit.IsAlive || unit.FallLandAt >= 0f) return;
+            if (unit == null || !unit.IsAlive || unit.FallLandAt >= 0f || unit.InAerialSlam) return;
             if (unit.HeldById != null) ReleaseHeld(unit);
+            ClearHover(unit);
             unit.LiftDropAt = -1f;
             unit.GlideEnd = -1f;
             if (unit.IsJumping) { unit.JumpEnd = -1f; unit.Position = Terrain.OnGround(unit.Position); }
@@ -1018,16 +1160,27 @@ namespace TacticsGame.Core
             to = Terrain.OnGround(FreeSpotNear(unit, to, to, false));   // crowded: the nearest free spot around the destination
             if (unit.Phase == UnitPhase.Moving) EndMove(unit, false);
             unit.Position = to;
-            Emit(EventType.Dash, unit.Id, null, new DashInfo { From = from, To = to, Duration = 0f, Forced = true, Teleport = true });
+            Emit(EventType.Dash, unit.Id, null, new DashInfo { From = from, To = to, Duration = 0f, Forced = source != unit, Teleport = true, Blink = source == unit });
         }
 
         // ------------------------------------------------------------------ out-of-range orders
 
         /// <summary>Melee, target out of reach: walk the shortest path at it (re-pathed as it moves) and strike once in range.</summary>
+        /// <summary>Unravel: strain reset and a long stun that pierces stun immunity (a Heavy hit at max strain, or an over-max Praa's Truth).</summary>
+        public void UnravelUnit(Unit target, Unit source)
+        {
+            if (target == null || !target.IsAlive) return;
+            AddStrain(target, -target.Strain);   // assumption: Unravel resets strain
+            Emit(EventType.Unravel, source != null ? source.Id : null, target.Id);
+            if (target.Slam != null) BreakAerialSlam(target, source);   // unravelled in mid-air: it drops what it carries, and falls
+            ApplyStun(target, UnravelStunSeconds, source, true, true);
+        }
+
         private bool StartChase(Unit unit, UnitCommand cmd, Unit target, out string reason)
         {
             reason = null;
             if (unit.IsRooted) { reason = "immobilized"; return false; }
+            if (unit.IsLifted) { reason = "in the air"; return false; }
             ClearQueued(unit, null);   // committing to an ability overrides a queued ranged one
             unit.LastActionId = null;
             if (!RepathChase(unit, target)) { reason = "no path"; return false; }
@@ -1045,7 +1198,8 @@ namespace TacticsGame.Core
         private bool ChaseCloseEnough(Unit u, ActionDefinition def, Unit target)
         {
             if (ActionBehaviors.Get(def.BehaviorId).ClosesDistance) return true;   // CanUse already found it in range
-            float close = Mathf.Min(def.Range, Mathf.Max(def.Range * ChaseStrikeFraction, u.BodyRadius + target.BodyRadius + 0.15f));
+            float range = u.ActionStat(def, ActionStat.Range);
+            float close = Mathf.Min(range, Mathf.Max(range * ChaseStrikeFraction, u.BodyRadius + target.BodyRadius + 0.15f));
             if (Vector3.Distance(u.Position, target.Position) <= close) return true;
             return u.Move == null || u.Move.NextIndex >= u.Move.Path.Count;   // can't get any closer on this path: strike from here
         }
@@ -1250,7 +1404,8 @@ namespace TacticsGame.Core
             var def = cmd.Action;
             float speed = unit.EffectiveActionSpeed();
             bool resuming = windupLeft >= 0f;
-            float windup = resuming ? windupLeft : def.Windup / speed;
+            bool transcend = cmd.Transcend && def.CanTranscend;
+            float windup = resuming ? windupLeft : WindupOf(unit, def) * (transcend ? def.TranscendWindupMultiplier : 1f);
             unit.Waiting = false;
             if (!resuming && unit.Queued != cmd) ClearQueued(unit, null);   // using another ability overrides a queued ranged one
             var inst = new ActionInstance
@@ -1266,42 +1421,58 @@ namespace TacticsGame.Core
             unit.LastActionId = def.Id;
             unit.LastActionTargetId = cmd.TargetUnitId;
             unit.LastActionPos = cmd.TargetPos;
-            if (!resuming) PayCosts(unit, def, behavior, cmd.TargetUnitId, inst.Transcended);
+            if (!resuming)
+            {
+                inst.UnravelsActor = def.UnravelsOverMaxStrain && unit.Strain + StrainCostOf(unit, def, cmd.TargetUnitId, inst.Transcended) > unit.MaxStrain + 1e-4f;
+                PayCosts(unit, def, behavior, cmd.TargetUnitId, inst.Transcended);
+                if (unit.Hovering) unit.HoverEndsAfterAction = true;   // one ability from the air, then it comes down
+            }
             if (unit.MesmerStrike != null && def == unit.MesmerStrike && unit.MesmerStrikesLeft > 0) unit.MesmerStrikesLeft--;
 
             behavior.OnWindupStart(this, inst);
             Emit(EventType.ActionStarted, unit.Id, cmd.TargetUnitId,
-                new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = def.Recovery / speed, TargetPos = cmd.TargetPos, Transcended = inst.Transcended });
+                new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = unit.ActionStat(def, ActionStat.Recovery) / speed, TargetPos = cmd.TargetPos, Transcended = inst.Transcended });
             ApplyWindupStatuses(inst);
             Triggers.Fire(new TriggerContext { Type = TriggerType.ActionStarted, Sim = this, Subject = unit, Action = def });
             if (!resuming) AlertTarget(unit, cmd.TargetUnitId);
         }
 
-        /// <summary>ActionDefinition.TargetStatusesDuringWindup: on the target while the windup runs (until ClearWindupStatuses).</summary>
+        /// <summary>ActionDefinition.TargetStatusesDuringWindup / SelfStatusesDuringWindup: on the target / the actor while the windup
+        /// runs (until ClearWindupStatuses).</summary>
         private void ApplyWindupStatuses(ActionInstance a)
         {
-            var specs = a.Definition.TargetStatusesDuringWindup;
             var target = GetUnit(a.TargetUnitId);
-            if (specs == null || target == null || target == a.Actor) return;
+            if (target != null && target != a.Actor) ApplyWhileWinding(a, target, a.Definition.TargetStatusesDuringWindup, true);
+            ApplyWhileWinding(a, a.Actor, a.Definition.SelfStatusesDuringWindup, false);
+        }
+
+        private void ApplyWhileWinding(ActionInstance a, Unit on, List<StatusSpec> specs, bool checkSide)
+        {
+            if (specs == null) return;
             foreach (var spec in specs)
             {
-                if (!spec.AppliesToUnit(a.Actor, target)) continue;
+                if (checkSide && !spec.AppliesToUnit(a.Actor, on)) continue;
                 var s = spec.Create(Now, a.Actor.Id);
                 s.ExpiresAt = float.MaxValue;   // taken off when the windup ends, however long it runs
-                ApplyStatus(target, s, a.Actor);
+                ApplyStatus(on, s, a.Actor);
             }
         }
 
         /// <summary>The windup ended (landed, interrupted, or the actor died): take its TargetStatusesDuringWindup back off.</summary>
         private void ClearWindupStatuses(ActionInstance a)
         {
-            var specs = a != null ? a.Definition.TargetStatusesDuringWindup : null;
-            var target = a != null ? GetUnit(a.TargetUnitId) : null;
-            if (specs == null || specs.Count == 0 || target == null) return;
+            if (a == null) return;
+            RemoveWhileWinding(a, GetUnit(a.TargetUnitId), a.Definition.TargetStatusesDuringWindup);
+            RemoveWhileWinding(a, a.Actor, a.Definition.SelfStatusesDuringWindup);
+        }
+
+        private void RemoveWhileWinding(ActionInstance a, Unit on, List<StatusSpec> specs)
+        {
+            if (specs == null || on == null) return;
             foreach (var spec in specs)
             {
-                var s = target.GetStatus(spec.Id);
-                if (s != null && s.SourceId == a.Actor.Id) RemoveStatus(target, spec.Id);
+                var s = on.GetStatus(spec.Id);
+                if (s != null && s.SourceId == a.Actor.Id && s.ExpiresAt >= UntimedStatus) RemoveStatus(on, spec.Id);
             }
         }
 
@@ -1326,9 +1497,16 @@ namespace TacticsGame.Core
         {
             float energyCost = behavior.EnergyCost(this, unit, def);   // before anything below changes the discount
             float strainCost = StrainCostOf(unit, def, targetId, transcended);
-            if (def.Cooldown > 0f) unit.CooldownReadyAt[def.Id] = Now + def.Cooldown;
+            float cooldown = unit.ActionStat(def, ActionStat.Cooldown);
+            if (cooldown > 0f) unit.CooldownReadyAt[def.Id] = Now + cooldown;
             AddStrain(unit, strainCost);
             if (energyCost > 0f) AddEnergy(unit, -energyCost);
+            if (def.HealthCost > 0f)
+            {
+                float paid = unit.ActionStat(def, ActionStat.HealthCost);
+                unit.Health -= paid;   // CanAfford keeps it above 0
+                Emit(EventType.Damage, unit.Id, unit.Id, new DamageInfo { ActionId = def.Id, Amount = paid, Impact = ImpactType.Light, RemainingHealth = unit.Health });
+            }
             if (def.ConsumesRequiredStatus && !def.ConsumeOnResolve)
                 foreach (var id in def.RequiredStatuses()) RemoveStatus(unit, id);
             if (def.SelfStatusesOnWindup) ApplySelfStatuses(unit, def);
@@ -1346,11 +1524,14 @@ namespace TacticsGame.Core
             tick++;
             TickFocus();
             TickLifts();
+            TickAerialSlams();
             AdvanceGlides();
             AdvanceMovement();
             TickGrapples();   // after movement, so the held unit is carried to where the grappler walked
             TickOutOfRangeOrders();
             TickCharges();
+            TickAuras();
+            TickChannels();
             CheckTraps();
             TickWindups();
             ResolveDueActions();
@@ -1511,18 +1692,27 @@ namespace TacticsGame.Core
                     foreach (var spec in a.Definition.SelfStatuses)
                         effects.Add(new ApplyStatusEffect { Source = a.Actor, TargetId = a.Actor.Id, Status = spec.Create(Now, a.Actor.Id, a.Definition.LinkedAction) });
                 if (a.Definition.EnergyGain > 0f) AddEnergy(a.Actor, a.Definition.EnergyGain);
-                float recovery = a.IsFree ? 0f : a.Definition.Recovery / a.Actor.EffectiveActionSpeed();
+                float recovery = a.IsFree ? 0f : a.Stat(ActionStat.Recovery) / a.Actor.EffectiveActionSpeed();
                 Emit(EventType.ActionResolved, a.Actor.Id, a.TargetUnitId, new ActionResolvedInfo { ActionId = a.Definition.Id, Recovery = recovery });
                 if (!a.IsFree)
                 {
                     a.Actor.ActiveAction = null;
                     a.Actor.Phase = UnitPhase.Recovery;
                     a.Actor.PhaseEndsAt = Now + recovery;
+                    if (a.Definition.ChannelSeconds > 0f && a.Actor.IsAlive) StartChannel(a);   // the recovery waits for the channel
                 }
                 Triggers.Fire(new TriggerContext { Type = TriggerType.ActionResolved, Sim = this, Subject = a.Actor, Action = a.Definition });
             }
 
             foreach (var e in effects) ApplyEffect(e, snapshot);
+
+            // After its hit has landed: an over-max Praa's Truth unravels its user; an ability used from a hover brings it down.
+            foreach (var a in due)
+            {
+                if (a.IsFree || !a.Actor.IsAlive) continue;
+                if (a.UnravelsActor) UnravelUnit(a.Actor, a.Actor);
+                if (a.Actor.HoverEndsAfterAction) EndHover(a.Actor, false, null);
+            }
         }
 
         private void ProcessDeaths()
@@ -1537,8 +1727,10 @@ namespace TacticsGame.Core
                 else if (u.IsLifted) u.Position = Terrain.OnGround(u.Position);
                 if (airborne) Emit(EventType.MoveEnded, u.Id, null, new MoveEndedInfo { Position = u.Position });
                 if (u.Phase == UnitPhase.Windup) ClearWindupStatuses(u.ActiveAction);
+                if (u.Channel != null) EndChannel(u, "death", false);
                 if (u.Grapple != null) EndGrapple(u);
                 if (u.HeldById != null) ReleaseHeld(u);
+                u.Hovering = u.HoverEndsAfterAction = false;
                 u.LiftDropAt = -1f;
                 u.Phase = UnitPhase.Dead;
                 u.ActiveAction = null;
@@ -1653,6 +1845,16 @@ namespace TacticsGame.Core
             var target = GetUnit(atk.TargetId);
             if (target == null || target.Phase == UnitPhase.Dead) return;
 
+            // A dome (Sanctity) takes projectiles and melee hits meant for those sheltering in it.
+            var guard = RedirectTarget(src, def, target);
+            if (guard == null) { Emit(EventType.Miss, src.Id, target.Id, new MissInfo { Reason = "absorbed", ActionId = def.Id }); return; }
+            if (guard != target)
+            {
+                Emit(EventType.HitRedirected, guard.Id, target.Id, new RedirectInfo { ActionId = def.Id, AttackerId = src.Id });
+                target = guard;
+                atk.IgnoreRange = true;   // it reaches the dome's owner wherever it stands
+            }
+
             // 0. A target that went hidden during the windup can't be found
             if (!IsTargetableBy(target, src))
             {
@@ -1661,7 +1863,7 @@ namespace TacticsGame.Core
             }
 
             // 1. Range (melee whiffs if the target moved away during windup; area hits only need to be in the area)
-            if (!atk.IgnoreRange && Vector3.Distance(src.Position, target.Position) > def.Range * RangeTolerance)
+            if (!atk.IgnoreRange && Vector3.Distance(src.Position, target.Position) > src.ActionStat(def, ActionStat.Range) * RangeTolerance)
             {
                 Emit(EventType.Miss, src.Id, target.Id, new MissInfo { Reason = "out_of_range" });
                 return;
@@ -1670,15 +1872,16 @@ namespace TacticsGame.Core
             // 2. Accuracy: base * body exposure (ranged vs cover) + modifiers (high ground among them)
             float exposure = (!atk.IgnoreCover && def.IsRanged && !def.PiercesTerrain) ? Visibility.GetExposure(src, target, false) : 1f;
             float accuracyBonus = atk.AccuracyBonus + HeightAccuracyBonus(src, target, def);
-            foreach (var s in target.Statuses) accuracyBonus += s.IncomingAccuracyBonus;
-            float hitChance = Mathf.Clamp01(def.BaseAccuracy * exposure + accuracyBonus);
+            accuracyBonus += target.IncomingAccuracyBonus();
+            float accuracy = src.ActionStat(def, ActionStat.Accuracy);
+            float hitChance = Mathf.Clamp01(accuracy * exposure + accuracyBonus);
             double roll = rng.NextDouble();
             if (roll >= hitChance)
             {
                 // A roll that would have hit in the open was stopped by cover: the shot strikes that cover. Where on it comes
                 // from the same roll (no extra draw), so the outcome stays seeded.
                 var miss = new MissInfo { Reason = "miss", ActionId = def.Id };
-                float openChance = Mathf.Clamp01(def.BaseAccuracy + accuracyBonus);
+                float openChance = Mathf.Clamp01(accuracy + accuracyBonus);
                 if (exposure < 0.999f && roll < openChance)
                 {
                     miss.Reason = "cover";
@@ -1702,9 +1905,10 @@ namespace TacticsGame.Core
 
             // 4. Damage through block
             // A Transcended Block (NegatesDamage) stops all of it, pierce or not: no damage, no strain, no wear on block.
-            bool negated = target.Statuses.Exists(s => s.NegatesDamage);
-            float raw = def.Damage * atk.DamageMultiplier;
-            float effectiveBlock = negated ? 1f : Mathf.Clamp01(snap.Block * (1f - Mathf.Clamp01(def.BlockPierce + atk.BlockPierceBonus)));
+            bool negated = target.HasFlag(StatusFlags.NegatesDamage);
+            // Lethal Prescience: more against a target that is stunned as the hit lands.
+            float raw = src.ActionStat(def, ActionStat.Damage) * atk.DamageMultiplier * (target.Phase == UnitPhase.Stunned ? def.StunnedDamageMultiplier : 1f);
+            float effectiveBlock = negated ? 1f : Mathf.Clamp01(snap.Block * (1f - Mathf.Clamp01(src.ActionStat(def, ActionStat.BlockPierce) + atk.BlockPierceBonus)));
             float dealt = raw * (1f - effectiveBlock);
             target.Health -= dealt;
             target.LastAttackerId = src.Id;
@@ -1714,8 +1918,9 @@ namespace TacticsGame.Core
 
             // 5. Strain / Unravel (checked against strain BEFORE this hit adds to it)
             bool atMaxStrain = target.Strain >= target.MaxStrain - 0.001f;
-            bool unravel = atMaxStrain && def.Impact == ImpactType.Heavy && !negated;   // even through Block: Unravel pierces stun immunity
-            if (!negated) AddStrain(target, def.StrainOnTarget);
+            // Nothing is immune to Unravel: not Block, not a Transcended Block that stops the damage, not Unstoppable.
+            bool unravel = atMaxStrain && def.Impact == ImpactType.Heavy;
+            if (!negated) AddStrain(target, src.ActionStat(def, ActionStat.StrainOnTarget));
 
             Emit(EventType.Damage, src.Id, target.Id, new DamageInfo
             {
@@ -1726,28 +1931,28 @@ namespace TacticsGame.Core
 
             // Taking damage breaks fragile statuses (Marking Shot's stealth).
             for (int i = target.Statuses.Count - 1; i >= 0; i--)
-                if (target.Statuses[i].BreaksOnDamage) RemoveStatus(target, target.Statuses[i].Id);
+                if (target.Statuses[i].Has(StatusFlags.BreaksOnDamage)) RemoveStatus(target, target.Statuses[i].Id);
 
             // 6. Interrupts and stun (a dead unit needs neither).
             // Rule: a Heavy impact that lands always cancels a windup; Light impacts only do if that action is InterruptedByDamage.
             if (target.Health <= 0f) return;
             BreakJump(target, src);   // any hit that lands knocks a jumping unit out of the air
+            if (target.Hovering && dealt > 0f) EndHover(target, true, src);   // and damage knocks a hovering one down
             foreach (var spec in def.TargetStatusesOnHit) if (spec.AppliesToUnit(src, target)) ApplyStatus(target, spec.Create(Now, src.Id), src);
-            if (def.Displace == DisplaceMode.TowardSource) DisplaceUnit(target, src, def);
-            float stunFor = def.StunDuration * atk.StunMultiplier;
+            if (def.Displace == DisplaceMode.TowardSource || def.Displace == DisplaceMode.AwayFromSource) DisplaceUnit(target, src, def);
+            float stunFor = src.ActionStat(def, ActionStat.StunDuration) * atk.StunMultiplier;
             bool willStun = unravel || stunFor > 0f;
             if (atk.HasPush) Relocate(target, atk.PushTo, DisplaceDuration, true, src);
-            if (target.Phase == UnitPhase.Charging) Interrupt(target, "charge broken", !willStun);   // any damage breaks a charge
-            if (target.Phase == UnitPhase.Windup && target.ActiveAction != null &&
+            // Any damage breaks a charge or a channel, and a Heavy one a windup, unless the unit is Unstoppable (Unravel, below, still does).
+            bool unstoppable = target.IsUnstoppable;
+            if (target.Phase == UnitPhase.Charging && !unstoppable) Interrupt(target, "charge broken", !willStun);
+            if (target.Phase == UnitPhase.Channeling && !negated && !unstoppable) EndChannel(target, "channel broken", !willStun);
+            if (target.Slam != null && !negated && AerialSlamPath.BeforeSlam(target.Slam.Path, Now)) BreakAerialSlam(target, src);   // knocked out of the air
+            if (target.Phase == UnitPhase.Windup && target.ActiveAction != null && !unstoppable &&
                 (def.Impact == ImpactType.Heavy || target.ActiveAction.Definition.InterruptedByDamage))
                 Interrupt(target, def.Impact == ImpactType.Heavy ? "heavy impact" : "damage", !willStun);
 
-            if (unravel)
-            {
-                AddStrain(target, -target.Strain);   // assumption: Unravel resets strain
-                Emit(EventType.Unravel, src.Id, target.Id);
-                ApplyStun(target, UnravelStunSeconds, src, true);
-            }
+            if (unravel) UnravelUnit(target, src);
             else if (stunFor > 0f)
             {
                 ApplyStun(target, stunFor, src);
@@ -1761,6 +1966,7 @@ namespace TacticsGame.Core
             Triggers.Fire(new TriggerContext { Type = TriggerType.Dodged, Sim = this, Subject = target, Other = attacker, Action = def });
             if (!target.IsAlive || target.IsRooted) return;   // rooted units still dodge, but can't dash
             if (target.MesmerStrikesLeft > 0) return;   // Mesmerize blinked it to the attacker instead
+            if (target.Phase == UnitPhase.Channeling || target.InAerialSlam) return;   // locked in: it dodges where it stands
 
             if (target.Team == Team.Player)
                 pendingDashes.Add(new DecisionRequest { Kind = DecisionKind.DodgeDash, UnitId = target.Id, AttackerId = attacker.Id });
@@ -1808,7 +2014,7 @@ namespace TacticsGame.Core
                 .Transcended(r.Transcended);
             string reason;
             bool ok = CanUse(u, def, GetUnit(r.TargetUnitId), out reason, false);   // already paid for: skip resource checks
-            if (ok && def.Targeting == TargetType.Position && def.Shape != AreaShape.Line && Vector3.Distance(u.Position, r.TargetPos) > def.Range) { ok = false; reason = "out of range"; }
+            if (ok && def.Targeting == TargetType.Position && def.Shape != AreaShape.Line && Vector3.Distance(u.Position, r.TargetPos) > u.ActionStat(def, ActionStat.Range)) { ok = false; reason = "out of range"; }
             if (ok && !r.Behavior.CanStart(this, u, cmd, out reason)) ok = false;
             if (!ok)
             {
@@ -2041,6 +2247,7 @@ namespace TacticsGame.Core
             if (a == null) return;
             a.Behavior.OnInterrupted(this, a);
             ClearWindupStatuses(a);
+            if (u.HoverEndsAfterAction && a.Actor == u) EndHover(u, false, null);
             u.ActiveAction = null;
             if (u.Phase == UnitPhase.Windup || u.Phase == UnitPhase.Charging) u.Phase = UnitPhase.Ready;
             Emit(EventType.ActionInterrupted, u.Id, null, new InterruptInfo { Reason = reason });
@@ -2057,10 +2264,13 @@ namespace TacticsGame.Core
         /// Stun drops Dodge to 0 through UnitPhase.Stunned.
         /// </summary>
         /// <param name="piercesImmunity">Unravel and falls: lands even on a stun-immune (blocking) unit, and always breaks a windup.</param>
-        private void ApplyStun(Unit target, float duration, Unit source, bool piercesImmunity = false)
+        /// <param name="unravel">It is an Unravel: it lands whatever the unit is immune to, Unstoppable included.</param>
+        private void ApplyStun(Unit target, float duration, Unit source, bool piercesImmunity = false, bool unravel = false)
         {
             if (target.Phase == UnitPhase.Dead) return;
             BreakJump(target, source);    // stunned mid-jump: it falls (and that fall's own stun lands first)
+            if (unravel) piercesImmunity = true;
+            else if (target.IsUnstoppable) return;   // nothing but Unravel stops an Unstoppable unit, not even a fall
             if (target.IsStunImmune && !piercesImmunity) return;   // Block
             target.ResumeAction = null;   // a stun mid-dodge drops the remembered action
             ClearChase(target);           // and a stun ends a chase (a queued ranged order survives it)
@@ -2070,6 +2280,7 @@ namespace TacticsGame.Core
                 Interrupt(target, "stun", false);
             }
             if (target.Phase == UnitPhase.Charging) Interrupt(target, "stun", false);   // a stun always breaks a charge
+            if (target.Phase == UnitPhase.Channeling) EndChannel(target, "stun", false);   // and a channel
             if (target.Phase == UnitPhase.Moving)
             {
                 target.Move = null;
@@ -2109,12 +2320,12 @@ namespace TacticsGame.Core
         {
             foreach (var u in State.Units)
             {
-                bool waiting = u.IsAlive && u.Phase == UnitPhase.Recovery && u.Waiting;
+                bool waiting = u.IsAlive && u.Phase == UnitPhase.Recovery && u.Waiting && !u.Idling;
                 if (!waiting) { if (u.FocusSince >= 0f) BreakFocus(u, false); continue; }
                 if (u.FocusSince >= 0f && Now - u.FocusSince >= FocusDelay - 1e-4f && !u.HasStatus(StatusIds.Focused))
                 {
                     RemoveStatus(u, StatusIds.Focusing);
-                    ApplyStatus(u, new StatusEffect { Id = StatusIds.Focused, SourceId = u.Id, ExpiresAt = float.MaxValue }, u);
+                    ApplyStatus(u, new StatusEffect { Id = StatusIds.Focused, SourceId = u.Id, ExpiresAt = float.MaxValue  }, u);
                 }
             }
         }
@@ -2125,7 +2336,7 @@ namespace TacticsGame.Core
             u.FocusSince = restart ? Now : -1f;
             if (u.HasStatus(StatusIds.Focused)) RemoveStatus(u, StatusIds.Focused);
             if (!restart) { RemoveStatus(u, StatusIds.Focusing); u.FocusTranscended = false; return; }
-            ApplyStatus(u, new StatusEffect { Id = StatusIds.Focusing, SourceId = u.Id, ExpiresAt = Now + FocusDelay }, u);
+            ApplyStatus(u, new StatusEffect { Id = StatusIds.Focusing, SourceId = u.Id, ExpiresAt = Now + FocusDelay  }, u);
             if (u.FocusTranscended && u.Waiting && u.Phase == UnitPhase.Recovery)
                 u.PhaseEndsAt = Mathf.Max(u.PhaseEndsAt, Now + FocusDelay + TickLength);
         }

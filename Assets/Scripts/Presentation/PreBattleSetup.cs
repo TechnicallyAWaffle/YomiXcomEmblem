@@ -11,7 +11,7 @@ namespace TacticsGame.Presentation
     ///   - how many enemies (1-MaxEnemies) and each one's class (any of EnemyClasses),
     ///   - for each squad member, which of its class abilities it brings.
     /// The basic attack, Block and Dash always come along. Start Battle swaps the enemy units placed in the scene for freshly spawned
-    /// ones, gives everyone runtime copies of their definitions with the chosen loadout (the assets are untouched), and
+    /// ones, builds everyone from their definitions with the chosen loadout (Placement.Loadout; the assets are untouched), and
     /// starts the BattleController. After the battle, New Battle reloads the scene back to this screen.
     /// Uses GUILayout, so anything that changes the set of controls (adding an enemy row, closing the panel) ends the
     /// GUI pass right away with GUIUtility.ExitGUI; the next frame lays out the new set.
@@ -22,7 +22,7 @@ namespace TacticsGame.Presentation
         public BattleContext Context;
         [Tooltip("Classes enemies can be. The first entries are the defaults for the starting lineup.")]
         public List<UnitDefinition> EnemyClasses = new List<UnitDefinition>();
-        public ActionDefinition BlockAction, DashAction;
+
         [Tooltip("Used for enemies whose definition has no ViewPrefab.")]
         public GameObject FallbackUnitPrefab;
         public Material EnemyMaterial;
@@ -63,6 +63,8 @@ namespace TacticsGame.Presentation
             MapChoices.RemoveAll(m => m == null);
             mapIndex = Mathf.Max(0, MapChoices.IndexOf(lastMap != null && MapChoices.Contains(lastMap) ? lastMap : Maps != null ? Maps.Current : null));
             mapDirty = true;
+            // The squad's own classes are never enemies (older scenes still list them).
+            EnemyClasses.RemoveAll(c => c == null || Context.Placements.Exists(p => p.Team == Team.Player && p.Definition == c));
             foreach (var p in Context.Placements)
             {
                 if (p.Team != Team.Player || p.Definition == null) continue;
@@ -181,7 +183,7 @@ namespace TacticsGame.Presentation
                 if (GUILayout.Button(">", GUILayout.Width(28f))) SetEnemyClass(i, enemyClass[i] + 1);
                 GUILayout.EndHorizontal();
             }
-            GUILayout.Label("Enemy classes cycle through every class, the squad's included. Everyone has Block and Dash (G).", small);
+            GUILayout.Label("Enemy classes cycle through the enemy types. Everyone has Block and Dash (G).", small);
         }
 
         private void SetEnemyClass(int i, int classIndex)
@@ -226,7 +228,7 @@ namespace TacticsGame.Presentation
                 var p = s.Placement;
                 var chosen = new List<ActionDefinition>();
                 for (int i = 0; i < s.Options.Count; i++) if (s.Enabled[i]) chosen.Add(s.Options[i]);
-                p.Definition = Loadout(p.Definition, chosen);
+                p.Loadout = chosen;   // the unit is built from the definition with these (Unit.FromDefinition): no copy of the asset
                 placements.Add(p);
             }
 
@@ -246,8 +248,7 @@ namespace TacticsGame.Presentation
                 if (view == null) { Destroy(go); continue; }
                 placements.Add(new BattleContext.Placement
                 {
-                    View = view, Team = Team.Enemy,
-                    Definition = Loadout(def, new List<ActionDefinition>(def.Actions)),
+                    View = view, Team = Team.Enemy, Definition = def,
                 });
             }
 
@@ -331,15 +332,5 @@ namespace TacticsGame.Presentation
             return sum / Mathf.Max(1, points.Count);
         }
 
-        /// <summary>A runtime copy of 'def' with these abilities plus Block and Dash; the asset itself is left untouched.</summary>
-        private UnitDefinition Loadout(UnitDefinition def, List<ActionDefinition> actions)
-        {
-            var copy = Instantiate(def);
-            copy.name = def.name;   // unit ids are built from it
-            copy.Actions = actions;
-            copy.Universal = BlockAction != null ? BlockAction : def.Universal;
-            copy.Dash = DashAction != null ? DashAction : def.Dash;
-            return copy;
-        }
     }
 }

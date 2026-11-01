@@ -82,6 +82,24 @@ namespace TacticsGame.Presentation
                 case TacticsGame.Core.EventType.Stun:
                     readyAt[e.TargetId] = e.SimTime + ((StunInfo)e.Payload).Duration;
                     break;
+                case TacticsGame.Core.EventType.ChannelStarted:
+                {
+                    // Busy for the whole channel; the recovery after it is added when it ends.
+                    float until = e.SimTime + ((ChannelInfo)e.Payload).Seconds, current;
+                    readyAt[e.ActorId] = readyAt.TryGetValue(e.ActorId, out current) ? Mathf.Max(current, until) : until;
+                    break;
+                }
+                case TacticsGame.Core.EventType.ChannelEnded:
+                    readyAt[e.ActorId] = e.SimTime + ((ChannelInfo)e.Payload).Recovery;
+                    break;
+                case TacticsGame.Core.EventType.AerialSlam:
+                {
+                    // Both are up in the air until the slam lands.
+                    float until = AerialSlamPath.End((AerialSlamInfo)e.Payload), current;
+                    foreach (var id in new[] { e.ActorId, e.TargetId })
+                        readyAt[id] = readyAt.TryGetValue(id, out current) ? Mathf.Max(current, until) : until;
+                    break;
+                }
                 case TacticsGame.Core.EventType.MoveStarted:
                 {
                     var m = (MoveInfo)e.Payload;

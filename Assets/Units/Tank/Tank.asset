@@ -38,6 +38,10 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 5f766a43f40a66e4c95aab556b2e1338, type: 2}
   - {fileID: 11400000, guid: 70b2a9303d8007d41bb3dbbb028c9be2, type: 2}
   - {fileID: 11400000, guid: 5527f3bda48cdbe46b9023f9efc0e39e, type: 2}
+  - {fileID: 11400000, guid: 9f7e7ad6405913b49bea20ca49f60764, type: 2}
+  - {fileID: 11400000, guid: fc2e8dbe4b319b74f979ffcbe10844cc, type: 2}
+  - {fileID: 11400000, guid: c525e06230308c04e9197d70d385aab0, type: 2}
   Passives: []
+  AIProfile: 
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
-  DataVersion: 9
+  DataVersion: 14

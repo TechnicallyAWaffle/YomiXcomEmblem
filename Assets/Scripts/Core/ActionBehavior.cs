@@ -18,6 +18,34 @@ namespace TacticsGame.Core
         public string Tag;      // behavior bookkeeping, copied onto the hits it makes (e.g. Final Cut follow-ups)
         public float Charge;    // 0..1: how fully a charge ability was charged before release
         public bool Transcended;   // ordered Transcended (and the definition allows it): the behavior's stronger version
+        public bool UnravelsActor; // its strain cost took the actor past max (ActionDefinition.UnravelsOverMaxStrain): it Unravels once this lands
+
+        /// <summary>One of this action's numbers for its actor, upgrades and statuses included (Unit.ActionStat).</summary>
+        public float Stat(ActionStat stat) { return Actor.ActionStat(Definition, stat); }
+    }
+
+    /// <summary>
+    /// What the ability popup says about an action's effect, as label / value cells. Its behavior fills it
+    /// (ActionBehavior.Describe), so an ability with special rules words its own lines and the popup needs no list of
+    /// ability types. Numbers come from V: the ordered unit's (upgrades and statuses in), or the ability's own.
+    /// </summary>
+    public class AbilityTip
+    {
+        public readonly ActionDefinition Def;
+        public readonly Unit Who;
+        public readonly BattleSimulation Sim;   // for battle rule numbers (null outside a battle)
+        public readonly List<KeyValuePair<string, string>> Effect = new List<KeyValuePair<string, string>>();
+        /// <summary>Heading for the statuses it puts on what it hits (a trap's: "SPRUNG BY").</summary>
+        public string TargetStatusesTitle = "TARGET";
+
+        public AbilityTip(ActionDefinition def, Unit who, BattleSimulation sim = null) { Def = def; Who = who; Sim = sim; }
+
+        public float V(ActionStat stat) { return Who != null ? Who.ActionStat(Def, stat) : Stats.Base(Def, stat); }
+        public void Add(string label, string value) { Effect.Add(new KeyValuePair<string, string>(label, value)); }
+
+        public static string Secs(float s) { return s <= 0f ? "instant" : string.Format("{0:0.##}s", s); }
+        public static string Metres(float m) { return string.Format("{0:0.#}m", m); }
+        public static string Mult(float m) { return "x" + m.ToString("0.##"); }
     }
 
     // ---- Effects: behaviors return these; the simulation applies them together so
@@ -65,18 +93,27 @@ namespace TacticsGame.Core
         public virtual void Attach(BattleSimulation sim) { }
 
         /// <summary>Energy this use would cost. Override for discounts (Rapid Slices follow-ups).</summary>
-        public virtual float EnergyCost(BattleSimulation sim, Unit actor, ActionDefinition def) { return def.EnergyCost; }
+        public virtual float EnergyCost(BattleSimulation sim, Unit actor, ActionDefinition def) { return actor.ActionStat(def, ActionStat.EnergyCost); }
 
         /// <summary>Strain the user takes for starting it (negative relieves strain). Behaviors may discount it (Rapid Slices).</summary>
         /// <param name="targetId">The unit it would be aimed at, when known (follow-up discounts depend on it).</param>
-        public virtual float StrainCost(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId) { return def.StrainOnSelf; }
+        public virtual float StrainCost(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId) { return actor.ActionStat(def, ActionStat.StrainOnSelf); }
 
         /// <summary>True if it may be used even when its strain cost would pass max strain (strain just stops at max).</summary>
         public virtual bool AllowsStrainOverflow { get { return false; } }
 
+        /// <summary>True if it may be used now although it is on cooldown (a chain's follow-ups). targetId null = on anyone.</summary>
+        public virtual bool IgnoresCooldown(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId) { return false; }
+
+        /// <summary>True for abilities that move the user (dashes, blinks, leaps): they can't be used while airborne.</summary>
+        public virtual bool MovesUser { get { return false; } }
+
         /// <summary>True for abilities that close the distance themselves (Phantom Strike's dash): ordered at a target out of
         /// reach, the unit walks only until the target is within the full Range, not BattleSimulation.ChaseStrikeFraction of it.</summary>
         public virtual bool ClosesDistance { get { return false; } }
+
+        /// <summary>Windup in seconds before action speed (Flowing Death gets faster with stacks). See BattleSimulation.WindupOf.</summary>
+        public virtual float WindupSeconds(BattleSimulation sim, Unit actor, ActionDefinition def) { return actor.ActionStat(def, ActionStat.Windup); }
 
         /// <summary>Extra validity checks beyond the built-in cooldown/resource/range/LOS ones.</summary>
         public virtual bool CanStart(BattleSimulation sim, Unit actor, UnitCommand cmd, out string reason)
@@ -94,6 +131,57 @@ namespace TacticsGame.Core
         public abstract void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects);
 
         public virtual void OnInterrupted(BattleSimulation sim, ActionInstance a) { }
+
+        // ------------------------------------------------------------------ how it reads (the ability popup)
+
+        /// <summary>Does it roll to hit its targets (damage, accuracy and stun lines)? Single-target attacks do; area attacks say so.</summary>
+        public virtual bool RollsToHit(ActionDefinition def) { return def.Targeting == TargetType.Enemy; }
+
+        /// <summary>Hit chance the targeting preview should add for this use (Transcended Steady Strikes always hits).</summary>
+        public virtual float PreviewAccuracyBonus(ActionDefinition def, bool transcended) { return 0f; }
+
+        /// <summary>
+        /// The popup's EFFECT lines. The default covers hits (damage, accuracy, stun, strain), heals, pushes and pulls, and
+        /// charge bonuses; override to add or reword lines for the behavior's own rules.
+        /// </summary>
+        public virtual void Describe(AbilityTip tip)
+        {
+            var def = tip.Def;
+            if (RollsToHit(def)) DescribeHit(tip, "Damage", "Stun", true);
+            if (tip.V(ActionStat.Heal) > 0f) tip.Add("Heal", tip.V(ActionStat.Heal).ToString("0"));
+            DescribeMovement(tip);
+            if (def.IsCharge && def.ChargeDamageMultiplier > 1f) tip.Add("Full charge", AbilityTip.Mult(def.ChargeDamageMultiplier) + " dmg");
+            if (def.IsCharge && def.ChargeHealMultiplier > 1f) tip.Add("Full charge", AbilityTip.Mult(def.ChargeHealMultiplier) + " heal");
+        }
+
+        /// <summary>The hit's lines: damage (or just "heavy" without any), accuracy, stun, target strain, the bonus on a stunned target.</summary>
+        protected static void DescribeHit(AbilityTip tip, string damageLabel, string stunLabel, bool accuracy)
+        {
+            var def = tip.Def;
+            float damage = tip.V(ActionStat.Damage);
+            if (damage > 0f) tip.Add(damageLabel, string.Format("{0:0} {1}", damage, def.Impact == ImpactType.Heavy ? "heavy" : "light"));
+            else if (def.Impact == ImpactType.Heavy) tip.Add("Impact", "heavy");
+            if (accuracy && tip.V(ActionStat.Accuracy) < 0.995f) tip.Add("Accuracy", string.Format("{0:0}%", tip.V(ActionStat.Accuracy) * 100f));
+            if (tip.V(ActionStat.StunDuration) > 0f) tip.Add(stunLabel, AbilityTip.Secs(tip.V(ActionStat.StunDuration)));
+            if (tip.V(ActionStat.StrainOnTarget) > 0f) tip.Add("Target strain", string.Format("+{0:0}", tip.V(ActionStat.StrainOnTarget)));
+            if (def.StunnedDamageMultiplier > 1f) tip.Add("Vs stunned", AbilityTip.Mult(def.StunnedDamageMultiplier) + " dmg");
+        }
+
+        /// <summary>What DisplaceDistance does: a pull, a reposition or a knockback by default; behaviors that use it as a
+        /// height (lifts, leaps, slams) say that instead.</summary>
+        protected virtual void DescribeMovement(AbilityTip tip)
+        {
+            float d = tip.V(ActionStat.DisplaceDistance);
+            if (d <= 0f) return;
+            var mode = tip.Def.Displace;
+            tip.Add(mode == DisplaceMode.TowardSource ? "Pull" : mode == DisplaceMode.AwayFromEnemies ? "Moves them" : "Knockback", AbilityTip.Metres(d));
+        }
+
+        /// <summary>Channeled actions (ActionDefinition.ChannelSeconds): called every tick of the channel. Return false to break it.</summary>
+        public virtual bool OnChannelTick(BattleSimulation sim, ActionInstance a) { return true; }
+
+        /// <summary>The channel is over: ran its course (broken false) or was broken.</summary>
+        public virtual void OnChannelEnd(BattleSimulation sim, ActionInstance a, bool broken) { }
     }
 
     /// <summary>Default: one attack against the chosen target.</summary>
@@ -126,6 +214,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class AreaAttackBehavior : ActionBehavior
     {
+        public override bool RollsToHit(ActionDefinition def) { return true; }
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             foreach (var target in sim.UnitsInArea(a.Actor, a.Definition, a.TargetPos))
@@ -139,6 +229,21 @@ namespace TacticsGame.Core
         }
     }
 
+    /// <summary>
+    /// A dome around the user (Sanctity, Chronosphere): AreaRadius wide and AreaHeight tall, moving with it; everyone inside
+    /// holds the AuraStatuses (allies or enemies, per each one's AppliesTo). It lasts AuraSeconds, or, for a channeled
+    /// action (ChannelSeconds), as long as the channel does (BattleSimulation.StartAura).
+    /// </summary>
+    public class AuraBehavior : ActionBehavior
+    {
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var def = a.Definition;
+            bool channeled = def.ChannelSeconds > 0f;
+            sim.StartAura(a.Actor, def, channeled ? def.ChannelSeconds : def.AuraSeconds, channeled);
+        }
+    }
+
     /// <summary>Heal an ally and relocate them (Reconstruct).</summary>
     public class HealDisplaceBehavior : ActionBehavior
     {
@@ -146,7 +251,7 @@ namespace TacticsGame.Core
         {
             var target = sim.GetUnit(a.TargetUnitId);
             if (target == null || !target.IsAlive) return;
-            if (a.Definition.Heal > 0f) effects.Add(new HealEffect { Source = a.Actor, TargetId = target.Id, Amount = a.Definition.Heal });
+            if (a.Definition.Heal > 0f) effects.Add(new HealEffect { Source = a.Actor, TargetId = target.Id, Amount = a.Stat(ActionStat.Heal) });
             if (a.Definition.Displace != DisplaceMode.None) effects.Add(new DisplaceEffect { Source = a.Actor, TargetId = target.Id, Definition = a.Definition });
         }
     }
@@ -182,6 +287,18 @@ namespace TacticsGame.Core
             { "status_spell", new StatusSpellBehavior() },
             { "teleport", new TeleportBehavior() },
             { "levitate", new LevitateBehavior() },
+            // Enemy types
+            { "blink", new BlinkBehavior() },
+            { "flowing_death", new FlowingDeathBehavior() },
+            { "repel", new RepelBehavior() },
+            { "charged_heal", new ChargedHealBehavior() },
+            { "charge", new ChargeBehavior() },
+            // Shared (any class)
+            { "chain_attack", new ChainAttackBehavior() },
+            { "leap", new LeapBehavior() },
+            { "arrival", new ArrivalBehavior() },
+            { "aura", new AuraBehavior() },
+            { "aerial_slam", new AerialSlamBehavior() },
         };
 
         public static void Register(string id, ActionBehavior behavior) { map[id] = behavior; }

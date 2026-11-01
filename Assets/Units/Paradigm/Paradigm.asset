@@ -39,6 +39,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 224a9986618eae048b37d1922d79a673, type: 2}
   - {fileID: 11400000, guid: 5e02e71cf8ebdd649a4d33a1fd316ac0, type: 2}
   - {fileID: 11400000, guid: 9097ce0cdffdf3c47989fd1ba7cc81ac, type: 2}
+  - {fileID: 11400000, guid: e372d47123abfb544ad97c14b028b967, type: 2}
   Passives: []
+  AIProfile: 
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
-  DataVersion: 9
+  DataVersion: 14

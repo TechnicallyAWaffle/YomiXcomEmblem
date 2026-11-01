@@ -43,6 +43,8 @@ namespace TacticsGame.Presentation
             }
 
             Sim = new BattleSimulation(state, Seed, staticOcclusion, paths);
+            var tuning = Resources.Load<BattleTuning>(BattleTuning.ResourceName);   // battle rule numbers (Tools > Combat Test > Tuning & Text)
+            if (tuning != null) tuning.ApplyTo(Sim);
             Director.Load(Sim.Timeline, Context.Registry);
             foreach (var view in Context.Registry.Values) view.Director = Director;
             StartCoroutine(BattleLoop());

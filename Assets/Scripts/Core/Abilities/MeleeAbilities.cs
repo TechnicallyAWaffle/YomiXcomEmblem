@@ -11,39 +11,69 @@ namespace TacticsGame.Core
     //   Strain relief on dodge - passive, see Passives.
 
     /// <summary>
-    /// Rapid Slices: a quick melee hit and a follow-up ability (Space re-casts it). Using one opens a short window
-    /// ("rapid_chain", aimed at that target) during which slicing the SAME target again costs FollowupCostMultiplier of
-    /// its strain, up to MaxFollowups more times. Slicing someone else starts a fresh chain at full price.
+    /// Chain attack (chain_attack): a plain attack that can be used ChainFollowups more times in a row on the same target.
+    /// Each use opens (or extends) a window, the "<id>_chain" status aimed at that target, through the recovery and
+    /// ChainWindow seconds after. Inside it, using it on that target again ignores its cooldown and costs ChainCostMultiplier
+    /// of its strain, until the follow-ups run out. Using it on someone else starts a fresh chain at full price (off
+    /// cooldown only). Flickershots; Rapid Slices is one with fixed numbers.
     /// </summary>
-    public class RapidSlicesBehavior : BasicAttackBehavior
+    public class ChainAttackBehavior : BasicAttackBehavior
     {
-        public const int MaxFollowups = 4;
-        public const float FollowupCostMultiplier = 0.5f;
-        public const float FollowupWindow = 1.0f;   // seconds after recovery ends
+        protected virtual int Followups(ActionDefinition def) { return def.ChainFollowups; }
+        protected virtual float CostMultiplier(ActionDefinition def) { return def.ChainCostMultiplier; }
+        protected virtual float Window(ActionDefinition def) { return def.ChainWindow; }
+        public virtual string ChainStatus(ActionDefinition def) { return def.Id + "_chain"; }
+
+        /// <summary>Would the next use on 'targetId' (on anyone, if null) be a follow-up?</summary>
+        public bool InChain(Unit actor, ActionDefinition def, string targetId)
+        {
+            var chain = actor.GetStatus(ChainStatus(def));
+            return chain != null && chain.Stacks < Followups(def) && (targetId == null || chain.TargetId == targetId);
+        }
 
         public override float StrainCost(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId)
         {
-            var chain = actor.GetStatus(StatusIds.RapidChain);
-            bool discounted = chain != null && chain.Stacks < MaxFollowups && targetId != null && chain.TargetId == targetId;
-            return discounted ? def.StrainOnSelf * FollowupCostMultiplier : def.StrainOnSelf;
+            return targetId != null && InChain(actor, def, targetId) ? actor.ActionStat(def, ActionStat.StrainOnSelf) * CostMultiplier(def) : actor.ActionStat(def, ActionStat.StrainOnSelf);
         }
+
+        public override bool IgnoresCooldown(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId) { return InChain(actor, def, targetId); }
 
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             base.OnResolve(sim, a, effects);
             if (a.IsFree) return;
             var actor = a.Actor;
-            float windowEnds = sim.Now + a.Definition.Recovery / actor.EffectiveActionSpeed() + FollowupWindow;
-            var chain = actor.GetStatus(StatusIds.RapidChain);
+            var def = a.Definition;
+            string id = ChainStatus(def);
+            float windowEnds = sim.Now + actor.ActionStat(def, ActionStat.Recovery) / actor.EffectiveActionSpeed() + Window(def);
+            var chain = actor.GetStatus(id);
             if (chain == null || chain.TargetId != a.TargetUnitId)
             {
-                sim.ApplyStatus(actor, new StatusEffect { Id = StatusIds.RapidChain, SourceId = actor.Id, TargetId = a.TargetUnitId, ExpiresAt = windowEnds }, actor);
+                if (Followups(def) > 0) sim.ApplyStatus(actor, new StatusEffect { Id = id, SourceId = actor.Id, TargetId = a.TargetUnitId, ExpiresAt = windowEnds  }, actor);
                 return;
             }
             chain.Stacks++;
-            if (chain.Stacks >= MaxFollowups) sim.RemoveStatus(actor, StatusIds.RapidChain);
+            if (chain.Stacks >= Followups(def)) sim.RemoveStatus(actor, id);
             else chain.ExpiresAt = windowEnds;
         }
+    }
+
+    /// <summary>
+    /// Rapid Slices: a quick melee hit and a follow-up ability (Space re-casts it): a chain attack of MaxFollowups more
+    /// slices at FollowupCostMultiplier of the strain ("rapid_chain"), whatever its asset's chain fields say.
+    /// </summary>
+    public class RapidSlicesBehavior : ChainAttackBehavior
+    {
+        public const int MaxFollowups = 4;
+        public const float FollowupCostMultiplier = 0.5f;
+        public const float FollowupWindow = 1.0f;   // seconds after recovery ends
+
+        protected override int Followups(ActionDefinition def) { return MaxFollowups; }
+        protected override float CostMultiplier(ActionDefinition def) { return FollowupCostMultiplier; }
+        protected override float Window(ActionDefinition def) { return FollowupWindow; }
+        public override string ChainStatus(ActionDefinition def) { return StatusIds.RapidChain; }
+        // Rapid Slices has no cooldown to skip.
+        public override bool IgnoresCooldown(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId) { return false; }
     }
 
     /// <summary>
@@ -53,6 +83,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class SteadyStrikesBehavior : BasicAttackBehavior
     {
+        public override float PreviewAccuracyBonus(ActionDefinition def, bool transcended) { return transcended ? TranscendAccuracyBonus : 0f; }
+
         public const string EmpoweredTag = "steady_empowered";
         public const float TranscendAccuracyBonus = 0.2f;
         public const float TranscendBlockPierce = 0.25f;
@@ -77,13 +109,14 @@ namespace TacticsGame.Core
     }
 
     /// <summary>
-    /// Final Cut: needs Battle Trance, and keeps it. Execute: damage grows with the target's missing health, up to double.
-    /// A kill extends the trance by TranceExtension seconds.
+    /// Final Cut (shown as Certainty): needs Battle Trance or Wrath (RequiredStatus "trance|wrath"), and keeps it. Execute:
+    /// damage grows with the target's missing health, up to double. A kill extends the trance or Wrath by TranceExtension seconds.
     /// </summary>
     public class FinalCutBehavior : ActionBehavior
     {
         public const string PrimaryTag = "final_cut";
         public const float TranceExtension = 3f;
+        private static readonly string[] Extends = { StatusIds.Trance, StatusIds.Wrath };
 
         public override void Attach(BattleSimulation sim)
         {
@@ -91,11 +124,14 @@ namespace TacticsGame.Core
             {
                 var attacker = ctx.Other;
                 if (ctx.Tag != PrimaryTag || attacker == null || !attacker.IsAlive) return;
-                var trance = attacker.GetStatus(StatusIds.Trance);
-                if (trance == null) return;
-                var extended = trance.Copy();
-                extended.ExpiresAt += TranceExtension;
-                sim.ApplyStatus(attacker, extended, attacker);   // refresh: same status, later end
+                foreach (var id in Extends)
+                {
+                    var status = attacker.GetStatus(id);
+                    if (status == null) continue;
+                    var extended = status.Copy();
+                    extended.ExpiresAt += TranceExtension;
+                    sim.ApplyStatus(attacker, extended, attacker);   // refresh: same status, later end
+                }
             });
         }
 
@@ -120,6 +156,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class PhantomStrikeBehavior : ActionBehavior
     {
+        public override bool MovesUser { get { return true; } }   // not while airborne
+
         public const float StrikeReach = 2f;
 
         public override bool ClosesDistance { get { return true; } }   // a chase goes the moment the dash can reach
@@ -152,11 +190,11 @@ namespace TacticsGame.Core
             if (target == null || !target.IsAlive) return;
             Vector3 dir = target.Position - a.Actor.Position; dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
-            Vector3 landed = sim.Paths.ClampDash(target.Position, target.Position + dir * a.Definition.DisplaceDistance);
+            Vector3 landed = sim.Paths.ClampDash(target.Position, target.Position + dir * a.Stat(ActionStat.DisplaceDistance));
             effects.Add(new AttackEffect
             {
                 Source = a.Actor, TargetId = target.Id, Definition = a.Definition, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag,
-                HasPush = a.Definition.DisplaceDistance > 0f, PushTo = landed,
+                HasPush = a.Stat(ActionStat.DisplaceDistance) > 0f, PushTo = landed,
             });
         }
     }

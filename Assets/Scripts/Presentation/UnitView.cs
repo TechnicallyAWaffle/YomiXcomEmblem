@@ -31,8 +31,11 @@ namespace TacticsGame.Presentation
         private float motionStart;
         private float motionLength;
         // Timed two-point motions (dash/shove, jump, fall) run over motionSeconds instead of at a speed.
-        private enum TimedKind { None, Glide, Jump, Fall, Lift }
+        private enum TimedKind { None, Glide, Jump, Fall, Lift, Slam }
         private TimedKind timedKind;
+        // Aerial slam (Heretic's Ascent) in progress: the shared flight, and whether this unit carries or is carried.
+        private AerialSlamInfo slamPath;
+        private bool slamCarrier;
         private float motionSeconds;
         private Quaternion initialRotation;
 
@@ -47,6 +50,10 @@ namespace TacticsGame.Presentation
         private float carryOffset;
         private const float CarryHeight = 0.45f;
         private bool lungeOnResolve, dead;
+        // Lunge shapes for strikes in a run, in order: lean and reach scales, and a sideways roll (degrees). The first is the plain one.
+        private static readonly Vector3[] Lunges = { new Vector3(1f, 1f, 0f), new Vector3(0.75f, 0.8f, 12f), new Vector3(1.15f, 1.1f, -10f), new Vector3(0.6f, 1.2f, 7f), new Vector3(1f, 0.7f, -14f) };
+        private const float LungeRunSeconds = 1.2f;
+        private int lungeVariant;
 
         private void Awake()
         {
@@ -55,9 +62,18 @@ namespace TacticsGame.Presentation
             if (Model != null) { modelPos = Model.localPosition; modelRot = Model.localRotation; modelScale = Model.localScale; }
         }
 
+        /// <summary>Resize the Model (UnitLooks' body proportions); the placeholder poses squash and stretch from this size.</summary>
+        public void SetBodyScale(Vector3 scale)
+        {
+            if (Model == null) return;
+            modelScale = scale;
+            Model.localScale = scale;
+        }
+
         public void ResetTo(Unit unit)
         {
             motionPath = null;
+            timedKind = TimedKind.None;
             carrier = null;
             transform.position = unit.Position;
             transform.rotation = initialRotation;
@@ -70,6 +86,7 @@ namespace TacticsGame.Presentation
         /// <summary>Walk the path at 'speed' (m/s over the ground, like the sim), feet on the terrain.</summary>
         public void BeginMotion(List<Vector3> path, float speed, float startSimTime)
         {
+            Unslam();
             motionPath = path;
             motionSpeed = speed;
             motionStart = startSimTime;
@@ -105,8 +122,51 @@ namespace TacticsGame.Presentation
             transform.position = position;
         }
 
+        /// <summary>
+        /// Heretic's Ascent: follow the slam's flight (AerialSlamPath, the same curve the simulation uses). The carrier leaps up,
+        /// hangs and drops back, arching back as it slams; the one carried swings over its head, turning over, to land behind it.
+        /// </summary>
+        public void BeginAerialSlam(AerialSlamInfo path, bool isCarrier)
+        {
+            Unslam();
+            carrier = null;
+            slamPath = path;
+            slamCarrier = isCarrier;
+            motionPath = new List<Vector3> { path.CarrierStart, path.Landing };
+            timedKind = TimedKind.Slam;
+            motionStart = path.Start;
+            motionSeconds = Mathf.Max(0.01f, AerialSlamPath.End(path) - path.Start);
+        }
+
+        private void UpdateSlam()
+        {
+            float t = Mathf.Min(Director.PlaybackClock, AerialSlamPath.End(slamPath));
+            Vector3 f = slamPath.Facing;
+            Vector3 back = Vector3.Cross(f, Vector3.up);   // turning about this tips a body's top toward the carrier's back
+            if (slamCarrier)
+            {
+                transform.position = AerialSlamPath.Carrier(slamPath, t);
+                float s = t - slamPath.Start - slamPath.Rise - slamPath.Hold;
+                float arch = s > 0f ? Mathf.Sin(Mathf.Clamp01(s / Mathf.Max(1e-4f, slamPath.Slam)) * Mathf.PI) * 30f : 0f;   // upright again as it lands
+                transform.rotation = Quaternion.AngleAxis(arch, back) * Quaternion.LookRotation(f);
+                return;
+            }
+            var tilt = Quaternion.AngleAxis(AerialSlamPath.Swing(slamPath, t) * Mathf.Rad2Deg, back);
+            transform.rotation = tilt * Quaternion.LookRotation(-f);   // facing its captor, turning over with the swing
+            transform.position = AerialSlamPath.HeldCenter(slamPath, t) - tilt * Vector3.up * slamPath.HeldHalfHeight;
+        }
+
+        /// <summary>Leaving a slam's motion: stand upright again, facing as it did.</summary>
+        private void Unslam()
+        {
+            if (timedKind != TimedKind.Slam) return;
+            timedKind = TimedKind.None;
+            transform.rotation = Quaternion.LookRotation(slamCarrier ? slamPath.Facing : -slamPath.Facing);
+        }
+
         private void BeginTimed(TimedKind kind, Vector3 from, Vector3 to, float seconds, float startSimTime)
         {
+            Unslam();
             motionPath = new List<Vector3> { from, to };
             timedKind = kind;
             motionStart = startSimTime;
@@ -116,6 +176,7 @@ namespace TacticsGame.Presentation
         /// <summary>Stop scripted movement where the simulation says the unit ended up (a cancelled walk stops mid-path).</summary>
         public void EndMotion(Vector3 finalPosition)
         {
+            Unslam();
             transform.position = finalPosition;
             motionPath = null;
         }
@@ -147,6 +208,7 @@ namespace TacticsGame.Presentation
         {
             if (motionPath == null || Director == null) return;
             var terrain = Terrain;
+            if (timedKind == TimedKind.Slam) { UpdateSlam(); return; }
             if (timedKind != TimedKind.None)
             {
                 Vector3 from = motionPath[0], to = motionPath[1];
@@ -203,8 +265,10 @@ namespace TacticsGame.Presentation
             if (lungeStart >= 0f && t - lungeStart < LungeSeconds)
             {
                 float s = Mathf.Sin(Mathf.PI * (t - lungeStart) / LungeSeconds);
-                lean += 20f * s;
-                forward += 0.35f * s;
+                var v = Lunges[lungeVariant % Lunges.Length];
+                lean += 20f * v.x * s;
+                forward += 0.35f * v.y * s;
+                roll += v.z * s;
             }
             if (flinchStart >= 0f && t - flinchStart < FlinchSeconds)
             {
@@ -252,7 +316,13 @@ namespace TacticsGame.Presentation
         public void PlayResolve(string actionId)
         {
             windupStart = -1f;
-            if (lungeOnResolve && Director != null) lungeStart = Director.PlaybackClock;
+            if (lungeOnResolve && Director != null)
+            {
+                // Lunges in quick succession (a run of rapid strikes) each lean a different way.
+                float now = Director.PlaybackClock;
+                lungeVariant = lungeStart >= 0f && now - lungeStart < LungeRunSeconds && now >= lungeStart ? lungeVariant + 1 : 0;
+                lungeStart = now;
+            }
             lungeOnResolve = false;
             Trigger("Resolve");
         }

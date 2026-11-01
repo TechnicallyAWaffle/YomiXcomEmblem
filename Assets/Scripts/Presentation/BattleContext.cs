@@ -18,6 +18,10 @@ namespace TacticsGame.Presentation
             public UnitView View;
             public UnitDefinition Definition;
             public Team Team;
+            [Tooltip("Permanent upgrades this unit fights with; its definition is left as it is.")]
+            public List<UpgradeDefinition> Upgrades;
+            /// <summary>The class abilities it brings (set by the pre-battle screen); null = all of its definition's.</summary>
+            [System.NonSerialized] public List<ActionDefinition> Loadout;
         }
 
         public List<Placement> Placements = new List<Placement>();
@@ -32,8 +36,9 @@ namespace TacticsGame.Presentation
             {
                 var p = Placements[i];
                 string id = p.Definition.name + "_" + i;
-                state.Units.Add(Unit.FromDefinition(p.Definition, id, p.Team, p.View.transform.position));
+                state.Units.Add(Unit.FromDefinition(p.Definition, id, p.Team, p.View.transform.position, p.Loadout, p.Upgrades));
                 p.View.UnitId = id;
+                UnitLooks.Apply(p.View, p.Definition);
                 Registry[id] = p.View;
             }
             foreach (var block in FindObjectsByType<ElevationBlock>(FindObjectsSortMode.InstanceID))

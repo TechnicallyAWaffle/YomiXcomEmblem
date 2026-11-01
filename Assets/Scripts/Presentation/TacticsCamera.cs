@@ -81,7 +81,8 @@ namespace TacticsGame.Presentation
             gliding = true;
             glideT = 0f;
             glideFromFocus = focus;
-            glideToFocus = new Vector3(Mathf.Clamp(point.x, BoundsMin.x, BoundsMax.x), 0f, Mathf.Clamp(point.z, BoundsMin.y, BoundsMax.y));
+            // The point's height counts: a unit on raised ground is centred, not the ground below it.
+            glideToFocus = new Vector3(Mathf.Clamp(point.x, BoundsMin.x, BoundsMax.x), point.y, Mathf.Clamp(point.z, BoundsMin.y, BoundsMax.y));
             glideFromYaw = yaw;
             glideToYaw = resetRotation ? yaw + Mathf.DeltaAngle(yaw, homeYaw) : yaw;   // the short way round
             glideFromPitch = pitch;
