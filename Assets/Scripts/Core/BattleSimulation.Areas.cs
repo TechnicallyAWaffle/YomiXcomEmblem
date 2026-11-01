@@ -154,9 +154,9 @@ namespace TacticsGame.Core
         private void StartChannel(ActionInstance a)
         {
             var u = a.Actor;
-            u.Channel = new ChannelState { Action = a, EndsAt = Now + a.Definition.ChannelSeconds };
+            var channel = u.AddState(new ChannelState { Action = a, EndsAt = Now + a.Definition.ChannelSeconds });
             u.Phase = UnitPhase.Channeling;
-            u.PhaseEndsAt = u.Channel.EndsAt;
+            u.PhaseEndsAt = channel.EndsAt;
             Emit(EventType.ChannelStarted, u.Id, a.TargetUnitId, new ChannelInfo { ActionId = a.Definition.Id, Seconds = a.Definition.ChannelSeconds });
         }
 
@@ -189,11 +189,11 @@ namespace TacticsGame.Core
         /// unit is ready again at once (a stun breaking it takes over instead; emitReady false leaves the announcing to that).
         /// Its channeled domes come down either way.
         /// </summary>
-        private void EndChannel(Unit u, string reason, bool emitReady = true)
+        internal void EndChannel(Unit u, string reason, bool emitReady = true)
         {
             var c = u.Channel;
             if (c == null) return;
-            u.Channel = null;
+            u.RemoveState(c);
             foreach (var a in auras.ToArray()) if (a.Source == u && a.Channeled) EndAura(a);
             c.Action.Behavior.OnChannelEnd(this, c.Action, reason != null);
             var def = c.Action.Definition;
@@ -246,8 +246,8 @@ namespace TacticsGame.Core
                 Height = carrier.ActionStat(def, ActionStat.DisplaceDistance), Radius = radius, PivotHeight = carrier.BodyHeight * 0.55f, HeldHalfHeight = target.BodyHeight * 0.5f,
                 Start = Now, Rise = Mathf.Max(TickLength, def.AirRiseSeconds), Hold = Mathf.Max(0f, def.AirHoldSeconds), Slam = Mathf.Max(TickLength, def.AirSlamSeconds),
             };
-            carrier.Slam = new AerialSlamState { HeldId = target.Id, Definition = def, Path = path };
-            target.SlammedById = carrier.Id;
+            carrier.AddState(new AerialSlamState { HeldId = target.Id, Definition = def, Path = path });
+            target.AddState(new SlamCarriedState { CarrierId = carrier.Id });
             HoldForSlam(carrier, target, path);
             Emit(EventType.AerialSlam, carrier.Id, target.Id, path);
         }
@@ -278,8 +278,8 @@ namespace TacticsGame.Core
 
         private void FinishAerialSlam(Unit carrier, Unit held, AerialSlamState s)
         {
-            carrier.Slam = null;
-            held.SlammedById = null;
+            carrier.RemoveState(s);
+            held.RemoveState<SlamCarriedState>();
             carrier.Position = s.Path.CarrierStart;
             held.Position = s.Path.Landing;
             Emit(EventType.AerialSlamEnded, carrier.Id, held.Id, false);
@@ -298,13 +298,13 @@ namespace TacticsGame.Core
         /// The slam fails in mid-air: the one carried is let go, and both fall from where they are, stunned for the fall and
         /// taking fall damage (credited to 'by', who knocked them down). With a carrier or target gone, the other just falls.
         /// </summary>
-        private void BreakAerialSlam(Unit carrier, Unit by)
+        internal void BreakAerialSlam(Unit carrier, Unit by)
         {
             var s = carrier.Slam;
             if (s == null) return;
             var held = GetUnit(s.HeldId);
-            carrier.Slam = null;
-            if (held != null) held.SlammedById = null;
+            carrier.RemoveState(s);
+            if (held != null) held.RemoveState<SlamCarriedState>();
             Emit(EventType.AerialSlamEnded, carrier.Id, held != null ? held.Id : null, true);
             foreach (var u in new[] { carrier, held })
             {

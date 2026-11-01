@@ -143,32 +143,6 @@ namespace TacticsGame.Core
         public bool IsSet { get { return Color.a > 0f || !string.IsNullOrEmpty(Name) || !string.IsNullOrEmpty(Word) || CountsUp || Hidden; } }
     }
 
-    /// <summary>Subjugate in progress, kept on the grappler (see BattleSimulation.TickGrapples).</summary>
-    public class GrappleState
-    {
-        public string TargetId;
-        public ActionDefinition Definition;   // Subjugate: its LinkedAction is the headbutt
-        public float NextHeadbuttAt;
-        public float EndsAt;                  // the grab's stun runs out: the throw starts
-        public Vector3 Facing;                // the held unit is carried this way from the grappler
-        public bool Throwing;                 // the throw is winding up
-        public bool AwaitingThrow;            // a player's grab ran out: it is asked which way to throw (any order throws)
-    }
-
-    /// <summary>A channeled ability running (UnitPhase.Channeling; see BattleSimulation.StartChannel).</summary>
-    public class ChannelState
-    {
-        public ActionInstance Action;   // what was channeled (its target, behavior)
-        public float EndsAt;            // runs out here, then the recovery
-    }
-
-    /// <summary>Heretic's Ascent in progress, kept on the one carrying (see BattleSimulation.StartAerialSlam).</summary>
-    public class AerialSlamState
-    {
-        public string HeldId;
-        public ActionDefinition Definition;
-        public AerialSlamInfo Path;     // the scripted flight both follow (AerialSlamPath)
-    }
 
     public class ActiveMove
     {
@@ -242,26 +216,44 @@ namespace TacticsGame.Core
         // Jump in progress while walking across a height change: From -> To over [JumpStart, JumpEnd). -1 = not jumping.
         public Vector3 JumpFrom, JumpTo;
         public float JumpStart, JumpEnd = -1f;
-        // Lifted (Amblivate): raised From -> To over [LiftStart, LiftRiseEnd), held there, dropped at LiftDropAt (a fall). -1 = not lifted.
-        public Vector3 LiftFrom, LiftTo;
-        public float LiftStart, LiftRiseEnd, LiftDropAt = -1f;
-        public string LiftSourceId;
-        // Hovering (Skyward Demise): a lift the unit made itself; it can act, not move. The ability it starts up there ends the
-        // hover once it lands (HoverEndsAfterAction); HoverStatuses come off when the hover ends.
-        public bool Hovering, HoverEndsAfterAction;
-        public List<string> HoverStatuses;
-        // Subjugate: what this unit is holding (null = nothing), and who is holding this one (null = nobody).
-        public GrappleState Grapple;
-        public string HeldById;
         public float ChargeDecisionAt;       // charging: when the unit next has to choose (keep charging or release)
-        public ChannelState Channel;         // channeling (UnitPhase.Channeling), else null
-        // Heretic's Ascent: the slam this unit is carrying out (null = none), and who is carrying this one up (null = nobody).
-        public AerialSlamState Slam;
-        public string SlammedById;
-        // Mesmerize counter in progress: rapid strikes left at MesmerTargetId (each is a decision; anything else ends it).
-        public string MesmerTargetId;
-        public int MesmerStrikesLeft;
-        public ActionDefinition MesmerStrike;
+
+        // Special states (holding, held, lifted, hovering, slamming, channeling, a Mesmerize counter): see ControlState.
+        public readonly List<ControlState> States = new List<ControlState>();
+
+        public T GetState<T>() where T : ControlState
+        {
+            for (int i = 0; i < States.Count; i++) { var s = States[i] as T; if (s != null) return s; }
+            return null;
+        }
+
+        public T AddState<T>(T state) where T : ControlState { state.Unit = this; States.Add(state); return state; }
+        public void RemoveState(ControlState state) { States.Remove(state); }
+        public void RemoveState<T>() where T : ControlState { States.RemoveAll(s => s is T); }
+
+        /// <summary>Does any of its states say so (ControlState.BlocksDodgeDash and the like)?</summary>
+        public bool AnyState(System.Predicate<ControlState> rule) { return States.Exists(rule); }
+
+        // The states, read by kind.
+        /// <summary>What this unit is holding (Subjugate), or null.</summary>
+        public GrappleState Grapple { get { return GetState<GrappleState>(); } }
+        /// <summary>Who is holding this unit, or null.</summary>
+        public string HeldById { get { var h = GetState<HeldState>(); return h != null ? h.HolderId : null; } }
+        /// <summary>Lifted or hovering: its lift, or null.</summary>
+        public LiftState Lift { get { return GetState<LiftState>(); } }
+        public HoverState Hover { get { return GetState<HoverState>(); } }
+        public bool Hovering { get { return Hover != null; } }
+        public bool HoverEndsAfterAction { get { var h = Hover; return h != null && h.EndsAfterAction; } }
+        /// <summary>Channeling (UnitPhase.Channeling): its channel, or null.</summary>
+        public ChannelState Channel { get { return GetState<ChannelState>(); } }
+        /// <summary>The aerial slam this unit is carrying out, or null; and who is carrying this one up in one.</summary>
+        public AerialSlamState Slam { get { return GetState<AerialSlamState>(); } }
+        public string SlammedById { get { var s = GetState<SlamCarriedState>(); return s != null ? s.CarrierId : null; } }
+        /// <summary>A Mesmerize counter: strikes left at MesmerTargetId (0 = none).</summary>
+        public MesmerState Mesmer { get { return GetState<MesmerState>(); } }
+        public int MesmerStrikesLeft { get { var m = Mesmer; return m != null ? m.StrikesLeft : 0; } }
+        public string MesmerTargetId { get { var m = Mesmer; return m != null ? m.TargetId : null; } }
+        public ActionDefinition MesmerStrike { get { var m = Mesmer; return m != null ? m.Strike : null; } }
         // The last ability this unit started (not moves or waits): a follow-up ability can be re-cast from it (see ActionDefinition.IsFollowup).
         public string LastActionId;
         public string LastActionTargetId;
@@ -286,8 +278,8 @@ namespace TacticsGame.Core
         /// <summary>Nothing but Unravel interrupts what it is doing (StatusFlags.Unstoppable).</summary>
         public bool IsUnstoppable { get { return HasFlag(StatusFlags.Unstoppable); } }
         public bool IsJumping { get { return JumpEnd >= 0f; } }
-        /// <summary>Up in the air and held there: lifted (Amblivate), hovering (Skyward Demise) or in an aerial slam.</summary>
-        public bool IsLifted { get { return LiftDropAt >= 0f || Slam != null || SlammedById != null; } }
+        /// <summary>Up in the air and held there: lifted (Amblivate), hovering (Skyward Demise) or in an aerial slam (ControlState.Airborne).</summary>
+        public bool IsLifted { get { return AnyState(s => s.Airborne); } }
         public bool InAerialSlam { get { return Slam != null || SlammedById != null; } }
 
         // ------------------------------------------------------------------ stats
