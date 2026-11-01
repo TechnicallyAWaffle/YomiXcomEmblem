@@ -1118,6 +1118,7 @@ namespace TacticsGame.Presentation
         {
             GUI.depth = -5;   // in front of the HUD's health and strain bars and the combat text, so the ability popup is never covered
             UiScale.Begin();
+            if (UiDeclutter.On) return;   // Alt: only the battle and its bars (release to give orders)
             DrawHoldTimer();
             var unit = Active ? Current : null;
             if (unit == null) { BottomReserved = 0f; return; }

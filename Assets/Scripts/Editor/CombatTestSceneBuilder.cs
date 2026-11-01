@@ -186,15 +186,46 @@ public static class CombatTestSceneBuilder
         timeline.CameraRig = rig;
         EditorUtility.SetDirty(timeline);
 
-        // Pre-battle screen: it starts the battle once the player has picked enemies and loadouts.
+        // The launcher spawns the squad and the enemies and starts the battle; the pre-battle screen is a UI over it and the roster.
+        var launcher = controller.GetComponent<BattleLauncher>();
+        if (launcher == null) launcher = controller.gameObject.AddComponent<BattleLauncher>();
+        launcher.Controller = controller;
+        launcher.Context = context;
+        launcher.Maps = loader;
+        launcher.FallbackUnitPrefab = unitPrefab;
+        launcher.PlayerMaterial = playerMat;
+        launcher.EnemyMaterial = enemyMat;
+        EditorUtility.SetDirty(launcher);
+
+        var catalog = WriteCatalog(new[] { squad.Sharpshooter, squad.Melee, squad.Tank, squad.Paradigm,
+                                           enemies.Sniper, enemies.Assassin, enemies.Skirmisher, enemies.Healer, enemies.Caster, enemies.Brutebeast });
+        var firstContact = GetOrCreate<EncounterDefinition>(EncountersFolder + "/FirstContact.asset", e =>
+        {
+            e.DisplayName = "First Contact";
+            e.Description = "Two Casters and two Brutebeasts hold the arena. Wounds carry over.";
+            e.Map = arena;
+            e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Caster, Count = 2 });
+            e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Brutebeast, Count = 2 });
+            e.Spec.Rewards.Currency = 100;
+        });
+
+        // Pre-battle screen: it starts the battle once the player has picked an encounter (or enemies) and loadouts.
         var setup = controller.GetComponent<PreBattleSetup>();
         if (setup == null) setup = controller.gameObject.AddComponent<PreBattleSetup>();
         setup.Controller = controller;
         setup.Context = context;
+        setup.Launcher = launcher;
+        setup.Catalog = catalog;
         setup.EnemyClasses = new List<UnitDefinition> { enemies.Caster, enemies.Brutebeast, enemies.Sniper, enemies.Assassin, enemies.Skirmisher, enemies.Healer };
-        setup.FallbackUnitPrefab = unitPrefab;
-        setup.EnemyMaterial = enemyMat;
         setup.Maps = loader;
+        // Every encounter in the project is on offer (ones already listed keep their order).
+        setup.Encounters.RemoveAll(e => e == null);
+        if (!setup.Encounters.Contains(firstContact)) setup.Encounters.Add(firstContact);
+        foreach (string guid in AssetDatabase.FindAssets("t:EncounterDefinition"))
+        {
+            var e = AssetDatabase.LoadAssetAtPath<EncounterDefinition>(AssetDatabase.GUIDToAssetPath(guid));
+            if (e != null && !setup.Encounters.Contains(e)) setup.Encounters.Add(e);
+        }
         // Every map template in the project is on offer (ones already listed keep their order).
         setup.MapChoices.RemoveAll(m => m == null);
         foreach (string guid in AssetDatabase.FindAssets("t:MapTemplate"))
@@ -286,6 +317,32 @@ public static class CombatTestSceneBuilder
     // ------------------------------------------------------------------ starter maps
 
     internal const string ArenaMapPath = "Assets/Maps/Arena.asset";
+    internal const string EncountersFolder = "Assets/Encounters";
+    internal const string CatalogPath = "Assets/Resources/" + ContentCatalog.ResourceName + ".asset";
+
+    /// <summary>
+    /// The content catalog saves resolve ids with (Resources/ContentCatalog): these classes, plus every other unit and every
+    /// upgrade in the project. Ones already listed stay (and keep their order).
+    /// </summary>
+    private static ContentCatalog WriteCatalog(UnitDefinition[] classes)
+    {
+        var catalog = GetOrCreate<ContentCatalog>(CatalogPath, c => { });
+        catalog.Units.RemoveAll(u => u == null);
+        catalog.Upgrades.RemoveAll(u => u == null);
+        foreach (var u in classes) if (u != null && !catalog.Units.Contains(u)) catalog.Units.Add(u);
+        foreach (string guid in AssetDatabase.FindAssets("t:UnitDefinition"))
+        {
+            var u = AssetDatabase.LoadAssetAtPath<UnitDefinition>(AssetDatabase.GUIDToAssetPath(guid));
+            if (u != null && !catalog.Units.Contains(u)) catalog.Units.Add(u);
+        }
+        foreach (string guid in AssetDatabase.FindAssets("t:UpgradeDefinition"))
+        {
+            var u = AssetDatabase.LoadAssetAtPath<UpgradeDefinition>(AssetDatabase.GUIDToAssetPath(guid));
+            if (u != null && !catalog.Upgrades.Contains(u)) catalog.Upgrades.Add(u);
+        }
+        EditorUtility.SetDirty(catalog);
+        return catalog;
+    }
     internal const string OpenFieldMapPath = "Assets/Maps/OpenField.asset";
 
     private static Vector3 Spawn(MapTemplate map, Team team, int index, Vector3 fallback)

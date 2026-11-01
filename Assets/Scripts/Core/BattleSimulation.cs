@@ -74,6 +74,10 @@ namespace TacticsGame.Core
         // Transcend (UnitCommand.Transcend). The strain price is per ability (ActionDefinition.TranscendStrain).
         /// <summary>A Heavy hit that lands on a (plain) Block puts Block on cooldown this long.</summary>
         public float HeavyBlockCooldown = 1f;
+        /// <summary>Windup of a stance's reaction shot (Take Aim's snipe at the first enemy to act).</summary>
+        public float ReactionWindup = 0.1f;
+        /// <summary>Strain shed on every dodge by a unit with the strain_relief_on_dodge passive (the Fighter).</summary>
+        public float DodgeStrainRelief = 15f;
         /// <summary>Transcended Dash: this many times the dash distance, covered in TranscendDashSeconds.</summary>
         public float TranscendDashDistanceMult = 1.8f;
         public float TranscendDashSeconds = 0.1f;

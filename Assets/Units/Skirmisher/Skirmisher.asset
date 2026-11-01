@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
   m_Name: Skirmisher
   m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
   DisplayName: Skirmisher
   MaxHealth: 110
   BaseDodge: 0.25
@@ -35,5 +36,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 8c044a57215a7a44593c09fba6b3dfca, type: 2}
   Passives: []
   AIProfile: skirmisher
+  AI: {fileID: 0}
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
-  DataVersion: 14
+  DataVersion: 15

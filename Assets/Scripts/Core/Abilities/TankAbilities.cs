@@ -6,17 +6,25 @@ namespace TacticsGame.Core
     /// <summary>
     /// Bash: hit everyone in a short strip in front of the Tank (a Line area toward the target point) and shove them
     /// DisplaceDistance straight back. Anyone the push drives into a wall (the navmesh edge stops them short) or the face
-    /// of higher ground takes WallMultiplier damage and stun. Pushed off a ledge, they fall (see BattleSimulation.Relocate).
+    /// of higher ground takes wall_multiplier damage and stun (its Params). Pushed off a ledge, they fall (see BattleSimulation.Relocate).
     /// </summary>
     public class BashBehavior : ActionBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Peel; }   // Repel too
+
         public override bool RollsToHit(ActionDefinition def) { return true; }
 
-        public const float WallMultiplier = 2f;
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get
+            {
+                yield return new BehaviorParam("wall_multiplier", WallMultiplierDefault);   // damage and stun on a target driven into a wall (1 = none)
+                yield return new BehaviorParam("wall_tolerance", 0.3f);   // a push stopped more than this short of its full distance hit a wall
+            }
+        }
 
-        /// <summary>Damage and stun multiplier for a target driven into a wall (1 = no bonus: Repel).</summary>
-        protected virtual float WallBonus { get { return WallMultiplier; } }
-        public const float WallTolerance = 0.3f;   // a push stopped more than this short of its full distance hit a wall
+        /// <summary>The default wall bonus: 2, none (1) for Repel.</summary>
+        protected virtual float WallMultiplierDefault { get { return 2f; } }
 
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
@@ -27,11 +35,12 @@ namespace TacticsGame.Core
                 Vector3 full = target.Position + dir * a.Stat(ActionStat.DisplaceDistance);
                 Vector3 landed = sim.Paths.ClampDash(target.Position, full);   // higher ground counts as a wall; a ledge drops them off it
                 Vector3 shortBy = full - landed; shortBy.y = 0f;
-                bool walled = WallBonus > 1f && shortBy.magnitude > WallTolerance;
+                float wallBonus = Param(a.Definition, "wall_multiplier");
+                bool walled = wallBonus > 1f && shortBy.magnitude > Param(a.Definition, "wall_tolerance");
                 effects.Add(new AttackEffect
                 {
                     Source = a.Actor, TargetId = target.Id, Definition = a.Definition, Tag = walled ? "bash_wall" : a.Tag,
-                    DamageMultiplier = a.DamageMultiplier * (walled ? WallBonus : 1f), StunMultiplier = walled ? WallBonus : 1f,
+                    DamageMultiplier = a.DamageMultiplier * (walled ? wallBonus : 1f), StunMultiplier = walled ? wallBonus : 1f,
                     IgnoreRange = true, IgnoreCover = true, HasPush = true, PushTo = landed,
                 });
             }

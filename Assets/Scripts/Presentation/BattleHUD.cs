@@ -14,6 +14,8 @@ namespace TacticsGame.Presentation
         public BattleController Controller;
         public PlaybackDirector Director;
         public Camera Camera;
+        [Tooltip("Whose unit is under the mouse (for the details panel). Found in the scene if empty.")]
+        public CombatVfx Vfx;
         public int LogLines = 10;
         public float BarHeightAboveUnit = 2.3f;
 
@@ -24,7 +26,7 @@ namespace TacticsGame.Presentation
             public float Health, MaxHealth, Strain, MaxStrain, Energy, MaxEnergy;
             public readonly List<string> Statuses = new List<string>();
             public readonly Dictionary<string, int> Stacks = new Dictionary<string, int>();   // stack counts above 1 (Flowing Death's chain)
-            // Self-applied timed statuses (Trance, Focus under way...): when each runs out, and how long it ran from (for its bar).
+            // Timed statuses (Trance, Focus under way, a slow on it...): when each runs out, and how long it ran from (for its bar).
             public readonly Dictionary<string, StatusTimerInfo> Timers = new Dictionary<string, StatusTimerInfo>();
             public bool Dead;
             public string Activity = "";
@@ -43,6 +45,7 @@ namespace TacticsGame.Presentation
 
         private readonly Dictionary<string, UnitReadout> units = new Dictionary<string, UnitReadout>();
         private readonly Dictionary<string, ActionDefinition> defs = new Dictionary<string, ActionDefinition>();
+        private readonly Dictionary<string, StatusSpec> statusSpecs = new Dictionary<string, StatusSpec>();
         private readonly List<string> log = new List<string>();
         private bool battleOver;
 
@@ -77,6 +80,13 @@ namespace TacticsGame.Presentation
                 };
                 foreach (var a in u.Actions)
                     for (var d = a; d != null && !defs.ContainsKey(d.Id); d = d.LinkedAction) defs[d.Id] = d;
+            }
+            // What each status does, from the abilities that give it (for the details panel).
+            statusSpecs.Clear();
+            foreach (var d in defs.Values)
+            {
+                foreach (var list in new[] { d.SelfStatuses, d.TargetStatusesOnHit, d.TargetStatusesDuringWindup, d.SelfStatusesDuringWindup, d.AuraStatuses })
+                    if (list != null) foreach (var s in list) if (s != null && !string.IsNullOrEmpty(s.Id) && !statusSpecs.ContainsKey(s.Id)) statusSpecs[s.Id] = s;
             }
         }
 
@@ -280,9 +290,8 @@ namespace TacticsGame.Presentation
                 }
                 case TacticsGame.Core.EventType.StatusTimer:
                 {
-                    // Only statuses a unit put on itself get a countdown (its own buffs and stances).
                     var t = (StatusTimerInfo)evt.Payload;
-                    if (target != null && evt.ActorId == evt.TargetId) target.Timers[t.Id] = t;
+                    if (target != null) target.Timers[t.Id] = t;
                     break;
                 }
                 case TacticsGame.Core.EventType.TrapPlaced:
@@ -360,6 +369,8 @@ namespace TacticsGame.Presentation
                     DrawUnit(r, at);
                 }
             }
+            if (UiDeclutter.On) return;   // Alt: just the bars
+            DrawDetails();
 
             // Fixed rows rather than GUILayout: the log can change mid-frame (a battle starting clears it), which would break
             // a layout measured earlier in the frame.
@@ -382,9 +393,10 @@ namespace TacticsGame.Presentation
             label.normal.textColor = r.Team == Team.Player ? new Color(0.6f, 0.8f, 1f) : new Color(1f, 0.6f, 0.6f);
             string title = r.Dead ? r.Name + " (down)" : r.Name;
             bool winding = !r.Dead && r.WindupName != null;
-            CombatVfx.OutlinedLabel(Fitted(at.x, at.y - (winding ? 54 : 36), 18, title, label, width + 80f), title, label, label.normal.textColor, 1f);
+            bool declutter = UiDeclutter.On;   // Alt: only the windup, health and strain bars
+            if (!declutter) CombatVfx.OutlinedLabel(Fitted(at.x, at.y - (winding ? 54 : 36), 18, title, label, width + 80f), title, label, label.normal.textColor, 1f);
             if (winding) DrawWindup(r, x, at.y, width);
-            else if (!r.Dead)
+            else if (!r.Dead && !declutter)
             {
                 // Held or holding (and hanging in the air) says more than the moment-to-moment activity.
                 string activity = r.HeldBy != null ? "held by " + r.HeldBy : r.Suspended ? "suspended" : r.Airborne && (r.Activity == "" || r.Activity == "recovering" || r.Activity == "moving") ? "airborne" : r.Holding != null && (r.Activity == "" || r.Activity == "recovering") ? "holding " + r.Holding : r.Activity;
@@ -399,22 +411,16 @@ namespace TacticsGame.Presentation
                 Bar(new Rect(x, below, width, 4), r.Energy / r.MaxEnergy, new Color(0.35f, 0.6f, 1f));
                 below += 6f;
             }
+            if (declutter) return;
             if (r.Statuses.Count > 0 && !r.Dead)
             {
-                // Untimed statuses (and other units' debuffs) as one line of names; the unit's own timed ones as bars below.
+                // Lasting statuses (stances, holds) as one line of names; timed ones are in the details panel (hover the unit).
                 var small = new GUIStyle(label) { alignment = TextAnchor.UpperCenter, fontSize = 12 };
                 var shown = r.Statuses.FindAll(s => !StatusDisplay.IsHidden(s) && !r.Timers.ContainsKey(s)).ConvertAll(s => StatusLabel(r, s));
                 if (shown.Count > 0)
                 {
                     CombatVfx.OutlinedLabel(new Rect(x - 40, below, width + 80, 16), string.Join(" · ", shown.ToArray()), small, small.normal.textColor, 1f);
                     below += 12f;
-                }
-                foreach (var id in r.Statuses)
-                {
-                    StatusTimerInfo t;
-                    if (StatusDisplay.IsHidden(id) || !r.Timers.TryGetValue(id, out t)) continue;
-                    DrawStatusTimer(r, id, t, x, below, width);
-                    below += 15f;
                 }
             }
             if (r.Order != null && !r.Dead)
@@ -423,6 +429,109 @@ namespace TacticsGame.Presentation
                 order.normal.textColor = new Color(1f, 0.85f, 0.4f);
                 CombatVfx.OutlinedLabel(new Rect(x - 60, below, width + 120, 16), r.Order, order, order.normal.textColor, 1f);
             }
+        }
+
+        // ------------------------------------------------------------------ details panel (hover a unit)
+
+        private const float PanelWidth = 300f, PanelPad = 8f;
+        private GUIStyle panelTitle, panelText, panelSmall;
+
+        /// <summary>
+        /// The unit under the mouse in detail, beside the cursor: its health and strain, what an enemy is winding up (the
+        /// ability's name, time left and description), and every status on it with what it does and, if timed, how long is left.
+        /// </summary>
+        private void DrawDetails()
+        {
+            if (Vfx == null) Vfx = FindAnyObjectByType<CombatVfx>();
+            var r = Vfx != null ? Get(Vfx.HoveredUnitId) : null;
+            if (r == null || r.Dead) return;
+            if (panelTitle == null)
+            {
+                panelTitle = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, wordWrap = true };
+                panelText = new GUIStyle(GUI.skin.label) { fontSize = 12, wordWrap = true };
+                panelSmall = new GUIStyle(panelText) { fontSize = 11 };
+                panelSmall.normal.textColor = new Color(0.8f, 0.8f, 0.8f);
+            }
+            float inner = PanelWidth - 2f * PanelPad;
+
+            // Measure first (rows of label + optional note), then draw.
+            var rows = new List<KeyValuePair<string, string>>();   // (heading, note) per row
+            var colors = new List<Color>();
+            string windup = null, windupNote = null;
+            if (r.Team == Team.Enemy && r.WindupName != null)
+            {
+                ActionDefinition def;
+                defs.TryGetValue(r.WindupId ?? "", out def);
+                float left = Mathf.Max(0f, r.WindupEnd - Director.PlaybackClock);
+                windup = string.Format("{0}: {1}  {2:0.0}s", r.Channeling ? "Channeling" : r.Charging ? "Charging" : "Winding up", r.WindupName, left);
+                windupNote = def != null && !string.IsNullOrEmpty(def.Description) ? def.Description : null;
+            }
+            foreach (var id in r.Statuses)
+            {
+                if (StatusDisplay.IsHidden(id)) continue;
+                StatusTimerInfo t;
+                bool timed = r.Timers.TryGetValue(id, out t);
+                string head = StatusLabel(r, id) + (timed ? string.Format("  {0:0.0}s", Mathf.Max(0f, t.ExpiresAt - Director.PlaybackClock)) : "");
+                rows.Add(new KeyValuePair<string, string>(head, StatusEffects(id)));
+                colors.Add(StatusDisplay.Get(id).Color);
+            }
+
+            string title = string.Format("{0}   health {1:0}/{2:0}   strain {3:0}/{4:0}", r.Name, r.Health, r.MaxHealth, r.Strain, r.MaxStrain);
+            float h = PanelPad + panelTitle.CalcHeight(new GUIContent(title), inner);
+            if (windup != null) h += 4f + panelText.CalcHeight(new GUIContent(windup), inner) + (windupNote != null ? panelSmall.CalcHeight(new GUIContent(windupNote), inner) : 0f);
+            if (rows.Count > 0) h += 6f;
+            foreach (var row in rows) h += panelText.CalcHeight(new GUIContent(row.Key), inner) + (row.Value != null ? panelSmall.CalcHeight(new GUIContent(row.Value), inner) : 0f) + 2f;
+            h += PanelPad;
+
+            Vector2 m = Event.current.mousePosition;
+            float x = Mathf.Clamp(m.x + 18f, 4f, UiScale.Width - PanelWidth - 4f), y = Mathf.Clamp(m.y + 16f, 4f, UiScale.Height - h - 4f);
+            var old = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.82f);
+            GUI.DrawTexture(new Rect(x, y, PanelWidth, h), Texture2D.whiteTexture);
+            GUI.color = old;
+
+            float cy = y + PanelPad;
+            panelTitle.normal.textColor = r.Team == Team.Player ? new Color(0.6f, 0.8f, 1f) : new Color(1f, 0.6f, 0.6f);
+            cy += Line(x, cy, inner, title, panelTitle);
+            if (windup != null)
+            {
+                cy += 4f;
+                panelText.normal.textColor = r.WindupHeavy ? HeavyWindup : r.Channeling ? ChannelWindup : r.Charging ? ChargeWindup : LightWindup;
+                cy += Line(x, cy, inner, windup, panelText);
+                if (windupNote != null) cy += Line(x, cy, inner, windupNote, panelSmall);
+            }
+            if (rows.Count > 0) cy += 6f;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                panelText.normal.textColor = colors[i];
+                cy += Line(x, cy, inner, rows[i].Key, panelText);
+                if (rows[i].Value != null) cy += Line(x, cy, inner, rows[i].Value, panelSmall);
+                cy += 2f;
+            }
+        }
+
+        private static float Line(float x, float y, float width, string text, GUIStyle style)
+        {
+            float h = style.CalcHeight(new GUIContent(text), width);
+            GUI.Label(new Rect(x + PanelPad, y, width, h), text, style);
+            return h;
+        }
+
+        /// <summary>What a status does, from the ability data that gives it ("Dodge +30%, stun immune"), or null if unknown.</summary>
+        private string StatusEffects(string id)
+        {
+            StatusSpec s;
+            if (!statusSpecs.TryGetValue(id, out s)) return null;
+            var parts = new List<string>();
+            if (s.Modifiers != null) foreach (var m in s.Modifiers) parts.Add(StatText.Name(m.Stat) + " " + StatText.Change(m));
+            if (s.ActionModifiers != null) foreach (var m in s.ActionModifiers) parts.Add(StatText.Label(m, ActionName) + " " + StatText.Change(m));
+            var cells = new List<KeyValuePair<string, string>>();
+            var notes = new List<string>();
+            StatText.Describe(s.Flags, cells, notes);
+            foreach (var c in cells) parts.Add(c.Key + " " + c.Value);
+            parts.AddRange(notes);
+            if (s.ForbidsActions != null && s.ForbidsActions.Count > 0) parts.Add("can't use " + string.Join(", ", s.ForbidsActions.ConvertAll(ActionName).ToArray()));
+            return parts.Count > 0 ? string.Join("; ", parts.ToArray()) : null;
         }
 
         /// <summary>A label rect centred on 'centerX', at least 'minWidth' wide and wide enough for all of 'text' (never clipped).</summary>
@@ -491,24 +600,6 @@ namespace TacticsGame.Presentation
                 GUI.DrawTexture(at, r.WindupAttack == WindupKind.Ranged ? HudIcons.Ranged : HudIcons.Melee);
             }
             GUI.color = old;
-        }
-
-        /// <summary>
-        /// A self-applied timed status: "trance 3.4s" over a thin bar in its colour that drains as it runs out (or, for a
-        /// countdown like Focus under way, fills up to the moment it ends). Blinks in its last second.
-        /// </summary>
-        private void DrawStatusTimer(UnitReadout r, string id, StatusTimerInfo t, float x, float y, float width)
-        {
-            var look = StatusDisplay.Get(id);
-            float left = Mathf.Max(0f, t.ExpiresAt - Director.PlaybackClock);
-            float frac = t.Duration > 0f ? Mathf.Clamp01(left / t.Duration) : 0f;
-            Color color = look.Color;
-            if (!look.CountsUp && left < 1f && Mathf.Repeat(Time.unscaledTime * 6f, 1f) < 0.5f) color = Color.Lerp(color, Color.white, 0.6f);
-
-            var text = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.UpperCenter, fontSize = 11, fontStyle = FontStyle.Bold };
-            text.normal.textColor = color;
-            CombatVfx.OutlinedLabel(new Rect(x - 40f, y - 2f, width + 80f, 14f), string.Format("{0} {1:0.0}s", StatusLabel(r, id), left), text, text.normal.textColor, 1f);
-            Bar(new Rect(x + 10f, y + 11f, width - 20f, 3f), look.CountsUp ? 1f - frac : frac, color);
         }
 
         private static void Bar(Rect rect, float fill, Color color)

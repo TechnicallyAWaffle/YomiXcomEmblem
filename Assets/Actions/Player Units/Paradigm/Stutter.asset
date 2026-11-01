@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: stutter
   DisplayName: Mental Stutter
   BehaviorId: stutter
+  Roles: 0
   Description: A near-instant jolt that interrupts targets and breaks through Block
     but Strains the caster.
   Targeting: 2
@@ -60,12 +61,38 @@ MonoBehaviour:
   TargetStatusesOnHit:
   - Id: stutter_block_disable
     Duration: 0.5
+    Modifiers:
+    - Stat: 6
+      Op: 1
+      Value: 0
+    - Stat: 7
+      Op: 1
+      Value: 0
+    - Stat: 10
+      Op: 1
+      Value: 0
+    - Stat: 11
+      Op: 1
+      Value: 0
+    ActionModifiers: []
+    Flags: 0
+    ForbidsActions:
+    - block
+    AppliesTo: 2
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
     DodgeDistanceBonus: 0
-    ActionSpeedMult: 0
-    MoveSpeedMult: 0
+    ActionSpeedMult: 1
+    MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
@@ -73,11 +100,6 @@ MonoBehaviour:
     KeepsBlock: 0
     Unstoppable: 0
     RedirectsHits: 0
-    DamageDealtMult: 0
-    StrainCostMult: 0
-    ForbidsActions:
-    - block
-    AppliesTo: 2
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -98,6 +120,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 2
+    Color: {r: 0.95, g: 0.95, b: 1, a: 1}
+    Width: 0.04
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

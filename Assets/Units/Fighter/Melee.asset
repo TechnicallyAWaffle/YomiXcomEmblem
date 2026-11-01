@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
   m_Name: Melee
   m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
   DisplayName: Fighter
   MaxHealth: 100
   BaseDodge: 0.35
@@ -47,5 +48,6 @@ MonoBehaviour:
   Passives:
   - strain_relief_on_dodge
   AIProfile: 
+  AI: {fileID: 0}
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
-  DataVersion: 14
+  DataVersion: 15

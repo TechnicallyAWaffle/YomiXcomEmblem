@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: lance_of_destiny
   DisplayName: Lance of Fate
   BehaviorId: lance
+  Roles: 0
   Description: Charge up energy, increasing Strain overtime. Release to throw out
     a lance that deals more damage and stun based on charge time.
   Targeting: 4
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 4
+    Color: {r: 1, g: 0.85, b: 0.35, a: 1}
+    Width: 0.25
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

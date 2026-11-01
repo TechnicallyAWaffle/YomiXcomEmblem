@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
   m_Name: Brutebeast
   m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
   DisplayName: Brutebeast
   MaxHealth: 130
   BaseDodge: 0.05
@@ -35,5 +36,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: b22de1d6cf3e8344689c72befdc11952, type: 2}
   Passives: []
   AIProfile: brutebeast
+  AI: {fileID: 0}
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
-  DataVersion: 14
+  DataVersion: 15

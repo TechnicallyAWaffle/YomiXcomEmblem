@@ -15,8 +15,8 @@ MonoBehaviour:
   Id: distort_space
   DisplayName: Distort Space
   BehaviorId: area_attack
-  Description: 'Distort space at a point: after a short windup it detonates, a heavy
-    impact that damages and stuns everyone in a small circle.'
+  Roles: 0
+  Description: Manipulate space at a point into a damaging distortion.
   Targeting: 4
   Range: 10
   IsRanged: 1
@@ -78,6 +78,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 5
+    Color: {r: 0.55, g: 0.3, b: 1, a: 1}
+    Width: 0.18
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

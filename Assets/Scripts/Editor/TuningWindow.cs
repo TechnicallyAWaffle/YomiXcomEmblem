@@ -11,6 +11,7 @@ using TacticsGame.Core;
 ///     every field, its statuses included.
 ///   - Units: every UnitDefinition asset's names and stats.
 ///   - Upgrades: every UpgradeDefinition asset (its unit and ability modifiers, granted abilities).
+///   - AI Profiles: every AIProfileDefinition asset: its style and the numbers it overrides.
 ///   - Battle Rules: battle-wide numbers (fall damage, focus, grapple timings...): overrides of BattleSimulation's tunable
 ///     fields kept in Assets/Resources/BattleTuning.asset, which every battle applies (see BattleTuning).
 /// Search narrows any tab by name; the Text / Numbers filter narrows Details. Edits go through Undo and mark the assets
@@ -19,9 +20,9 @@ using TacticsGame.Core;
 /// </summary>
 public class TuningWindow : EditorWindow
 {
-    private enum Tab { Abilities, Units, Upgrades, BattleRules }
+    private enum Tab { Abilities, Units, Upgrades, AIProfiles, BattleRules }
     private enum Show { All, Text, Numbers }
-    private static readonly string[] TabNames = { "Abilities", "Units", "Upgrades", "Battle Rules" };
+    private static readonly string[] TabNames = { "Abilities", "Units", "Upgrades", "AI Profiles", "Battle Rules" };
 
     private const string TuningPath = "Assets/Resources/" + BattleTuning.ResourceName + ".asset";
 
@@ -32,6 +33,8 @@ public class TuningWindow : EditorWindow
 
     // Fields code looks up by value (renaming them breaks the ability): shown, not editable.
     private static readonly HashSet<string> Locked = new HashSet<string> { "Id", "BehaviorId", "AIProfile", "m_Script" };
+    // Fields drawn their own way below the rest (an ability's Params: as its behavior's numbers).
+    private static readonly HashSet<string> DrawnSeparately = new HashSet<string> { "Params" };
 
     private Tab tab;
     private Show show;
@@ -42,6 +45,7 @@ public class TuningWindow : EditorWindow
     private List<ActionDefinition> actions = new List<ActionDefinition>();
     private List<UnitDefinition> units = new List<UnitDefinition>();
     private List<UpgradeDefinition> upgrades = new List<UpgradeDefinition>();
+    private List<AIProfileDefinition> aiProfiles = new List<AIProfileDefinition>();
     private BattleTuning tuning;
     private BattleSimulation defaults;   // a blank simulation: BattleSimulation's own values, for the Battle Rules defaults
 
@@ -57,6 +61,7 @@ public class TuningWindow : EditorWindow
         actions = Find<ActionDefinition>().OrderBy(a => Folder(a)).ThenBy(a => a.DisplayName).ToList();
         units = Find<UnitDefinition>().OrderBy(u => Folder(u)).ThenBy(u => u.DisplayName).ToList();
         upgrades = Find<UpgradeDefinition>().OrderBy(u => Folder(u)).ThenBy(u => u.DisplayName).ToList();
+        aiProfiles = Find<AIProfileDefinition>().OrderBy(p => p.name).ToList();
         tuning = AssetDatabase.LoadAssetAtPath<BattleTuning>(TuningPath);
     }
 
@@ -87,11 +92,11 @@ public class TuningWindow : EditorWindow
     private void OnGUI()
     {
         EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
-        tab = (Tab)GUILayout.Toolbar((int)tab, TabNames, EditorStyles.toolbarButton, GUILayout.Width(380f));
+        tab = (Tab)GUILayout.Toolbar((int)tab, TabNames, EditorStyles.toolbarButton, GUILayout.Width(470f));
         GUILayout.Space(8f);
         search = GUILayout.TextField(search, EditorStyles.toolbarSearchField, GUILayout.MinWidth(120f));
         if (tab == Tab.Abilities) table = GUILayout.Toggle(table, table ? "Table" : "Details", EditorStyles.toolbarButton, GUILayout.Width(60f));
-        if (tab != Tab.BattleRules && !(tab == Tab.Abilities && table))
+        if (tab != Tab.BattleRules && tab != Tab.AIProfiles && !(tab == Tab.Abilities && table))
             show = (Show)EditorGUILayout.EnumPopup(show, EditorStyles.toolbarDropDown, GUILayout.Width(80f));
         if (GUILayout.Button("Save", EditorStyles.toolbarButton, GUILayout.Width(50f))) AssetDatabase.SaveAssets();
         EditorGUILayout.EndHorizontal();
@@ -109,6 +114,9 @@ public class TuningWindow : EditorWindow
             case Tab.Upgrades:
                 if (upgrades.Count == 0) EditorGUILayout.HelpBox("No upgrades yet: create one with Assets > Create > TacticsGame > Upgrade Definition, and give it to a unit in the scene's BattleContext (Placements > Upgrades).", MessageType.Info);
                 DrawAssets(upgrades, u => u.DisplayName);
+                break;
+            case Tab.AIProfiles:
+                DrawAIProfiles();
                 break;
             case Tab.BattleRules:
                 DrawRules();
@@ -199,13 +207,38 @@ public class TuningWindow : EditorWindow
         }
         EditorGUI.indentLevel--;
         so.ApplyModifiedProperties();
+        var action = o as ActionDefinition;
+        if (action != null && show != Show.Text) DrawBehaviorNumbers(action);
         GUILayout.Space(6f);
+    }
+
+    /// <summary>An ability's behavior numbers (ActionBehavior.Parameters): ticked ones are set on this ability (its Params).</summary>
+    private static void DrawBehaviorNumbers(ActionDefinition def)
+    {
+        var declared = ActionBehaviors.Get(def.BehaviorId).Parameters.ToList();
+        if (declared.Count == 0) return;
+        EditorGUI.indentLevel++;
+        EditorGUILayout.LabelField("Behavior numbers (" + def.BehaviorId + ")", EditorStyles.miniBoldLabel);
+        if (def.Params == null) def.Params = new List<BehaviorParam>();
+        foreach (var p in declared)
+        {
+            int at = def.Params.FindIndex(x => x.Key == p.Key);
+            bool on = at >= 0, nowOn;
+            float now;
+            if (!OverrideRow(ObjectNames.NicifyVariableName(p.Key.Replace('_', ' ')), false, false, p.Value, on, on ? def.Params[at].Value : p.Value, out nowOn, out now)) continue;
+            Undo.RecordObject(def, "Behavior number");
+            if (at >= 0) def.Params.RemoveAt(at);
+            if (nowOn) def.Params.Add(new BehaviorParam(p.Key, now));
+            EditorUtility.SetDirty(def);
+        }
+        EditorGUI.indentLevel--;
     }
 
     /// <summary>One field: strings and numbers (per the Text / Numbers filter); lists of statuses opened up entry by entry;
     /// references to other assets left out.</summary>
     private void DrawProperty(SerializedProperty p)
     {
+        if (DrawnSeparately.Contains(p.name)) return;
         if (Locked.Contains(p.name))
         {
             if (show != Show.Numbers && p.propertyType == SerializedPropertyType.String)
@@ -281,27 +314,81 @@ public class TuningWindow : EditorWindow
 
         foreach (var f in BattleTuning.TunableFields())
         {
-            string label = ObjectNames.NicifyVariableName(f.Name);
-            if (!string.IsNullOrEmpty(search) && label.IndexOf(search.Trim(), System.StringComparison.OrdinalIgnoreCase) < 0 &&
-                f.Name.IndexOf(search.Trim(), System.StringComparison.OrdinalIgnoreCase) < 0) continue;
-            float def = BattleTuning.Read(defaults, f), value;
-            bool on = tuning.TryGet(f.Name, out value);
-            EditorGUILayout.BeginHorizontal();
-            bool nowOn = EditorGUILayout.ToggleLeft(label, on, GUILayout.Width(260f));
-            float shown = on ? value : def, now;
-            using (new EditorGUI.DisabledScope(!nowOn))
-            {
-                if (f.FieldType == typeof(bool)) now = EditorGUILayout.Toggle(shown >= 0.5f, GUILayout.Width(90f)) ? 1f : 0f;
-                else if (f.FieldType == typeof(int)) now = EditorGUILayout.IntField(Mathf.RoundToInt(shown), GUILayout.Width(90f));
-                else now = EditorGUILayout.FloatField(shown, GUILayout.Width(90f));
-            }
-            GUILayout.Label("default " + (f.FieldType == typeof(bool) ? (def >= 0.5f ? "on" : "off") : def.ToString("0.###")), EditorStyles.miniLabel);
-            EditorGUILayout.EndHorizontal();
-            if (nowOn == on && (!nowOn || Mathf.Approximately(now, value))) continue;
+            if (!MatchesField(f)) continue;
+            float value;
+            bool on = tuning.TryGet(f.Name, out value), nowOn;
+            float now;
+            if (!OverrideRow(f, BattleTuning.Read(defaults, f), on, value, out nowOn, out now)) continue;
             Undo.RecordObject(tuning, "Battle tuning");
             if (nowOn) tuning.Set(f.Name, now);
             else tuning.Clear(f.Name);
             EditorUtility.SetDirty(tuning);
+        }
+    }
+
+    private bool MatchesField(System.Reflection.FieldInfo f)
+    {
+        if (string.IsNullOrEmpty(search)) return true;
+        string s = search.Trim();
+        return ObjectNames.NicifyVariableName(f.Name).IndexOf(s, System.StringComparison.OrdinalIgnoreCase) >= 0 || f.Name.IndexOf(s, System.StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    /// <summary>One overridable number: a tick, its value (editable when ticked) and the default. True if anything changed.</summary>
+    private static bool OverrideRow(System.Reflection.FieldInfo f, float def, bool on, float value, out bool nowOn, out float now)
+    {
+        return OverrideRow(ObjectNames.NicifyVariableName(f.Name), f.FieldType == typeof(bool), f.FieldType == typeof(int), def, on, value, out nowOn, out now);
+    }
+
+    private static bool OverrideRow(string label, bool isBool, bool isInt, float def, bool on, float value, out bool nowOn, out float now)
+    {
+        EditorGUILayout.BeginHorizontal();
+        nowOn = EditorGUILayout.ToggleLeft(label, on, GUILayout.Width(260f));
+        float shown = on ? value : def;
+        using (new EditorGUI.DisabledScope(!nowOn))
+        {
+            if (isBool) now = EditorGUILayout.Toggle(shown >= 0.5f, GUILayout.Width(90f)) ? 1f : 0f;
+            else if (isInt) now = EditorGUILayout.IntField(Mathf.RoundToInt(shown), GUILayout.Width(90f));
+            else now = EditorGUILayout.FloatField(shown, GUILayout.Width(90f));
+        }
+        GUILayout.Label("default " + (isBool ? (def >= 0.5f ? "on" : "off") : def.ToString("0.###")), EditorStyles.miniLabel);
+        EditorGUILayout.EndHorizontal();
+        return nowOn != on || (nowOn && !Mathf.Approximately(now, value));
+    }
+
+    // ------------------------------------------------------------------ AI profiles
+
+    private void DrawAIProfiles()
+    {
+        EditorGUILayout.HelpBox("A profile is a style plus its numbers. Give it to a unit in its definition (AI). Style auto picks the style from the unit's abilities, by their roles. Tick a number to override the style's default.", MessageType.None);
+        if (aiProfiles.Count == 0) EditorGUILayout.HelpBox("No AI profiles yet: Assets > Create > TacticsGame > AI Profile.", MessageType.Info);
+        var styles = UnitAIs.Styles.Concat(new[] { UnitAIs.Auto }).Distinct().ToArray();
+        var labels = styles.Select(s => s == "" ? "basic" : s).ToArray();
+        foreach (var p in aiProfiles)
+        {
+            if (!Matches(p.name, p) && !p.Tuning.Exists(e => e.Field != null && e.Field.IndexOf(search.Trim(), System.StringComparison.OrdinalIgnoreCase) >= 0)) continue;
+            string key = AssetDatabase.GetAssetPath(p);
+            bool wasOpen = open.Contains(key);
+            bool isOpen = EditorGUILayout.Foldout(wasOpen, string.Format("{0}   ({1})", p.name, p.Style == "" ? "basic" : p.Style), true);
+            if (isOpen != wasOpen) { if (isOpen) open.Add(key); else open.Remove(key); }
+            if (!isOpen) continue;
+            EditorGUI.indentLevel++;
+            int at = System.Array.IndexOf(styles, p.Style ?? "");
+            int now = EditorGUILayout.Popup("Style", Mathf.Max(0, at), labels);
+            if (now != at) { Undo.RecordObject(p, "AI style"); p.Style = styles[now]; EditorUtility.SetDirty(p); }
+            // The numbers of that style (auto: the ones every style shares), defaulting to a fresh one's.
+            var sample = UnitAIs.Create(p.Style == UnitAIs.Auto ? "" : p.Style) ?? new BasicEnemyAI();
+            foreach (var f in BattleTuning.TunableFields(sample.GetType()))
+            {
+                float value;
+                bool on = p.TryGet(f.Name, out value), nowOn;
+                float v;
+                if (!OverrideRow(f, BattleTuning.Read(sample, f), on, value, out nowOn, out v)) continue;
+                Undo.RecordObject(p, "AI tuning");
+                if (nowOn) p.Set(f.Name, v); else p.Clear(f.Name);
+                EditorUtility.SetDirty(p);
+            }
+            EditorGUI.indentLevel--;
+            GUILayout.Space(6f);
         }
     }
 

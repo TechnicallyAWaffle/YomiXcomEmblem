@@ -4,41 +4,105 @@ using UnityEngine;
 namespace TacticsGame.Core
 {
     /// <summary>
-    /// AI profiles by id (UnitDefinition.AIProfile). A profile is an IUnitAI, usually a BasicEnemyAI subclass that keeps its
-    /// shared tactics (reacting to incoming attacks, resting off strain, picking safe spots) and changes what the unit goes
-    /// for. To add an enemy type: write a profile, Register it (or add it below), and set the unit's AIProfile.
-    /// Profiles are shared by every unit that uses them, so like BasicEnemyAI they keep no memory between decisions.
+    /// AI styles by id. A style is a BasicEnemyAI subclass that keeps the shared tactics (reacting to incoming attacks,
+    /// resting off strain, picking safe spots) and changes what the unit goes for, finding its abilities by role
+    /// (AbilityRole), so it plays any kit that has them. A unit picks its style by its AIProfile string, or by its AI asset
+    /// (AIProfileDefinition: a style plus tuned numbers). "auto" picks the style from the unit's abilities (StyleFor), so a
+    /// new enemy needs no AI code. Styles keep no memory between decisions, so one instance serves every unit using it.
     /// </summary>
     public static class UnitAIs
     {
-        private static readonly Dictionary<string, IUnitAI> map = new Dictionary<string, IUnitAI>
+        /// <summary>The style that picks a style from the unit's abilities.</summary>
+        public const string Auto = "auto";
+
+        private static readonly Dictionary<string, System.Func<IUnitAI>> styles = new Dictionary<string, System.Func<IUnitAI>>
         {
-            { "sniper", new SniperAI() },
-            { "assassin", new AssassinAI() },
-            { "skirmisher", new SkirmisherAI() },
-            { "healer", new HealerAI() },
-            { "caster", new CasterAI() },
-            { "brutebeast", new BrutebeastAI() },
+            { "", () => new BasicEnemyAI() },
+            { "sniper", () => new SniperAI() },
+            { "assassin", () => new AssassinAI() },
+            { "skirmisher", () => new SkirmisherAI() },
+            { "healer", () => new HealerAI() },
+            { "caster", () => new CasterAI() },
+            { "brutebeast", () => new BrutebeastAI() },
         };
 
-        public static void Register(string id, IUnitAI ai) { map[id] = ai; }
+        private static readonly Dictionary<string, IUnitAI> shared = new Dictionary<string, IUnitAI>();
 
-        /// <summary>The profile registered as 'id', or null (none, or empty).</summary>
+        /// <summary>The style ids there are (for editors), "" being the basic AI.</summary>
+        public static IEnumerable<string> Styles { get { return styles.Keys; } }
+
+        /// <summary>Add a style: 'make' builds one (an asset's tuning is applied to its own instance).</summary>
+        public static void Register(string id, System.Func<IUnitAI> make) { styles[id] = make; shared.Remove(id); }
+        public static void Register(string id, IUnitAI ai) { Register(id, () => ai); }
+
+        /// <summary>A new instance of a style (null for an unknown one).</summary>
+        public static IUnitAI Create(string id)
+        {
+            System.Func<IUnitAI> make;
+            return styles.TryGetValue(id ?? "", out make) ? make() : null;
+        }
+
+        /// <summary>The shared instance of style 'id', or null (none, empty, or unknown).</summary>
         public static IUnitAI Get(string id)
         {
+            if (string.IsNullOrEmpty(id)) return null;
             IUnitAI ai;
-            return !string.IsNullOrEmpty(id) && map.TryGetValue(id, out ai) ? ai : null;
+            if (!shared.TryGetValue(id, out ai) && styles.ContainsKey(id)) shared[id] = ai = Create(id);
+            return ai;
+        }
+
+        /// <summary>
+        /// The style for a unit's kit (style "auto"), from its abilities' roles: a charged heal plays the healer; a snipe
+        /// and a mark the sniper; a rush the brutebeast; a chain attack the skirmisher; an opener or a blink with a melee
+        /// strike the assassin; a ranged unit with an area blast the caster; anything else the basic AI ("").
+        /// </summary>
+        public static string StyleFor(Unit unit)
+        {
+            if (AbilityRoles.Any(unit, AbilityRole.Heal, a => a.IsCharge)) return "healer";
+            if (AbilityRoles.Any(unit, AbilityRole.Snipe) && AbilityRoles.Any(unit, AbilityRole.Mark)) return "sniper";
+            if (AbilityRoles.Any(unit, AbilityRole.Rush)) return "brutebeast";
+            if (AbilityRoles.Any(unit, AbilityRole.Chain, a => !a.IsRanged)) return "skirmisher";
+            bool melee = AbilityRoles.Any(unit, AbilityRole.Strike, a => !a.IsRanged);
+            if (AbilityRoles.Any(unit, AbilityRole.Opener) || (melee && AbilityRoles.Any(unit, AbilityRole.Gapcloser))) return "assassin";
+            if (AbilityRoles.Any(unit, AbilityRole.AreaBlast) && unit.Actions.Exists(a => a != null && a.Targeting == TargetType.Enemy && a.IsRanged)) return "caster";
+            return "";
         }
     }
 
-    /// <summary>The default enemy AI: each unit is played by its AIProfile (UnitAIs), or by BasicEnemyAI if it has none.</summary>
+    /// <summary>
+    /// The default enemy AI: each unit is played by its AI asset (a style with tuned numbers), else its AIProfile style
+    /// ("auto" picks one from its abilities), else BasicEnemyAI.
+    /// </summary>
     public class AIRouter : IUnitAI
     {
         private readonly BasicEnemyAI fallback = new BasicEnemyAI();
+        // One AI per asset and style ("auto" can pick differently for different kits), built once with the asset's numbers.
+        private readonly Dictionary<KeyValuePair<AIProfileDefinition, string>, IUnitAI> tuned = new Dictionary<KeyValuePair<AIProfileDefinition, string>, IUnitAI>();
 
         public UnitCommand Decide(BattleSimulation sim, Unit unit)
         {
-            return (UnitAIs.Get(unit.AIProfile) ?? fallback).Decide(sim, unit);
+            return For(unit).Decide(sim, unit);
+        }
+
+        /// <summary>The AI playing 'unit'.</summary>
+        public IUnitAI For(Unit unit)
+        {
+            var asset = unit.AI;
+            if (asset != null)
+            {
+                string style = asset.Style == UnitAIs.Auto ? UnitAIs.StyleFor(unit) : asset.Style ?? "";
+                var key = new KeyValuePair<AIProfileDefinition, string>(asset, style);
+                IUnitAI ai;
+                if (!tuned.TryGetValue(key, out ai))
+                {
+                    ai = UnitAIs.Create(style) ?? new BasicEnemyAI();
+                    asset.ApplyTo(ai);
+                    tuned[key] = ai;
+                }
+                return ai;
+            }
+            string id = unit.AIProfile == UnitAIs.Auto ? UnitAIs.StyleFor(unit) : unit.AIProfile;
+            return UnitAIs.Get(id) ?? fallback;
         }
     }
 
@@ -51,13 +115,8 @@ namespace TacticsGame.Core
             return unit.Phase == UnitPhase.Charging || unit.Grapple != null || unit.IsLifted || sim.NearestEnemy(unit) == null;
         }
 
-        protected static ActionDefinition FindWhere(Unit unit, System.Predicate<ActionDefinition> match) { return unit.Actions.Find(match); }
-
-        /// <summary>The unit's plain melee strike: an enemy-targeted, melee, plain attack.</summary>
-        protected static ActionDefinition MeleeStrike(Unit unit)
-        {
-            return FindWhere(unit, a => a.Targeting == TargetType.Enemy && !a.IsRanged && a.BehaviorId == "basic_attack" && a.Damage > 0f);
-        }
+        /// <summary>The unit's plain melee strike.</summary>
+        protected static ActionDefinition MeleeStrike(Unit unit) { return Find(unit, AbilityRole.Strike, a => !a.IsRanged); }
 
         protected static bool Ready(BattleSimulation sim, Unit unit, ActionDefinition def)
         {
@@ -108,10 +167,7 @@ namespace TacticsGame.Core
     {
         public SniperAI() { KeepDistance = 9f; }
 
-        private static ActionDefinition Marker(Unit unit)
-        {
-            return FindWhere(unit, a => a.Targeting == TargetType.Enemy && a.BehaviorId != "snipe" && a.TargetStatusesOnHit.Exists(s => s.Id == StatusIds.Marked));
-        }
+        private static ActionDefinition Marker(Unit unit) { return Find(unit, AbilityRole.Mark); }
 
         public override UnitCommand Decide(BattleSimulation sim, Unit unit)
         {
@@ -125,7 +181,7 @@ namespace TacticsGame.Core
                 BestSpot(sim, unit, p => RangedSpotScore(sim, unit, p), out spot) && NearestMeleeThreat(sim, unit, spot) > threat + 1f)
                 return UnitCommand.MoveTo(unit.Id, spot);
 
-            var snipe = Find(unit, "snipe");
+            var snipe = Find(unit, AbilityRole.Snipe);
             var mark = Marker(unit);
             // 1. Snipe a marked target: the likeliest hit, finishing hurt ones first.
             Unit best = null;
@@ -195,18 +251,19 @@ namespace TacticsGame.Core
             var react = React(sim, unit);
             if (react != null) return react;
 
-            var blink = Find(unit, "blink");
-            var hidden = Find(unit, "phantom_strike");
+            var escape = Find(unit, AbilityRole.Escape);
+            var blink = Find(unit, AbilityRole.Gapcloser);
+            var hidden = Find(unit, AbilityRole.Opener);
             var strike = MeleeStrike(unit);
-            var dash = Find(unit, "dash");
+            var dash = Find(unit, AbilityRole.Dash);
 
             float strain = StrainFraction(unit);
             if (!unit.HasStatus(StatusIds.LastStand) && (strain >= HighStrain || (unit.FocusSince >= 0f && strain > RestedStrain)))
             {
                 Vector3 away;
-                if (Danger(sim, unit, unit.Position) > 0 && !unit.IsRooted && Ready(sim, unit, blink) && SafeJump(sim, unit, unit.ActionStat(blink, ActionStat.Range), out away) &&
+                if (Danger(sim, unit, unit.Position) > 0 && !unit.IsRooted && Ready(sim, unit, escape) && SafeJump(sim, unit, unit.ActionStat(escape, ActionStat.Range), out away) &&
                     !StandsGround(sim, unit))
-                    return UnitCommand.UseActionAt(unit.Id, blink, away);
+                    return UnitCommand.UseActionAt(unit.Id, escape, away);
                 var rest = Rest(sim, unit);
                 if (rest != null) return rest;   // nowhere safe and someone is on it: fight on
             }
@@ -248,10 +305,7 @@ namespace TacticsGame.Core
     /// </summary>
     public class SkirmisherAI : ProfileAI
     {
-        private static ActionDefinition DodgeBuff(Unit unit)
-        {
-            return FindWhere(unit, a => a.Targeting == TargetType.Self && a.BehaviorId == "self_buff" && a.SelfStatuses.Exists(s => s.Total(StatId.Dodge, false) > 0f));
-        }
+        private static ActionDefinition DodgeBuff(Unit unit) { return Find(unit, AbilityRole.DodgeBuff); }
 
         public override UnitCommand Decide(BattleSimulation sim, Unit unit)
         {
@@ -269,7 +323,7 @@ namespace TacticsGame.Core
             if (r != null) return r;
 
             var target = sim.NearestEnemy(unit);
-            var flow = Find(unit, "flowing_death");
+            var flow = Find(unit, AbilityRole.Chain);
             var strike = MeleeStrike(unit);
             foreach (var def in new[] { flow, strike })
             {
@@ -320,8 +374,8 @@ namespace TacticsGame.Core
             var r = React(sim, unit) ?? Rest(sim, unit);
             if (r != null) return r;
 
-            var repel = Find(unit, "repel");
-            var deluge = Find(unit, "charged_heal");
+            var repel = Find(unit, AbilityRole.Peel);
+            var deluge = Find(unit, AbilityRole.Heal, a => a.IsCharge);   // charged to full, aimed when released
             var close = sim.NearestEnemy(unit);
             bool danger = InDanger(sim, unit);
             Vector3 spot;
@@ -405,7 +459,7 @@ namespace TacticsGame.Core
             if (Basic(sim, unit)) return base.Decide(sim, unit);
             var r = React(sim, unit) ?? Rest(sim, unit);
             if (r != null) return r;
-            var blast = FindWhere(unit, a => a.Targeting == TargetType.Position && a.Shape == AreaShape.Circle && a.Damage > 0f);
+            var blast = Find(unit, AbilityRole.AreaBlast);
             bool pressed = NearestMeleeThreat(sim, unit, unit.Position) < KeepDistance && BrawlerPressing(sim, unit);
             Vector3 at;
             if (!pressed && Ready(sim, unit, blast) && BestBlast(sim, unit, blast, out at)) return UnitCommand.UseActionAt(unit.Id, blast, at);
@@ -448,13 +502,13 @@ namespace TacticsGame.Core
             var r = React(sim, unit) ?? Rest(sim, unit);
             if (r != null) return r;
 
-            var follow = FindWhere(unit, a => a.Targeting == TargetType.Enemy && !string.IsNullOrEmpty(a.RequiredStatus) && a.Damage > 0f && !a.IsRanged);
+            var follow = Find(unit, AbilityRole.Combo);
             var last = sim.GetUnit(unit.LastActionTargetId);
             if (follow != null && last != null && last.IsAlive && last.Team != unit.Team && Ready(sim, unit, follow) &&
                 Reach(sim, unit, follow, last) && LandsInStun(sim, unit, follow, last))
                 return UnitCommand.UseAction(unit.Id, follow, last.Id);
 
-            var charge = Find(unit, "charge");
+            var charge = Find(unit, AbilityRole.Rush);
             Vector3 aim;
             if (!unit.IsRooted && Ready(sim, unit, charge) && PinCharge(sim, unit, charge, out aim)) return UnitCommand.UseActionAt(unit.Id, charge, aim);
             return DecideMelee(sim, unit, a => a != follow);

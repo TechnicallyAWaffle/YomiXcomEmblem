@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: praas_truth
   DisplayName: Praa's Truth
   BehaviorId: basic_attack
+  Roles: 0
   Description: 'A powerful blow that strains you greatly. Transcend the strike to
     remove its windup completely at an even greater cost. '
   Targeting: 2
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 30
   TranscendWindupMultiplier: 0
   ExtraCinematic: 0
+  Visuals:
+    Kind: 3
+    Color: {r: 1, g: 0.85, b: 0.35, a: 1}
+    Width: 0.3
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

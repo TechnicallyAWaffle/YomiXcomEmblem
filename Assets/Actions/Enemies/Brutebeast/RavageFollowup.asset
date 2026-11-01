@@ -15,8 +15,8 @@ MonoBehaviour:
   Id: ravage_followup
   DisplayName: Ravage Follow-up
   BehaviorId: basic_attack
-  Description: 'Right after Ravage only: another strike with 50% more windup, recovery
-    and damage.'
+  Roles: 0
+  Description: A devastating strike used only after an initial Ravage
   Targeting: 2
   Range: 1.8
   IsRanged: 0
@@ -78,6 +78,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 3
+    Color: {r: 1, g: 0.3, b: 0.15, a: 1}
+    Width: 0.26
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

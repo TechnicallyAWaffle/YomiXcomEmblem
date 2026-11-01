@@ -15,8 +15,9 @@ MonoBehaviour:
   Id: charge
   DisplayName: Charge
   BehaviorId: charge
-  Description: 'After a windup, charge in a direction, dragging any enemy in the
-    way along. Slam them into a wall for a heavy impact: big damage and a long stun.'
+  Roles: 0
+  Description: Charge in a direction, dragging enemies along the way and dealing
+    a large amount of stun and damage if a wall is hit.
   Targeting: 4
   Range: 9
   IsRanged: 0
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 4
+    Color: {r: 0.85, g: 0.55, b: 0.3, a: 1}
+    Width: 0.35
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

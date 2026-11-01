@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: second_mind
   DisplayName: Second Mind
   BehaviorId: status_spell
+  Roles: 0
   Description: Speed up an ally's actions or slow down an enemy's actions.
   Targeting: 5
   Range: 20
@@ -59,31 +60,28 @@ MonoBehaviour:
   TargetStatusesOnHit:
   - Id: quickened
     Duration: 3
-    DodgeBonus: 0
-    BlockBonus: 0
-    IncomingAccuracyBonus: 0
-    DodgeDistanceBonus: 0
-    ActionSpeedMult: 1.5
-    MoveSpeedMult: 1
-    Rooted: 0
-    Untargetable: 0
-    BreaksOnDamage: 0
-    StunImmune: 0
-    KeepsBlock: 0
-    Unstoppable: 0
-    RedirectsHits: 0
-    DamageDealtMult: 1
-    StrainCostMult: 1
+    Modifiers:
+    - Stat: 6
+      Op: 1
+      Value: 1.5
+    ActionModifiers: []
+    Flags: 0
     ForbidsActions: []
     AppliesTo: 1
-  - Id: slowed
-    Duration: 3
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
     DodgeDistanceBonus: 0
-    ActionSpeedMult: 0.6666667
+    ActionSpeedMult: 1
     MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
@@ -91,10 +89,37 @@ MonoBehaviour:
     KeepsBlock: 0
     Unstoppable: 0
     RedirectsHits: 0
-    DamageDealtMult: 1
-    StrainCostMult: 1
+  - Id: slowed
+    Duration: 3
+    Modifiers:
+    - Stat: 6
+      Op: 1
+      Value: 0.6666667
+    ActionModifiers: []
+    Flags: 0
     ForbidsActions: []
     AppliesTo: 2
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
+    DodgeBonus: 0
+    BlockBonus: 0
+    IncomingAccuracyBonus: 0
+    DodgeDistanceBonus: 0
+    ActionSpeedMult: 1
+    MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
+    Rooted: 0
+    Untargetable: 0
+    BreaksOnDamage: 0
+    StunImmune: 0
+    KeepsBlock: 0
+    Unstoppable: 0
+    RedirectsHits: 0
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -115,6 +140,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 2
+    Color: {r: 0.45, g: 1, b: 1, a: 1}
+    Width: 0.05
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

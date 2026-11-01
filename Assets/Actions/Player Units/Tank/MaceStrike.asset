@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: mace_strike
   DisplayName: Crush
   BehaviorId: basic_attack
+  Roles: 0
   Description: A crushing melee attack.
   Targeting: 2
   Range: 1.9
@@ -77,6 +78,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 3
+    Color: {r: 0.9, g: 0.8, b: 0.5, a: 1}
+    Width: 0.16
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

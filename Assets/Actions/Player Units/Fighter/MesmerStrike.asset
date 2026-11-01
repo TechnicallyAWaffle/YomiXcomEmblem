@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: mesmer_strike
   DisplayName: Mesmer Strike
   BehaviorId: basic_attack
+  Roles: 0
   Description: 'Mesmerize''s counter: a rapid strike at the attacker you dodged.'
   Targeting: 2
   Range: 2.2
@@ -77,6 +78,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 3
+    Color: {r: 0.85, g: 0.5, b: 1, a: 1}
+    Width: 0.07
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: flowing_death
   DisplayName: Flowing Death
   BehaviorId: flowing_death
+  Roles: 0
   Description: A melee attack. Each one used in a row winds up 0.1s faster, down
     to 0.1s.
   Targeting: 2
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 3
+    Color: {r: 1, g: 0.45, b: 0.35, a: 1}
+    Width: 0.07
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

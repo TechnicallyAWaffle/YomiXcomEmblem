@@ -11,6 +11,9 @@ namespace TacticsGame.Core
     /// <summary>Snipe: aim, then fire. Cancels if the target leaves line of sight (or goes hidden) during the windup.</summary>
     public class SnipeBehavior : BasicAttackBehavior
     {
+        // A snipe is saved for marked targets; it marks nothing itself.
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return (base.DefaultRoles(def) & ~AbilityRole.Mark) | AbilityRole.Snipe; }
+
         public override bool OnWindupTick(BattleSimulation sim, ActionInstance a)
         {
             var target = sim.GetUnit(a.TargetUnitId);
@@ -26,8 +29,6 @@ namespace TacticsGame.Core
     /// </summary>
     public class TakeAimBehavior : SelfBuffBehavior
     {
-        public const float ReactionWindup = 0.1f;
-
         public override void Attach(BattleSimulation sim)
         {
             sim.Triggers.Subscribe(TriggerType.ActionStarted, ctx =>
@@ -40,7 +41,7 @@ namespace TacticsGame.Core
                     if (stance == null || stance.LinkedAction == null) continue;
                     if (!sim.InReach(aimer, stance.LinkedAction, actor)) continue;
                     sim.RemoveStatus(aimer, StatusIds.TakeAim);
-                    sim.QueueFreeAction(aimer, stance.LinkedAction, actor.Id, ReactionWindup);
+                    sim.QueueFreeAction(aimer, stance.LinkedAction, actor.Id, sim.ReactionWindup);
                 }
             });
         }

@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: repel
   DisplayName: Repel
   BehaviorId: repel
+  Roles: 0
   Description: Strike in a wide line in front, damaging enemies and pushing them
     away.
   Targeting: 4
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 4
+    Color: {r: 0.6, g: 1, b: 0.75, a: 1}
+    Width: 0.3
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

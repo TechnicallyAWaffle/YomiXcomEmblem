@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: wrath
   DisplayName: Wrath
   BehaviorId: self_buff
+  Roles: 0
   Description: Become consumed with Wrath, gaining massively reduced Strain costs
     and increased damage but becoming unable to Block.
   Targeting: 1
@@ -58,12 +59,33 @@ MonoBehaviour:
   SelfStatuses:
   - Id: wrath
     Duration: 6
+    Modifiers:
+    - Stat: 10
+      Op: 1
+      Value: 1.3
+    - Stat: 11
+      Op: 1
+      Value: 0.25
+    ActionModifiers: []
+    Flags: 0
+    ForbidsActions:
+    - block
+    - battle_trance
+    AppliesTo: 0
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
     DodgeDistanceBonus: 0
     ActionSpeedMult: 1
     MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
@@ -71,12 +93,6 @@ MonoBehaviour:
     KeepsBlock: 0
     Unstoppable: 0
     RedirectsHits: 0
-    DamageDealtMult: 1.3
-    StrainCostMult: 0.25
-    ForbidsActions:
-    - block
-    - battle_trance
-    AppliesTo: 0
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
   TargetStatusesDuringWindup: []
@@ -99,6 +115,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 8
+    Color: {r: 1, g: 0.2, b: 0.15, a: 1}
+    Width: 0.06
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

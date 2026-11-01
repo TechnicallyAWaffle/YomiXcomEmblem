@@ -27,11 +27,36 @@ namespace TacticsGame.Core
             if (unit.IsLifted) { reason = "in the air"; return false; }
             ClearQueued(unit, null);   // committing to an ability overrides a queued ranged one
             unit.LastActionId = null;
-            if (!RepathChase(unit, target)) { reason = "no path"; return false; }
+            if (!RepathChase(unit, target, cmd.Action)) { reason = "no path"; return false; }
             unit.Chase = cmd;
             unit.ChaseUntil = Now + MaxRangeWait;
             Emit(EventType.QueuedActionChanged, unit.Id, target.Id, new QueuedActionInfo { ActionId = cmd.Action.Id, Chase = true });
             return true;
+        }
+
+        /// <summary>Up in the air or on the way down: lifted, hovering, in an aerial slam, falling or jumping.</summary>
+        public bool Airborne(Unit t) { return t.IsLifted || t.FallLandAt >= 0f || t.IsJumping; }
+
+        /// <summary>Where an airborne unit will come down (its fall's or jump's end, a slam's landing, else the ground under it).</summary>
+        public Vector3 LandingPoint(Unit t)
+        {
+            if (t.FallLandAt >= 0f) return t.GlideTo;
+            if (t.IsJumping) return t.JumpTo;
+            var carrier = GetUnit(t.SlammedById);
+            if (carrier != null && carrier.Slam != null) return carrier.Slam.Path.Landing;
+            if (t.Slam != null) return t.Slam.Path.CarrierStart;
+            return Terrain.OnGround(t.Position);
+        }
+
+        /// <summary>Where a melee unit waits for an airborne target: ChaseStrikeFraction of its reach from the landing point, on its own side.</summary>
+        private Vector3 LandingWaitSpot(Unit u, ActionDefinition def, Unit target)
+        {
+            Vector3 land = LandingPoint(target);
+            float dist = Mathf.Max(u.ActionStat(def, ActionStat.Range) * ChaseStrikeFraction, u.BodyRadius + target.BodyRadius + StandingGap);
+            Vector3 d = u.Position - land; d.y = 0f;
+            d = d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward;
+            Vector3 spot = Terrain.OnGround(land + d * dist);
+            return FreeSpotNear(u, spot, u.Position, true);
         }
 
         /// <summary>A chase only strikes once inside this fraction of the ability's range, so a target stepping back doesn't
@@ -48,10 +73,16 @@ namespace TacticsGame.Core
             return u.Move == null || u.Move.NextIndex >= u.Move.Path.Count;   // can't get any closer on this path: strike from here
         }
 
-        private bool RepathChase(Unit unit, Unit target)
+        /// <summary>
+        /// Walk (again) toward the chase's target: straight at it, or, while it is up in the air or coming down (lifted,
+        /// hovering, falling, in a slam), to a spot ChaseStrikeFraction of the strike's reach from where it will land, to wait
+        /// there and strike once it is down and in reach (TickOutOfRangeOrders keeps checking).
+        /// </summary>
+        private bool RepathChase(Unit unit, Unit target, ActionDefinition def)
         {
             var path = new List<Vector3>();
-            if (!PlanPath(unit, unit.Position, target.Position, path)) return false;
+            Vector3 to = Airborne(target) ? LandingWaitSpot(unit, def, target) : target.Position;
+            if (!PlanPath(unit, unit.Position, to, path)) return false;
             StartMove(unit, path);
             unit.ChaseRepathAt = Now + ChaseRepathSeconds;
             return true;
@@ -112,6 +143,7 @@ namespace TacticsGame.Core
                     var target = GetUnit(cmd.TargetUnitId);
                     if (u.Phase != UnitPhase.Moving) { ClearChase(u); continue; }   // something else stopped the walk
                     if (target == null || !target.IsAlive || !IsTargetableBy(target, u)) { StopChase(u, "target lost"); continue; }
+                    if (Airborne(target)) u.ChaseUntil = Mathf.Max(u.ChaseUntil, Now + 1f);   // waiting for it to come down isn't giving up
                     if (Now >= u.ChaseUntil) { StopChase(u, "never came in range"); continue; }
                     if (CanUse(u, cmd.Action, target, out reason))
                     {
@@ -126,7 +158,7 @@ namespace TacticsGame.Core
                         }
                     }
                     if (reason != "out of range") { StopChase(u, reason); continue; }
-                    if (Now >= u.ChaseRepathAt && !RepathChase(u, target)) StopChase(u, "no path");
+                    if (Now >= u.ChaseRepathAt && !RepathChase(u, target, cmd.Action)) StopChase(u, "no path");
                     continue;
                 }
                 if (u.Queued != null)

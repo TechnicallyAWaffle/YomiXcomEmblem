@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: tracking_shot
   DisplayName: Tracking Shot
   BehaviorId: basic_attack
+  Roles: 0
   Description: Enter intense focus, tracking your target. If you aren't interrupted
     by damage or crowd control, fire a shot that pierces terrain and 50% block.
   Targeting: 2
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 1
+  Visuals:
+    Kind: 1
+    Color: {r: 0.5, g: 0.95, b: 1, a: 1}
+    Width: 0.13
+    Pierce: 1
   InterruptedByDamage: 1
   InterruptedByStun: 1
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

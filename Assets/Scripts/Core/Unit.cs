@@ -187,7 +187,8 @@ namespace TacticsGame.Core
         // its abilities' numbers. Read through Stat / ActionStat.
         public List<Modifier> UpgradeModifiers = new List<Modifier>();
         public List<ActionModifier> UpgradeActionModifiers = new List<ActionModifier>();
-        public string AIProfile = "";   // how the AI plays this unit (UnitAIs); empty = BasicEnemyAI
+        public string AIProfile = "";   // how the AI plays this unit (UnitAIs); empty = BasicEnemyAI, "auto" = picked from its abilities
+        public AIProfileDefinition AI;  // a style with tuned numbers, over AIProfile (see AIRouter)
 
         // Runtime state
         public UnitPhase Phase = UnitPhase.Ready;
@@ -419,7 +420,7 @@ namespace TacticsGame.Core
                 Position = position,
                 Actions = actions,
                 Passives = new List<string>(def.Passives),
-                AIProfile = def.AIProfile ?? "",
+                AIProfile = def.AIProfile ?? "", AI = def.AI,
                 UpgradeModifiers = unitMods.FindAll(m => !Stats.IsFixed(m.Stat)),
                 UpgradeActionModifiers = actionMods,
             };
@@ -442,7 +443,7 @@ namespace TacticsGame.Core
                 Strain = Strain, MaxStrain = MaxStrain, StrainRecoveryPerSecond = StrainRecoveryPerSecond, StrainRecoveryDelay = StrainRecoveryDelay, LastStrainGainAt = LastStrainGainAt, Energy = Energy, MaxEnergy = MaxEnergy,
                 ActionSpeed = ActionSpeed, MoveSpeed = MoveSpeed, DashDistance = DashDistance,
                 EyeHeight = EyeHeight, BodyHeight = BodyHeight, BodyRadius = BodyRadius,
-                Position = Position, Actions = Actions, Passives = Passives, AIProfile = AIProfile,
+                Position = Position, Actions = Actions, Passives = Passives, AIProfile = AIProfile, AI = AI,
                 UpgradeModifiers = UpgradeModifiers, UpgradeActionModifiers = UpgradeActionModifiers,
             };
         }

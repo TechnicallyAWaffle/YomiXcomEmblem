@@ -3,11 +3,11 @@ using UnityEngine;
 using TacticsGame.Core;
 
 /// <summary>
-/// Creates the four squad classes from the design doc (Sharpshooter, Melee Fighter, Tank, Paradigm User) and their
-/// abilities as assets under Assets/Actions/&lt;Class&gt; and Assets/Units/&lt;Class&gt;, plus the universal Block and Dash. The
-/// code here writes an asset in full only when it is first created; after that the asset (and your Inspector tweaks) is
-/// the source of truth, and a DataVersion bump only patches the fields that version changed (see ActionPatches). Delete
-/// an asset to regenerate it from scratch.
+/// Creates any missing squad, enemy and universal assets (abilities under Assets/Actions, units under Assets/Units, wherever
+/// those folders have been moved to). The assets are the source of truth: this only writes an asset that doesn't exist
+/// yet (from the init code below), and fills a description or a look that is still empty. Change an existing ability by
+/// editing its asset (Inspector, or Tools > Combat Test > Tuning &amp; Text), never here. Delete an asset to regenerate it.
+/// The DataVersion patches below are frozen history: they only bring an asset saved before version 15 up to date.
 /// </summary>
 public static class SquadAssets
 {
@@ -15,7 +15,9 @@ public static class SquadAssets
     public struct Enemies { public UnitDefinition Sniper, Assassin, Skirmisher, Healer, Caster, Brutebeast; }
 
     /// <summary>
-    /// Bump when the squad data changes in a way existing assets must pick up, and in the same change:
+    /// FROZEN at 15: assets are now the source of truth, so changes go into the assets and no new versions are added. New
+    /// content is new assets (init code below, or made in the editor). The history, for assets saved before 15:
+    /// Each version said: bump when the squad data changes in a way existing assets must pick up, and in the same change:
     ///   1. edit the init code below (what a freshly created asset gets), and
     ///   2. add an entry for the new version to ActionPatches (and the class's patches passed to Unit) that sets ONLY the fields that changed
     ///      (including clearing a value the new data no longer uses), keyed by asset file name.

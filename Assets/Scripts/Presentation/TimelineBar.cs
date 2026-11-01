@@ -134,6 +134,7 @@ namespace TacticsGame.Presentation
         private void OnGUI()
         {
             if (Director == null || Director.Timeline == null) return;
+            if (UiDeclutter.On) return;   // Alt: hidden with the rest of the UI
             UiScale.Begin();
             GUI.depth = -10;   // in front of the orders panel, so clicks on the bar don't reach the world
             if (chipStyle == null)

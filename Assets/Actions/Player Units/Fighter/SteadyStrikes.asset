@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: steady_strikes
   DisplayName: Perfect Edge
   BehaviorId: steady_strikes
+  Roles: 0
   Description: A deliberate, steady melee strike. Can be Transcended to make it a
     guaranteed hit that pierces 25% block.
   Targeting: 2
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 20
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 3
+    Color: {r: 1, g: 0.7, b: 0.35, a: 1}
+    Width: 0.14
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

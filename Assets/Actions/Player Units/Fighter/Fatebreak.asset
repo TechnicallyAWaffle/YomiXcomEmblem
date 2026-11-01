@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: fatebreak
   DisplayName: Fatebreak
   BehaviorId: fatebreak
+  Roles: 0
   Description: Only available during Trance or Wrath. Heavily slows the target while
     you wind up, then strikes it with a massive blow that knocks it far back. Ends
     the current empowered state it's used in.
@@ -23,7 +24,7 @@ MonoBehaviour:
   IsRanged: 0
   CannotTargetSelf: 0
   DestinationRange: 0
-  Windup: 1.1
+  Windup: 1
   Recovery: 0.7
   Cooldown: 0
   EnergyCost: 0
@@ -32,7 +33,7 @@ MonoBehaviour:
   ConsumesRequiredStatus: 1
   ConsumeOnResolve: 1
   Impact: 1
-  Damage: 50
+  Damage: 40
   BaseAccuracy: 0.95
   StunDuration: 1.5
   StrainOnTarget: 30
@@ -62,12 +63,28 @@ MonoBehaviour:
   TargetStatusesDuringWindup:
   - Id: fated
     Duration: 3
+    Modifiers:
+    - Stat: 6
+      Op: 1
+      Value: 0.2
+    ActionModifiers: []
+    Flags: 0
+    ForbidsActions: []
+    AppliesTo: 0
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
     DodgeDistanceBonus: 0
-    ActionSpeedMult: 0.3
+    ActionSpeedMult: 1
     MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
@@ -75,10 +92,6 @@ MonoBehaviour:
     KeepsBlock: 0
     Unstoppable: 0
     RedirectsHits: 0
-    DamageDealtMult: 1
-    StrainCostMult: 1
-    ForbidsActions: []
-    AppliesTo: 0
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30
@@ -98,6 +111,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 1
+  Visuals:
+    Kind: 3
+    Color: {r: 0.75, g: 0.1, b: 0.45, a: 1}
+    Width: 0.36
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

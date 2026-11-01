@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
   m_Name: Caster
   m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
   DisplayName: Caster
   MaxHealth: 80
   BaseDodge: 0.15
@@ -34,5 +35,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: bcb725a826baaf444a644b7106c5eb75, type: 2}
   Passives: []
   AIProfile: caster
+  AI: {fileID: 0}
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
-  DataVersion: 14
+  DataVersion: 15

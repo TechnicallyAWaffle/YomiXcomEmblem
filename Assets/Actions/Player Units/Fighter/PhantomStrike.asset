@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: phantom_strike
   DisplayName: Phantom Strike
   BehaviorId: phantom_strike
+  Roles: 0
   Description: Dash to the target and slash it, applying a Mark that increases accuracy
     against them.
   Targeting: 2
@@ -60,12 +61,28 @@ MonoBehaviour:
   TargetStatusesOnHit:
   - Id: marked
     Duration: 6
+    Modifiers:
+    - Stat: 9
+      Op: 0
+      Value: 0.25
+    ActionModifiers: []
+    Flags: 0
+    ForbidsActions: []
+    AppliesTo: 0
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
     DodgeBonus: 0
     BlockBonus: 0
-    IncomingAccuracyBonus: 0.25
+    IncomingAccuracyBonus: 0
     DodgeDistanceBonus: 0
     ActionSpeedMult: 1
     MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
@@ -73,10 +90,6 @@ MonoBehaviour:
     KeepsBlock: 0
     Unstoppable: 0
     RedirectsHits: 0
-    DamageDealtMult: 1
-    StrainCostMult: 1
-    ForbidsActions: []
-    AppliesTo: 0
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -97,6 +110,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 3
+    Color: {r: 0.55, g: 0.9, b: 1, a: 1}
+    Width: 0.14
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

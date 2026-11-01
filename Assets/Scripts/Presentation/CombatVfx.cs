@@ -65,7 +65,12 @@ namespace TacticsGame.Presentation
         private readonly List<RingFx> rings = new List<RingFx>();
         private readonly List<TextFx> texts = new List<TextFx>();
         private readonly Dictionary<string, HashSet<string>> statuses = new Dictionary<string, HashSet<string>>();
-        private readonly Dictionary<string, float> stunnedUntil = new Dictionary<string, float>();
+        // Stunned units (stars over the head): from the Stun event until the unit is free again (UnitReady, a new action,
+        // death). A stun's own duration isn't enough: a lift, a grab or a slam holds the unit stunned longer without a new event.
+        private readonly HashSet<string> stunned = new HashSet<string>();
+
+        /// <summary>The unit under the mouse (or the one the timeline points at), or null: the HUD shows its details panel.</summary>
+        public string HoveredUnitId { get; private set; }
         private readonly Dictionary<UnitView, float> flashes = new Dictionary<UnitView, float>();
         private readonly Dictionary<UnitView, Renderer[]> renderers = new Dictionary<UnitView, Renderer[]>();
         private readonly HashSet<UnitView> tinted = new HashSet<UnitView>();
@@ -106,7 +111,7 @@ namespace TacticsGame.Presentation
         private void ResetAll()
         {
             windups.Clear(); lines.Clear(); rings.Clear(); texts.Clear(); lastAim.Clear(); slashRun.Clear(); slashAt.Clear();
-            statuses.Clear(); stunnedUntil.Clear(); flashes.Clear(); orders.Clear(); charges.Clear(); domes.Clear();
+            statuses.Clear(); stunned.Clear(); flashes.Clear(); orders.Clear(); charges.Clear(); domes.Clear();
             sparks.Clear(); puffs.Clear();
             defs.Clear(); heights.Clear();
             if (Director == null || Director.Timeline == null || Director.Timeline.InitialState == null) return;
@@ -189,7 +194,7 @@ namespace TacticsGame.Presentation
                 case TacticsGame.Core.EventType.ActionStarted:
                 {
                     var info = (ActionStartedInfo)evt.Payload;
-                    if (!info.Free) charges.Remove(evt.ActorId);   // a released charge becomes an ordinary action
+                    if (!info.Free) { charges.Remove(evt.ActorId); stunned.Remove(evt.ActorId); }   // a released charge becomes an ordinary action; acting, it isn't stunned
                     if (info.Transcended && actor != null)
                     {
                         // Transcend: a violet flare, a closing ring and the word over the unit.
@@ -346,7 +351,7 @@ namespace TacticsGame.Presentation
                 case TacticsGame.Core.EventType.Stun:
                 {
                     if (target == null) break;
-                    stunnedUntil[evt.TargetId] = evt.SimTime + ((StunInfo)evt.Payload).Duration;
+                    stunned.Add(evt.TargetId);
                     AddText(Head(target) + Vector3.up * 0.3f, "STUNNED", new Color(1f, 0.9f, 0.3f), 15f);
                     break;
                 }
@@ -461,13 +466,16 @@ namespace TacticsGame.Presentation
                     Burst(sparks, target.transform.position + Vector3.up * 0.3f, 18, new Color(0.5f, 0.9f, 1f), 4f, 0.1f, 0.35f);
                     AddText(Head(target) + Vector3.up * 0.3f, "SNARED", new Color(0.5f, 0.9f, 1f), 18f);
                     break;
+                case TacticsGame.Core.EventType.UnitReady:
+                    stunned.Remove(evt.ActorId);   // free to act: the stun is over, however long it was held
+                    break;
                 case TacticsGame.Core.EventType.Death:
                     if (target == null) break;
                     windups.RemoveAll(x => x.ActorId == evt.TargetId);
                     charges.Remove(evt.TargetId);
                     statuses.Remove(evt.TargetId);
                     orders.Remove(evt.TargetId);
-                    stunnedUntil.Remove(evt.TargetId);
+                    stunned.Remove(evt.TargetId);
                     Burst(sparks, Chest(target), 34, new Color(1f, 0.3f, 0.2f), 6f, 0.15f, 0.6f);
                     Burst(puffs, target.transform.position + Vector3.up * 0.5f, 22, new Color(0.25f, 0.22f, 0.22f, 0.8f), 1.6f, 0.8f, 1.1f);
                     AddText(Head(target) + Vector3.up * 0.4f, "DOWN", new Color(1f, 0.35f, 0.3f), 24f);
@@ -690,9 +698,10 @@ namespace TacticsGame.Presentation
             }
             markers.End();
 
+            // Combat text fades on real time, so it doesn't hang on screen while the world is held for orders.
             for (int i = texts.Count - 1; i >= 0; i--)
             {
-                texts[i].Age += dt;
+                texts[i].Age += Time.unscaledDeltaTime;
                 if (texts[i].Age >= texts[i].Life) texts.RemoveAt(i);
             }
 
@@ -839,6 +848,7 @@ namespace TacticsGame.Presentation
         {
             hoverText = null;
             var view = HoverOverride != null ? Director.FindView(HoverOverride) : UnitUnderMouse();
+            HoveredUnitId = view != null ? view.UnitId : null;
             if (view == null) return;
             string incoming = DrawIncoming(view);
             var w = windups.Find(x => x.ActorId == view.UnitId);
@@ -1024,10 +1034,9 @@ namespace TacticsGame.Presentation
             }
 
             // Stun stars orbiting the head.
-            foreach (var kv in stunnedUntil)
+            foreach (var id in stunned)
             {
-                if (now >= kv.Value) continue;
-                var view = Director.FindView(kv.Key);
+                var view = Director.FindView(id);
                 if (view == null) continue;
                 Vector3 c = Head(view) + Vector3.up * 0.3f;
                 for (int i = 0; i < 3; i++)
@@ -1088,6 +1097,7 @@ namespace TacticsGame.Presentation
             if (cam == null) return;
             GUI.depth = 3;   // over the HUD's bars, under the orders panel and its ability popup
             UiScale.Begin();
+            if (UiDeclutter.On) return;   // Alt: no labels or combat text
             DrawHoverLabel();
             if (texts.Count == 0) return;
             if (textStyle == null) textStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, wordWrap = false, clipping = TextClipping.Overflow };

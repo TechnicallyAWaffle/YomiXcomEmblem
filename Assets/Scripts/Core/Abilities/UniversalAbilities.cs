@@ -14,6 +14,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class BlockBehavior : SelfBuffBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Guard; }
+
         public override bool AllowsStrainOverflow { get { return true; } }
 
         public override void Attach(BattleSimulation sim)
@@ -51,6 +53,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class DashBehavior : ActionBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Dash; }
+
         public override bool MovesUser { get { return true; } }   // not while airborne
 
         public override bool CanStart(BattleSimulation sim, Unit actor, UnitCommand cmd, out string reason)

@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: cataclysm
   DisplayName: Cataclysm
   BehaviorId: area_attack
+  Roles: 0
   Description: After a long channel, deal heavy damage in a huge area and stun. Any
     damage breaks the channel.
   Targeting: 4
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 5
+    Color: {r: 0.65, g: 0.3, b: 1, a: 1}
+    Width: 0.25
+    Pierce: 0
   InterruptedByDamage: 1
   InterruptedByStun: 1
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

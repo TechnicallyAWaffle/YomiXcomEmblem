@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: retaliate
   DisplayName: Flickering Redress
   BehaviorId: retaliate
+  Roles: 0
   Description: Increase dodge chance and dodge distance. Gain a free Snapshot at
     every attacker you dodge.
   Targeting: 1
@@ -58,12 +59,31 @@ MonoBehaviour:
   SelfStatuses:
   - Id: retaliate
     Duration: 6
-    DodgeBonus: 0.3
+    Modifiers:
+    - Stat: 4
+      Op: 0
+      Value: 0.3
+    - Stat: 8
+      Op: 0
+      Value: 2
+    ActionModifiers: []
+    Flags: 0
+    ForbidsActions: []
+    AppliesTo: 0
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
+    DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
-    DodgeDistanceBonus: 2
+    DodgeDistanceBonus: 0
     ActionSpeedMult: 1
     MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
@@ -71,10 +91,6 @@ MonoBehaviour:
     KeepsBlock: 0
     Unstoppable: 0
     RedirectsHits: 0
-    DamageDealtMult: 1
-    StrainCostMult: 1
-    ForbidsActions: []
-    AppliesTo: 0
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
   TargetStatusesDuringWindup: []
@@ -97,6 +113,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 8
+    Color: {r: 1, g: 0.6, b: 0.2, a: 1}
+    Width: 0.06
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

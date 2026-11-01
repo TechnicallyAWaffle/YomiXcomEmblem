@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: flickershots
   DisplayName: Flickershots
   BehaviorId: chain_attack
+  Roles: 0
   Description: Fire a quick shot. Followup with up to 2 additional shots on the same
     target.
   Targeting: 2
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 1
+    Color: {r: 0.7, g: 1, b: 0.95, a: 1}
+    Width: 0.03
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

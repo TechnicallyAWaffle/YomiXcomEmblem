@@ -132,6 +132,43 @@ namespace TacticsGame.Core
 
         public virtual void OnInterrupted(BattleSimulation sim, ActionInstance a) { }
 
+        // ------------------------------------------------------------------ its own numbers (ActionDefinition.Params)
+
+        /// <summary>The numbers this behavior has of its own, with their defaults. Each ability using it can set any of them in its Params.</summary>
+        public virtual IEnumerable<BehaviorParam> Parameters { get { yield break; } }
+
+        private Dictionary<string, float> defaults;
+
+        /// <summary>One of this behavior's numbers for 'def': the ability's Params entry for 'key', else the default declared in Parameters.</summary>
+        protected float Param(ActionDefinition def, string key)
+        {
+            if (def != null && def.Params != null)
+                for (int i = 0; i < def.Params.Count; i++) if (def.Params[i].Key == key) return def.Params[i].Value;
+            if (defaults == null)
+            {
+                defaults = new Dictionary<string, float>();
+                foreach (var p in Parameters) defaults[p.Key] = p.Value;
+            }
+            float v;
+            if (!defaults.TryGetValue(key, out v)) throw new System.ArgumentException(GetType().Name + " has no parameter '" + key + "' (declare it in Parameters)");
+            return v;
+        }
+
+        // ------------------------------------------------------------------ what the AI uses it for
+
+        /// <summary>
+        /// Its roles when the definition sets none (AbilityRoles.Of). The base reads the data alone: marking someone (Mark),
+        /// a damaging circle at a point (AreaBlast), a melee strike that needs a status first (Combo). Behaviors add theirs.
+        /// </summary>
+        public virtual AbilityRole DefaultRoles(ActionDefinition def)
+        {
+            var r = AbilityRole.None;
+            if (def.Targeting == TargetType.Enemy && def.TargetStatusesOnHit != null && def.TargetStatusesOnHit.Exists(s => s != null && s.Id == StatusIds.Marked)) r |= AbilityRole.Mark;
+            if (def.Targeting == TargetType.Position && def.Shape == AreaShape.Circle && def.Damage > 0f) r |= AbilityRole.AreaBlast;
+            if (def.Targeting == TargetType.Enemy && !string.IsNullOrEmpty(def.RequiredStatus) && def.Damage > 0f && !def.IsRanged) r |= AbilityRole.Combo;
+            return r;
+        }
+
         // ------------------------------------------------------------------ how it reads (the ability popup)
 
         /// <summary>Does it roll to hit its targets (damage, accuracy and stun lines)? Single-target attacks do; area attacks say so.</summary>
@@ -187,6 +224,14 @@ namespace TacticsGame.Core
     /// <summary>Default: one attack against the chosen target.</summary>
     public class BasicAttackBehavior : ActionBehavior
     {
+        // A plain attack is a Strike; behaviors built on this one (Snipe, Flowing Death...) are something more and say so.
+        public override AbilityRole DefaultRoles(ActionDefinition def)
+        {
+            var r = base.DefaultRoles(def);
+            if (GetType() == typeof(BasicAttackBehavior) && def.Targeting == TargetType.Enemy && def.Damage > 0f) r |= AbilityRole.Strike;
+            return r;
+        }
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             var target = sim.GetUnit(a.TargetUnitId);
@@ -205,6 +250,13 @@ namespace TacticsGame.Core
     /// <summary>No direct effect: everything comes from the definition's SelfStatuses / EnergyGain (Brace, Battle Trance).</summary>
     public class SelfBuffBehavior : ActionBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def)
+        {
+            var r = base.DefaultRoles(def);
+            if (def.Targeting == TargetType.Self && def.SelfStatuses != null && def.SelfStatuses.Exists(s => s != null && s.Total(StatId.Dodge, false) > 0f)) r |= AbilityRole.DodgeBuff;
+            return r;
+        }
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects) { }
     }
 
@@ -247,6 +299,8 @@ namespace TacticsGame.Core
     /// <summary>Heal an ally and relocate them (Reconstruct).</summary>
     public class HealDisplaceBehavior : ActionBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Heal; }
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             var target = sim.GetUnit(a.TargetUnitId);

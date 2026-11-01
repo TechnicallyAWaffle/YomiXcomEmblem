@@ -7,6 +7,8 @@ namespace TacticsGame.Core
     [CreateAssetMenu(menuName = "TacticsGame/Unit Definition")]
     public class UnitDefinition : ScriptableObject
     {
+        [Tooltip("Stable id for saves (rosters name classes by it). Empty: the asset's name.")]
+        public string Id = "";
         public string DisplayName;
         public float MaxHealth = 100f;
         public float BaseDodge = 0.1f;
@@ -35,6 +37,8 @@ namespace TacticsGame.Core
         public List<string> Passives = new List<string>();
         [Tooltip("How the AI plays this unit: a UnitAIs profile (sniper, assassin, skirmisher, healer). Empty = the general BasicEnemyAI.")]
         public string AIProfile = "";
+        [Tooltip("How the AI plays it, as data: a style and its tuned numbers. Overrides AIProfile when set.")]
+        public AIProfileDefinition AI;
         public GameObject ViewPrefab;
         [HideInInspector] public int DataVersion;   // which SquadAssets data revision this asset was last written with
     }

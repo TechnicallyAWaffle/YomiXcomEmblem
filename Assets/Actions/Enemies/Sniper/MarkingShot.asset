@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: sniper_marking_shot
   DisplayName: Marking Shot
   BehaviorId: basic_attack
+  Roles: 0
   Description: Fire a shot that marks the target (attacks hit it more easily).
   Targeting: 2
   Range: 18
@@ -59,12 +60,28 @@ MonoBehaviour:
   TargetStatusesOnHit:
   - Id: marked
     Duration: 8
+    Modifiers:
+    - Stat: 9
+      Op: 0
+      Value: 0.25
+    ActionModifiers: []
+    Flags: 0
+    ForbidsActions: []
+    AppliesTo: 0
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
     DodgeBonus: 0
     BlockBonus: 0
-    IncomingAccuracyBonus: 0.25
+    IncomingAccuracyBonus: 0
     DodgeDistanceBonus: 0
     ActionSpeedMult: 1
     MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
@@ -72,10 +89,6 @@ MonoBehaviour:
     KeepsBlock: 0
     Unstoppable: 0
     RedirectsHits: 0
-    DamageDealtMult: 1
-    StrainCostMult: 1
-    ForbidsActions: []
-    AppliesTo: 0
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -96,6 +109,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 1
+    Color: {r: 1, g: 0.35, b: 0.9, a: 1}
+    Width: 0.05
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

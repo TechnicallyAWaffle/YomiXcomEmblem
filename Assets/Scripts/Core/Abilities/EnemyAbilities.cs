@@ -11,6 +11,8 @@ namespace TacticsGame.Core
     /// <summary>Polystep: blink (teleport) to the target point, as far as Range that way, onto the nearest walkable ground.</summary>
     public class BlinkBehavior : ActionBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Gapcloser | AbilityRole.Escape; }
+
         public override bool MovesUser { get { return true; } }   // not while airborne
 
         public override bool CanStart(BattleSimulation sim, Unit actor, UnitCommand cmd, out string reason)
@@ -32,15 +34,24 @@ namespace TacticsGame.Core
 
     /// <summary>
     /// Flowing Death: a melee strike that speeds up as it chains. Each use opens (or extends) a "flow" window that lasts
-    /// ChainWindow seconds past its recovery and counts the uses so far (its Stacks, shown over the unit); while it is open
-    /// the next Flowing Death, at any target, winds up WindupStep faster per stack, down to MinWindup.
+    /// chain_window seconds past its recovery and counts the uses so far (its Stacks, shown over the unit); while it is open
+    /// the next Flowing Death, at any target, winds up windup_step faster per stack, down to min_windup (its Params).
     /// </summary>
     public class FlowingDeathBehavior : BasicAttackBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Chain; }
+
         public const string FlowStatus = StatusIds.Flow;
-        public const float WindupStep = 0.1f;
-        public const float MinWindup = 0.1f;
-        public const float ChainWindow = 1f;
+
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get
+            {
+                yield return new BehaviorParam("windup_step", 0.1f);
+                yield return new BehaviorParam("min_windup", 0.1f);
+                yield return new BehaviorParam("chain_window", 1f);
+            }
+        }
 
         public static int Stacks(Unit actor)
         {
@@ -51,7 +62,8 @@ namespace TacticsGame.Core
         public override float WindupSeconds(BattleSimulation sim, Unit actor, ActionDefinition def)
         {
             float windup = actor.ActionStat(def, ActionStat.Windup);
-            return Mathf.Max(Mathf.Min(MinWindup, windup), windup - WindupStep * Stacks(actor));
+            float min = Param(def, "min_windup");
+            return Mathf.Max(Mathf.Min(min, windup), windup - Param(def, "windup_step") * Stacks(actor));
         }
 
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
@@ -59,7 +71,7 @@ namespace TacticsGame.Core
             base.OnResolve(sim, a, effects);
             if (a.IsFree) return;
             var actor = a.Actor;
-            float windowEnds = sim.Now + a.Stat(ActionStat.Recovery) / actor.EffectiveActionSpeed() + ChainWindow;
+            float windowEnds = sim.Now + a.Stat(ActionStat.Recovery) / actor.EffectiveActionSpeed() + Param(a.Definition, "chain_window");
             var flow = actor.GetStatus(FlowStatus);
             if (flow == null)
             {
@@ -78,7 +90,7 @@ namespace TacticsGame.Core
     /// <summary>Repel: Bash's line push (everyone in the line shoved DisplaceDistance straight away), without its wall bonus.</summary>
     public class RepelBehavior : BashBehavior
     {
-        protected override float WallBonus { get { return 1f; } }
+        protected override float WallMultiplierDefault { get { return 1f; } }   // it pushes, without the wall bonus
     }
 
     /// <summary>
@@ -87,6 +99,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class ChargedHealBehavior : ActionBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Heal; }
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             var target = sim.GetUnit(a.TargetUnitId);
@@ -97,16 +111,28 @@ namespace TacticsGame.Core
     }
 
     /// <summary>
-    /// Charge (aimed at a point; Range is how far it runs): after the windup the Brutebeast rushes that way at Speed and
+    /// Charge (aimed at a point; Range is how far it runs): after the windup the Brutebeast rushes that way at "speed" and
     /// drags every enemy in its path along in front of it. The first of them driven into a wall (or the face of higher
     /// ground) stops the lot: then each one dragged takes this action's hit (a Heavy impact, Damage and StunDuration),
     /// which can't miss. A charge that is never stopped, or catches no one, deals nothing.
     /// </summary>
     public class ChargeBehavior : ActionBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Rush; }
+
         public override bool MovesUser { get { return true; } }   // not while airborne
 
-        public const float Speed = 18f;   // m/s
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get
+            {
+                yield return new BehaviorParam("speed", 18f);            // m/s
+                yield return new BehaviorParam("wall_tolerance", 0.3f);  // stopped this far short of its full run: it hit a wall
+            }
+        }
+
+        // Reads its numbers for PlanCharge (static: the AI plans charges too).
+        private static readonly ChargeBehavior Numbers = new ChargeBehavior();
         public const string WallTag = "charge_wall";
         private const float Gap = BattleSimulation.StandingGap + 0.05f;   // between the charger and the one it pushes (room to stand)
 
@@ -153,7 +179,7 @@ namespace TacticsGame.Core
                 offsets.Add(offset);
                 float want = Mathf.Max(0f, run + offset - along[i]);
                 float got = Along(sim.Paths.ClampDash(t.Position, t.Position + dir * want) - t.Position, dir);
-                if (got < want - BashBehavior.WallTolerance) stop = Mathf.Min(stop, along[i] + got - offset);
+                if (got < want - Numbers.Param(def, "wall_tolerance")) stop = Mathf.Min(stop, along[i] + got - offset);
             }
             stop = Mathf.Max(0f, stop);
             for (int i = 0; i < plan.Caught.Count; i++)
@@ -163,8 +189,8 @@ namespace TacticsGame.Core
                 plan.CaughtEnds.Add(sim.Paths.ClampDash(t.Position, t.Position + dir * push));
             }
             plan.End = start + dir * stop;
-            plan.Walled = plan.Caught.Count > 0 && stop < actor.ActionStat(def, ActionStat.Range) - BashBehavior.WallTolerance;
-            plan.Seconds = Mathf.Max(BattleSimulation.DashDuration, stop / Speed);
+            plan.Walled = plan.Caught.Count > 0 && stop < actor.ActionStat(def, ActionStat.Range) - Numbers.Param(def, "wall_tolerance");
+            plan.Seconds = Mathf.Max(BattleSimulation.DashDuration, stop / Numbers.Param(def, "speed"));
             return plan;
         }
 

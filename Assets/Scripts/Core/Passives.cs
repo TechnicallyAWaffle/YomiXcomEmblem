@@ -6,14 +6,13 @@ namespace TacticsGame.Core
     /// </summary>
     public static class Passives
     {
-        public const string StrainReliefOnDodge = "strain_relief_on_dodge";   // Melee: shed strain whenever you dodge
-        public const float StrainReliefOnDodgeAmount = 15f;
+        public const string StrainReliefOnDodge = "strain_relief_on_dodge";   // Fighter: shed strain whenever you dodge (BattleSimulation.DodgeStrainRelief)
 
         public static void Attach(BattleSimulation sim)
         {
             sim.Triggers.Subscribe(TriggerType.Dodged, ctx =>
             {
-                if (ctx.Subject.Passives.Contains(StrainReliefOnDodge)) sim.AddStrain(ctx.Subject, -StrainReliefOnDodgeAmount);
+                if (ctx.Subject.Passives.Contains(StrainReliefOnDodge)) sim.AddStrain(ctx.Subject, -sim.DodgeStrainRelief);
             });
         }
     }

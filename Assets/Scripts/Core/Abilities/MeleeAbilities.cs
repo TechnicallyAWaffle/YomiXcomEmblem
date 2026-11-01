@@ -19,6 +19,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class ChainAttackBehavior : BasicAttackBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Chain; }
+
         protected virtual int Followups(ActionDefinition def) { return def.ChainFollowups; }
         protected virtual float CostMultiplier(ActionDefinition def) { return def.ChainCostMultiplier; }
         protected virtual float Window(ActionDefinition def) { return def.ChainWindow; }
@@ -60,17 +62,23 @@ namespace TacticsGame.Core
 
     /// <summary>
     /// Rapid Slices: a quick melee hit and a follow-up ability (Space re-casts it): a chain attack of MaxFollowups more
-    /// slices at FollowupCostMultiplier of the strain ("rapid_chain"), whatever its asset's chain fields say.
+    /// slices at followup_cost of the strain ("rapid_chain"), its own Params rather than its asset's chain fields.
     /// </summary>
     public class RapidSlicesBehavior : ChainAttackBehavior
     {
-        public const int MaxFollowups = 4;
-        public const float FollowupCostMultiplier = 0.5f;
-        public const float FollowupWindow = 1.0f;   // seconds after recovery ends
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get
+            {
+                yield return new BehaviorParam("followups", 4f);
+                yield return new BehaviorParam("followup_cost", 0.5f);
+                yield return new BehaviorParam("followup_window", 1f);   // seconds after recovery ends
+            }
+        }
 
-        protected override int Followups(ActionDefinition def) { return MaxFollowups; }
-        protected override float CostMultiplier(ActionDefinition def) { return FollowupCostMultiplier; }
-        protected override float Window(ActionDefinition def) { return FollowupWindow; }
+        protected override int Followups(ActionDefinition def) { return Mathf.RoundToInt(Param(def, "followups")); }
+        protected override float CostMultiplier(ActionDefinition def) { return Param(def, "followup_cost"); }
+        protected override float Window(ActionDefinition def) { return Param(def, "followup_window"); }
         public override string ChainStatus(ActionDefinition def) { return StatusIds.RapidChain; }
         // Rapid Slices has no cooldown to skip.
         public override bool IgnoresCooldown(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId) { return false; }
@@ -78,16 +86,23 @@ namespace TacticsGame.Core
 
     /// <summary>
     /// Steady Strikes: a deliberate melee strike. Transcended (hold its button; ActionDefinition.TranscendStrain extra
-    /// strain) it is the empowered blow: TranscendAccuracyBonus more hit chance (80% -> 100%) and it pierces
-    /// TranscendBlockPierce of block.
+    /// strain) it is the empowered blow: transcend_accuracy more hit chance (80% -> 100%) and it pierces transcend_pierce
+    /// of block (its Params).
     /// </summary>
     public class SteadyStrikesBehavior : BasicAttackBehavior
     {
-        public override float PreviewAccuracyBonus(ActionDefinition def, bool transcended) { return transcended ? TranscendAccuracyBonus : 0f; }
+        public override float PreviewAccuracyBonus(ActionDefinition def, bool transcended) { return transcended ? Param(def, "transcend_accuracy") : 0f; }
 
         public const string EmpoweredTag = "steady_empowered";
-        public const float TranscendAccuracyBonus = 0.2f;
-        public const float TranscendBlockPierce = 0.25f;
+
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get
+            {
+                yield return new BehaviorParam("transcend_accuracy", 0.2f);
+                yield return new BehaviorParam("transcend_pierce", 0.25f);
+            }
+        }
 
         public override void OnWindupStart(BattleSimulation sim, ActionInstance a)
         {
@@ -102,20 +117,21 @@ namespace TacticsGame.Core
             effects.Add(new AttackEffect
             {
                 Source = a.Actor, TargetId = target.Id, Definition = a.Definition, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag,
-                AccuracyBonus = empowered ? TranscendAccuracyBonus : 0f,
-                BlockPierceBonus = empowered ? TranscendBlockPierce : 0f,
+                AccuracyBonus = empowered ? Param(a.Definition, "transcend_accuracy") : 0f,
+                BlockPierceBonus = empowered ? Param(a.Definition, "transcend_pierce") : 0f,
             });
         }
     }
 
     /// <summary>
     /// Final Cut (shown as Certainty): needs Battle Trance or Wrath (RequiredStatus "trance|wrath"), and keeps it. Execute:
-    /// damage grows with the target's missing health, up to double. A kill extends the trance or Wrath by TranceExtension seconds.
+    /// damage grows with the target's missing health, up to double. A kill extends the trance or Wrath by kill_extends seconds.
     /// </summary>
     public class FinalCutBehavior : ActionBehavior
     {
         public const string PrimaryTag = "final_cut";
-        public const float TranceExtension = 3f;
+
+        public override IEnumerable<BehaviorParam> Parameters { get { yield return new BehaviorParam("kill_extends", 3f); } }
         private static readonly string[] Extends = { StatusIds.Trance, StatusIds.Wrath };
 
         public override void Attach(BattleSimulation sim)
@@ -129,7 +145,7 @@ namespace TacticsGame.Core
                     var status = attacker.GetStatus(id);
                     if (status == null) continue;
                     var extended = status.Copy();
-                    extended.ExpiresAt += TranceExtension;
+                    extended.ExpiresAt += Param(ctx.Action, "kill_extends");
                     sim.ApplyStatus(attacker, extended, attacker);   // refresh: same status, later end
                 }
             });
@@ -156,9 +172,11 @@ namespace TacticsGame.Core
     /// </summary>
     public class PhantomStrikeBehavior : ActionBehavior
     {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Opener; }
+
         public override bool MovesUser { get { return true; } }   // not while airborne
 
-        public const float StrikeReach = 2f;
+        public override IEnumerable<BehaviorParam> Parameters { get { yield return new BehaviorParam("strike_reach", 2f); } }   // the slash lands if the dash ends this close
 
         public override bool ClosesDistance { get { return true; } }   // a chase goes the moment the dash can reach
 
@@ -172,7 +190,7 @@ namespace TacticsGame.Core
             Vector3 beside = target.Position - from * (actor.BodyRadius + target.BodyRadius + 0.3f);
             Vector3 landed = sim.Paths.ClampDash(target.Position, beside);   // from the target out: walls between don't matter
             sim.SlideUnitTo(actor, landed, BattleSimulation.DashDuration, target.Position);
-            if (Vector3.Distance(landed, target.Position) > StrikeReach) return;
+            if (Vector3.Distance(landed, target.Position) > Param(a.Definition, "strike_reach")) return;
             effects.Add(new AttackEffect { Source = actor, TargetId = target.Id, Definition = a.Definition, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag, IgnoreRange = true });
         }
     }

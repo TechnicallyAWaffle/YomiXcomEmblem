@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: sanctity
   DisplayName: Sanctity
   BehaviorId: aura
+  Roles: 0
   Description: Emit a dome of protection around you. Projectiles headed into it are
     drawn to you, and melee attacks on allies inside it hit you instead.
   Targeting: 1
@@ -48,23 +49,32 @@ MonoBehaviour:
   AuraStatuses:
   - Id: sheltered
     Duration: 1.5
+    Modifiers: []
+    ActionModifiers: []
+    Flags: 64
+    ForbidsActions: []
+    AppliesTo: 1
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
     DodgeDistanceBonus: 0
     ActionSpeedMult: 1
     MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
     StunImmune: 0
     KeepsBlock: 0
     Unstoppable: 0
-    RedirectsHits: 1
-    DamageDealtMult: 1
-    StrainCostMult: 1
-    ForbidsActions: []
-    AppliesTo: 1
+    RedirectsHits: 0
   AuraSeconds: 1.5
   ChannelSeconds: 0
   ChannelNeedsSight: 0
@@ -77,12 +87,25 @@ MonoBehaviour:
   SelfStatuses:
   - Id: sanctity
     Duration: 1.5
+    Modifiers: []
+    ActionModifiers: []
+    Flags: 0
+    ForbidsActions: []
+    AppliesTo: 0
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
     DodgeDistanceBonus: 0
     ActionSpeedMult: 1
     MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
@@ -90,10 +113,6 @@ MonoBehaviour:
     KeepsBlock: 0
     Unstoppable: 0
     RedirectsHits: 0
-    DamageDealtMult: 1
-    StrainCostMult: 1
-    ForbidsActions: []
-    AppliesTo: 0
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
   TargetStatusesDuringWindup: []
@@ -116,6 +135,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 8
+    Color: {r: 1, g: 0.88, b: 0.45, a: 1}
+    Width: 0.06
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

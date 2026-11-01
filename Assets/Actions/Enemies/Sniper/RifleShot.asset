@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: sniper_rifle_shot
   DisplayName: Rifle Shot
   BehaviorId: basic_attack
+  Roles: 0
   Description: Basic ranged attack. Always available.
   Targeting: 2
   Range: 14
@@ -77,6 +78,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 1
+    Color: {r: 1, g: 0.95, b: 0.7, a: 1}
+    Width: 0.035
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

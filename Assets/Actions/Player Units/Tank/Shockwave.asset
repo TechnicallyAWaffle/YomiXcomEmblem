@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: shockwave
   DisplayName: Tremors
   BehaviorId: area_attack
+  Roles: 0
   Description: Slam the ground, stunning every enemy around you and building their
     strain.
   Targeting: 1
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 5
+    Color: {r: 0.95, g: 0.8, b: 0.55, a: 1}
+    Width: 0.16
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

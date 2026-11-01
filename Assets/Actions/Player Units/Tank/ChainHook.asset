@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: chain_hook
   DisplayName: Forced Accession
   BehaviorId: basic_attack
+  Roles: 0
   Description: Drag an enemy towards you, stunning them briefly.
   Targeting: 2
   Range: 15
@@ -77,6 +78,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 6
+    Color: {r: 0.75, g: 0.75, b: 0.8, a: 1}
+    Width: 0.06
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

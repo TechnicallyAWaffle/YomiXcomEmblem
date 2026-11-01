@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: skyward_demise
   DisplayName: Skyward Demise
   BehaviorId: leap
+  Roles: 0
   Description: Leap forward and high into the air, your next ability deals increased
     damage and returns you to the ground.
   Targeting: 4
@@ -58,12 +59,28 @@ MonoBehaviour:
   SelfStatuses:
   - Id: skyward
     Duration: 2.5
+    Modifiers:
+    - Stat: 10
+      Op: 1
+      Value: 1.5
+    ActionModifiers: []
+    Flags: 0
+    ForbidsActions: []
+    AppliesTo: 0
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
     DodgeDistanceBonus: 0
     ActionSpeedMult: 1
     MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
     Rooted: 0
     Untargetable: 0
     BreaksOnDamage: 0
@@ -71,10 +88,6 @@ MonoBehaviour:
     KeepsBlock: 0
     Unstoppable: 0
     RedirectsHits: 0
-    DamageDealtMult: 1.5
-    StrainCostMult: 1
-    ForbidsActions: []
-    AppliesTo: 0
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
   TargetStatusesDuringWindup: []
@@ -97,6 +110,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 8
+    Color: {r: 0.6, g: 0.9, b: 1, a: 1}
+    Width: 0.06
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15

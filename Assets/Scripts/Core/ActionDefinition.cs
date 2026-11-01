@@ -3,6 +3,15 @@ using UnityEngine;
 
 namespace TacticsGame.Core
 {
+    /// <summary>One of a behavior's own numbers, set for one ability (ActionDefinition.Params; see ActionBehavior.Parameters).</summary>
+    [System.Serializable]
+    public struct BehaviorParam
+    {
+        public string Key;
+        public float Value;
+        public BehaviorParam(string key, float value) { Key = key; Value = value; }
+    }
+
     /// <summary>What an ability's effect looks like when it lands (CombatVfx). Auto: picked from the ability itself.</summary>
     public enum VfxKind { Auto, Tracer, Bolt, Slash, Beam, Shockwave, Chain, Heal, Buff, Lob }
 
@@ -34,6 +43,8 @@ namespace TacticsGame.Core
         public string DisplayName = "Attack";
         [Tooltip("See ActionBehaviors: basic_attack, self_buff, area_attack, heal_displace, snipe, take_aim, retaliate, trap, rapid_slices, steady_strikes, final_cut, block, dash, bash, phantom_strike, mesmerize, stutter, lance, subjugate, fatebreak, status_spell, teleport, levitate, blink, flowing_death, repel, charged_heal, charge, chain_attack, leap, arrival, aura, aerial_slam.")]
         public string BehaviorId = "basic_attack";
+        [Tooltip("What the AI uses it for. Nothing ticked: worked out from its behavior and numbers (see AbilityRole).")]
+        public AbilityRole Roles = AbilityRole.None;
         [Tooltip("Player-facing text shown when hovering the ability in the orders panel.")]
         [TextArea(2, 5)]
         public string Description = "";
@@ -164,6 +175,10 @@ namespace TacticsGame.Core
         // These flags make THIS action's windup more fragile (e.g. Tracking Shot).
         public bool InterruptedByDamage = false;      // broken by any landed hit, even Light
         public bool InterruptedByStun = false;        // broken by any stun
+
+        [Header("Behavior numbers")]
+        [Tooltip("Numbers its behavior has of its own (Rapid Slices' follow-up discount, Bash's wall bonus...), by key; any left out keep the behavior's default. The Tuning & Text window lists them.")]
+        public List<BehaviorParam> Params = new List<BehaviorParam>();
 
         [HideInInspector] public int DataVersion;   // which SquadAssets data revision this asset was last written with
 

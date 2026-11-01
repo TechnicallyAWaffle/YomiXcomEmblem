@@ -22,6 +22,8 @@ namespace TacticsGame.Presentation
             public List<UpgradeDefinition> Upgrades;
             /// <summary>The class abilities it brings (set by the pre-battle screen); null = all of its definition's.</summary>
             [System.NonSerialized] public List<ActionDefinition> Loadout;
+            /// <summary>Share of max health it starts without (a squad member's wounds from earlier battles); 0 = unhurt.</summary>
+            [System.NonSerialized] public float Wounds;
         }
 
         public List<Placement> Placements = new List<Placement>();
@@ -36,7 +38,9 @@ namespace TacticsGame.Presentation
             {
                 var p = Placements[i];
                 string id = p.Definition.name + "_" + i;
-                state.Units.Add(Unit.FromDefinition(p.Definition, id, p.Team, p.View.transform.position, p.Loadout, p.Upgrades));
+                var unit = Unit.FromDefinition(p.Definition, id, p.Team, p.View.transform.position, p.Loadout, p.Upgrades);
+                Campaign.ApplyWounds(unit, p.Wounds);
+                state.Units.Add(unit);
                 p.View.UnitId = id;
                 UnitLooks.Apply(p.View, p.Definition);
                 Registry[id] = p.View;

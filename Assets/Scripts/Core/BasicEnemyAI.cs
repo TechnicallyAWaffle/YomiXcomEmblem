@@ -196,7 +196,7 @@ namespace TacticsGame.Core
             string why;
 
             // A shooter facing a melee swing: dash out of its reach, Transcended if a plain dash falls short.
-            var dash = Find(unit, "dash");
+            var dash = AbilityRoles.Find(unit, AbilityRole.Dash);
             float reach = incoming.Stat(ActionStat.Range) * BattleSimulation.RangeTolerance;
             if (dash != null && IsRangedUnit(unit) && !incoming.Definition.IsRanged && !unit.IsRooted)
             {
@@ -209,7 +209,7 @@ namespace TacticsGame.Core
 
             // Otherwise guard, timed so the block is still up when the hit lands. A heavy blow (which would put a plain
             // Block on cooldown, or unravel at max strain) gets a Transcended guard when the strain allows.
-            var block = Find(unit, "block");
+            var block = AbilityRoles.Find(unit, AbilityRole.Guard);
             if (block != null && Affordable(sim, unit, block, false))
             {
                 float guard = GuardSeconds(block);
@@ -507,11 +507,8 @@ namespace TacticsGame.Core
             return n;
         }
 
-        protected static ActionDefinition Find(Unit unit, string behaviorId)
-        {
-            foreach (var a in unit.Actions) if (a.BehaviorId == behaviorId) return a;
-            return null;
-        }
+        /// <summary>The unit's first ability for 'role' (see AbilityRole): the AI never looks abilities up by name or behavior.</summary>
+        protected static ActionDefinition Find(Unit unit, AbilityRole role, System.Predicate<ActionDefinition> also = null) { return AbilityRoles.Find(unit, role, also); }
 
         /// <summary>A stand-in for the unit at 'p' (same Id, so sight checks still skip its own body).</summary>
         protected static Unit Ghost(Unit unit, Vector3 p)

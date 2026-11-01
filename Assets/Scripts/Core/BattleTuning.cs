@@ -27,27 +27,32 @@ namespace TacticsGame.Core
         public List<Entry> Overrides = new List<Entry>();
 
         /// <summary>The BattleSimulation fields that can be tuned, in declaration order.</summary>
-        public static List<FieldInfo> TunableFields()
+        public static List<FieldInfo> TunableFields() { return TunableFields(typeof(BattleSimulation)); }
+
+        /// <summary>Any type's tunable fields (public float, int and bool instance fields), in declaration order, base class first: an AI style's numbers.</summary>
+        public static List<FieldInfo> TunableFields(System.Type type)
         {
-            return typeof(BattleSimulation).GetFields(BindingFlags.Public | BindingFlags.Instance)
+            return type.GetFields(BindingFlags.Public | BindingFlags.Instance)
                 .Where(f => !f.IsInitOnly && (f.FieldType == typeof(float) || f.FieldType == typeof(int) || f.FieldType == typeof(bool)))
-                .OrderBy(f => f.MetadataToken).ToList();
+                .OrderBy(f => Depth(f.DeclaringType)).ThenBy(f => f.MetadataToken).ToList();
         }
 
+        private static int Depth(System.Type t) { int d = 0; for (; t != null; t = t.BaseType) d++; return d; }
+
         /// <summary>A field's value as a float (bools 0 / 1).</summary>
-        public static float Read(BattleSimulation sim, FieldInfo f)
+        public static float Read(object owner, FieldInfo f)
         {
-            object v = f.GetValue(sim);
+            object v = f.GetValue(owner);
             if (v is bool) return (bool)v ? 1f : 0f;
             if (v is int) return (int)v;
             return (float)v;
         }
 
-        public static void Write(BattleSimulation sim, FieldInfo f, float value)
+        public static void Write(object owner, FieldInfo f, float value)
         {
-            if (f.FieldType == typeof(bool)) f.SetValue(sim, value >= 0.5f);
-            else if (f.FieldType == typeof(int)) f.SetValue(sim, Mathf.RoundToInt(value));
-            else f.SetValue(sim, value);
+            if (f.FieldType == typeof(bool)) f.SetValue(owner, value >= 0.5f);
+            else if (f.FieldType == typeof(int)) f.SetValue(owner, Mathf.RoundToInt(value));
+            else f.SetValue(owner, value);
         }
 
         public bool TryGet(string field, out float value)

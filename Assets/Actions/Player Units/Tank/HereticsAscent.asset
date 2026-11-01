@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: heretics_ascent
   DisplayName: Heretic's Ascent
   BehaviorId: aerial_slam
+  Roles: 0
   Description: Grab a target and rise into the air before slamming them into the
     ground.
   Targeting: 2
@@ -78,6 +79,12 @@ MonoBehaviour:
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
   ExtraCinematic: 0
+  Visuals:
+    Kind: 3
+    Color: {r: 0.85, g: 0.45, b: 0.3, a: 1}
+    Width: 0.22
+    Pierce: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
-  DataVersion: 14
+  Params: []
+  DataVersion: 15
