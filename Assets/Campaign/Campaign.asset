@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e8065a6a631efd4ab463c1d74f076ad, type: 3}
+  m_Name: Campaign
+  m_EditorClassIdentifier: Apotheom.Presentation::TacticsGame.Presentation.CampaignDefinition
+  DisplayName: The Proving
+  Missions:
+  - {fileID: 11400000, guid: b57ac11ea323fa540aaf1910d39fdb8e, type: 2}
+  - {fileID: 11400000, guid: 3ca3628b8823c3d45b5d0102381857a7, type: 2}
+  - {fileID: 11400000, guid: c63ebb2a44abdff42b1a9d6a3cc23e86, type: 2}
+  - {fileID: 11400000, guid: 55a78af5b4705c94bb2416bbf05e319a, type: 2}
+  - {fileID: 11400000, guid: 4ffa5db303744fe4897f7760415030a4, type: 2}
+  - {fileID: 11400000, guid: fbf8b33ab7bf57c48a0de8269e1aad15, type: 2}
+  - {fileID: 11400000, guid: eafb4deb9bc8dd5459d6649f2811bb12, type: 2}
+  - {fileID: 11400000, guid: 8855971009b005d418ba47abb35e0861, type: 2}
+  - {fileID: 11400000, guid: 508b83ae967cb014fb0dfe3858fb8729, type: 2}
+  - {fileID: 11400000, guid: 4ac7ea2921699784da635ceb8bf4be6a, type: 2}
+  Squad:
+  - {fileID: 11400000, guid: 1398d33ac4149994fa4256a30fb4114a, type: 2}
+  - {fileID: 11400000, guid: a9ec52e8845028b418402d54387b46b9, type: 2}
+  - {fileID: 11400000, guid: 72b277c7261b4d34ab1eae5ebb4463ee, type: 2}
+  - {fileID: 11400000, guid: 29a993e21f7b7e949950208649a1ec08, type: 2}
+  Progression: {fileID: 11400000, guid: 2a6e4e56aaf712e4099f289e80698eff, type: 2}
+  EtchingsBeforeFirstMission: 1
+  StartingAbilityPoints: 1
+  StartingAbilityPointsByUnit: []
+  EtchingsPerMission: 1
+  EtchingsByMission: []

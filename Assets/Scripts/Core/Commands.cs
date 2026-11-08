@@ -5,7 +5,7 @@ namespace TacticsGame.Core
 {
     // HoldGrapple / ReleaseGrapple: a unit holding someone with Subjugate keeps headbutting (until just after the next one)
     // or throws now. Moving is the only other order it takes.
-    public enum CommandType { Action, Move, Wait, ContinueCharge, ReleaseCharge, HoldGrapple, ReleaseGrapple }
+    public enum CommandType { Action, Move, Wait, ContinueCharge, ReleaseCharge, HoldGrapple, ReleaseGrapple, Redirect }   // Redirect: a redirectable channel's next target (Soulseeker; none = stop)
 
     /// <summary>One order for one unit. Build with the static helpers.</summary>
     public class UnitCommand
@@ -15,6 +15,7 @@ namespace TacticsGame.Core
         public ActionDefinition Action;
         public string TargetUnitId;
         public Vector3 TargetPos;
+        public List<Vector3> Waypoints;   // Move: walk through these first, then on to TargetPos (UnitCommand.MoveVia)
         public float WaitSeconds = 0.5f;
         public bool WaitForRange;   // out of range when ordered: melee chases the target, ranged queues until it is in range
         public bool Transcend;      // use the ability's Transcended version (ActionDefinition.CanTranscend), for its extra strain
@@ -44,6 +45,8 @@ namespace TacticsGame.Core
         {
             return new UnitCommand { UnitId = unitId, Type = CommandType.Action, Action = action, TargetUnitId = targetUnitId, TargetPos = destination, WaitForRange = true };
         }
+        /// <summary>A redirectable channel (IRedirectable: Soulseeker) goes on to 'targetUnitId'; null ends the channel.</summary>
+        public static UnitCommand Redirect(string unitId, string targetUnitId) { return new UnitCommand { UnitId = unitId, Type = CommandType.Redirect, TargetUnitId = targetUnitId }; }
         public static UnitCommand HoldGrapple(string unitId) { return new UnitCommand { UnitId = unitId, Type = CommandType.HoldGrapple }; }
         public static UnitCommand ReleaseGrapple(string unitId) { return new UnitCommand { UnitId = unitId, Type = CommandType.ReleaseGrapple }; }
         /// <summary>Throw now, toward 'toward' (the held unit swings round to that side first) instead of the way the holder faces.</summary>
@@ -62,6 +65,11 @@ namespace TacticsGame.Core
         {
             return new UnitCommand { UnitId = unitId, Type = CommandType.Move, TargetPos = pos };
         }
+        /// <summary>One walk through 'waypoints' in order, then on to 'pos' (Shift-click moves), without stopping in between.</summary>
+        public static UnitCommand MoveVia(string unitId, IList<Vector3> waypoints, Vector3 pos)
+        {
+            return new UnitCommand { UnitId = unitId, Type = CommandType.Move, TargetPos = pos, Waypoints = waypoints != null && waypoints.Count > 0 ? new List<Vector3>(waypoints) : null };
+        }
         /// <summary>Focus: stand still and rest off strain (see BattleSimulation.StartWait).</summary>
         public static UnitCommand Wait(string unitId, float seconds)
         {
@@ -74,7 +82,7 @@ namespace TacticsGame.Core
         }
     }
 
-    public enum DecisionKind { Action, DodgeDash, Charge }   // Charge: a charging unit must keep charging or release
+    public enum DecisionKind { Action, DodgeDash, Charge, Redirect }   // Charge: a charging unit must keep charging or release. Redirect: a channel (Soulseeker) needs its next target
 
     /// <summary>The sim is paused because a player unit needs input.</summary>
     public class DecisionRequest

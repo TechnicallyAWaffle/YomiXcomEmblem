@@ -16,8 +16,8 @@ MonoBehaviour:
   DisplayName: Perfect Edge
   BehaviorId: steady_strikes
   Roles: 0
-  Description: A deliberate, steady melee strike. Can be Transcended to make it a
-    guaranteed hit that pierces 25% block.
+  Description: 'A deliberate, steady melee strike that pierces 50% block and stuns
+    for a long duration. Can be Transcended to make it pierce 100% Block instead. '
   Targeting: 2
   Range: 3.25
   IsRanged: 0
@@ -33,7 +33,7 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 0
   Damage: 16
-  BaseAccuracy: 0.7
+  BaseAccuracy: 1
   StunDuration: 0.9
   StrainOnTarget: 8
   StrainOnSelf: 0
@@ -48,8 +48,17 @@ MonoBehaviour:
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonCount: 0
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5
@@ -59,7 +68,50 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
-  TargetStatusesDuringWindup: []
+  TargetStatusesDuringWindup:
+  - Id: immobilized
+    Duration: 0
+    Modifiers:
+    - Stat: 6
+      Op: 1
+      Value: 0
+    - Stat: 7
+      Op: 1
+      Value: 0
+    - Stat: 10
+      Op: 1
+      Value: 0
+    - Stat: 11
+      Op: 1
+      Value: 0
+    ActionModifiers: []
+    Flags: 0
+    ForbidsActions: []
+    AppliesTo: 0
+    Look:
+      Name: 
+      Word: 
+      Color: {r: 0, g: 0, b: 0, a: 0}
+      CountsUp: 0
+      Hidden: 0
+      Important: 0
+    HealPerSecond: 0
+    BreakStun: 0
+    DodgeBonus: 0
+    BlockBonus: 0
+    IncomingAccuracyBonus: 0
+    DodgeDistanceBonus: 0
+    ActionSpeedMult: 1
+    MoveSpeedMult: 1
+    DamageDealtMult: 1
+    StrainCostMult: 1
+    Rooted: 0
+    Untargetable: 0
+    BreaksOnDamage: 0
+    StunImmune: 0
+    KeepsBlock: 0
+    Unstoppable: 0
+    RedirectsHits: 0
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30

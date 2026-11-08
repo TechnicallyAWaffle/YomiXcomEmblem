@@ -1,0 +1,205 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e28427a253197334b818cdd26df77c81, type: 3}
+  m_Name: Threshold
+  m_EditorClassIdentifier: Apotheom.Presentation::TacticsGame.Presentation.MapTemplate
+  DisplayName: The Threshold
+  Description: 'Broken ground at every height: a dais, terraces, towers and rubble,
+    with walls across every lane.'
+  GroundSize: {x: 56, y: 56}
+  Pieces:
+  - Name: Dais
+    Kind: 1
+    Position: {x: 0, y: 0, z: 9}
+    Size: {x: 12, y: 1.2, z: 10}
+    Yaw: 0
+  - Name: Dais_Top
+    Kind: 1
+    Position: {x: 0, y: 1.2, z: 9.5}
+    Size: {x: 6, y: 1.2, z: 5}
+    Yaw: 0
+  - Name: Dais_Rim_W
+    Kind: 0
+    Position: {x: -4.5, y: 1.2, z: 5}
+    Size: {x: 2.5, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: Dais_Rim_E
+    Kind: 0
+    Position: {x: 4.5, y: 1.2, z: 5}
+    Size: {x: 2.5, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: Pillar_SW
+    Kind: 0
+    Position: {x: -9, y: 0, z: 1}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_SE
+    Kind: 0
+    Position: {x: 9, y: 0, z: 1}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_NW
+    Kind: 0
+    Position: {x: -9, y: 0, z: 17}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_NE
+    Kind: 0
+    Position: {x: 9, y: 0, z: 17}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_W
+    Kind: 0
+    Position: {x: -11, y: 0, z: 9}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_E
+    Kind: 0
+    Position: {x: 11, y: 0, z: 9}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Terrace_W
+    Kind: 1
+    Position: {x: -21, y: 0, z: 3}
+    Size: {x: 10, y: 1.2, z: 18}
+    Yaw: 0
+  - Name: Terrace_W_Top
+    Kind: 1
+    Position: {x: -23, y: 1.2, z: 6}
+    Size: {x: 6, y: 1.2, z: 8}
+    Yaw: 0
+  - Name: Terrace_E
+    Kind: 1
+    Position: {x: 21, y: 0, z: 3}
+    Size: {x: 10, y: 1.2, z: 18}
+    Yaw: 0
+  - Name: Terrace_E_Top
+    Kind: 1
+    Position: {x: 23, y: 1.2, z: 6}
+    Size: {x: 6, y: 1.2, z: 8}
+    Yaw: 0
+  - Name: Parapet_W
+    Kind: 0
+    Position: {x: -17, y: 1.2, z: 3}
+    Size: {x: 0.5, y: 1, z: 4}
+    Yaw: 0
+  - Name: Parapet_E
+    Kind: 0
+    Position: {x: 17, y: 1.2, z: 3}
+    Size: {x: 0.5, y: 1, z: 4}
+    Yaw: 0
+  - Name: Tower_NW
+    Kind: 1
+    Position: {x: -22.5, y: 0, z: 22.5}
+    Size: {x: 7, y: 1.2, z: 7}
+    Yaw: 0
+  - Name: Tower_NW_Top
+    Kind: 1
+    Position: {x: -22.5, y: 1.2, z: 22.5}
+    Size: {x: 3, y: 1.2, z: 3}
+    Yaw: 0
+  - Name: Tower_NE
+    Kind: 1
+    Position: {x: 22.5, y: 0, z: 22.5}
+    Size: {x: 7, y: 1.2, z: 7}
+    Yaw: 0
+  - Name: Tower_NE_Top
+    Kind: 1
+    Position: {x: 22.5, y: 1.2, z: 22.5}
+    Size: {x: 3, y: 1.2, z: 3}
+    Yaw: 0
+  - Name: Rubble_SW
+    Kind: 1
+    Position: {x: -11, y: 0, z: -17}
+    Size: {x: 6, y: 0.9, z: 6}
+    Yaw: 0
+  - Name: Rubble_SE
+    Kind: 1
+    Position: {x: 11, y: 0, z: -17}
+    Size: {x: 6, y: 0.9, z: 6}
+    Yaw: 0
+  - Name: Rubble_Heap
+    Kind: 1
+    Position: {x: 0, y: 0, z: -10.5}
+    Size: {x: 4, y: 0.9, z: 3}
+    Yaw: 0
+  - Name: Wall_S
+    Kind: 0
+    Position: {x: 0, y: 0, z: -4}
+    Size: {x: 6, y: 3, z: 0.6}
+    Yaw: 15
+  - Name: Wall_SW
+    Kind: 0
+    Position: {x: -12, y: 0, z: -8}
+    Size: {x: 6, y: 3, z: 0.6}
+    Yaw: -35
+  - Name: Wall_SE
+    Kind: 0
+    Position: {x: 12, y: 0, z: -8}
+    Size: {x: 6, y: 3, z: 0.6}
+    Yaw: 35
+  - Name: Wall_N
+    Kind: 0
+    Position: {x: 0, y: 0, z: 20}
+    Size: {x: 6, y: 3, z: 0.6}
+    Yaw: -10
+  - Name: Wall_NW
+    Kind: 0
+    Position: {x: -14, y: 0, z: 15}
+    Size: {x: 6, y: 3, z: 0.6}
+    Yaw: 40
+  - Name: Wall_NE
+    Kind: 0
+    Position: {x: 14, y: 0, z: 15}
+    Size: {x: 6, y: 3, z: 0.6}
+    Yaw: -40
+  - Name: LowWall_W
+    Kind: 0
+    Position: {x: -6, y: 0, z: -14}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 10
+  - Name: LowWall_E
+    Kind: 0
+    Position: {x: 6, y: 0, z: -14}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: -10
+  - Name: LowWall_FarW
+    Kind: 0
+    Position: {x: -20, y: 0, z: -14}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 60
+  - Name: LowWall_FarE
+    Kind: 0
+    Position: {x: 20, y: 0, z: -14}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: -60
+  - Name: LowWall_NW
+    Kind: 0
+    Position: {x: -6, y: 0, z: 22}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: LowWall_NE
+    Kind: 0
+    Position: {x: 6, y: 0, z: 22}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  PlayerSpawns:
+  - {x: -4.5, y: 0, z: -24}
+  - {x: -1.5, y: 0, z: -24}
+  - {x: 1.5, y: 0, z: -24}
+  - {x: 4.5, y: 0, z: -24}
+  EnemySpawns:
+  - {x: 0, y: 2.4, z: 9.5}
+  - {x: -22, y: 2.4, z: 22}
+  - {x: 22, y: 2.4, z: 22}
+  - {x: -22, y: 2.4, z: 6}
+  - {x: 22, y: 2.4, z: 6}

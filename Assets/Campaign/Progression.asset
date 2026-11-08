@@ -1,0 +1,873 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 73fe7d7d87ed0b94d858f4aff8efe335, type: 3}
+  m_Name: Progression
+  m_EditorClassIdentifier: Core::TacticsGame.Core.ProgressionConfig
+  DefaultStart: 0
+  Classes:
+  - Class: {fileID: 11400000, guid: 1398d33ac4149994fa4256a30fb4114a, type: 2}
+    DefaultAbilities:
+    - {fileID: 11400000, guid: ed447ec3502aa394ea725969066ad9ac, type: 2}
+    - {fileID: 11400000, guid: 804269327a3dc114caac234d2c14f839, type: 2}
+    - {fileID: 11400000, guid: d53286b3cd683b94a893056620996001, type: 2}
+    - {fileID: 11400000, guid: 992fdcefa6a270e4a9b45a54fdff68d7, type: 2}
+    RandomCount: 4
+  - Class: {fileID: 11400000, guid: a9ec52e8845028b418402d54387b46b9, type: 2}
+    DefaultAbilities:
+    - {fileID: 11400000, guid: 21b5f4e1b93dd154e8c4d5db83dedcd6, type: 2}
+    - {fileID: 11400000, guid: 470fadec892047c4c9cd8241a05bd965, type: 2}
+    - {fileID: 11400000, guid: d02dafc6b2de1bd4a82420ff33e94c39, type: 2}
+    - {fileID: 11400000, guid: 054e55497b7ae0f498e94895d8fad8f5, type: 2}
+    RandomCount: 4
+  - Class: {fileID: 11400000, guid: 72b277c7261b4d34ab1eae5ebb4463ee, type: 2}
+    DefaultAbilities:
+    - {fileID: 11400000, guid: f2ff342cf93c51f4fbb36989923d3d5b, type: 2}
+    - {fileID: 11400000, guid: d7ebf1ba5a75e72409928babfabda946, type: 2}
+    - {fileID: 11400000, guid: 89c425610acc93343802068419dad0d2, type: 2}
+    - {fileID: 11400000, guid: 5f766a43f40a66e4c95aab556b2e1338, type: 2}
+    RandomCount: 4
+  - Class: {fileID: 11400000, guid: 29a993e21f7b7e949950208649a1ec08, type: 2}
+    DefaultAbilities:
+    - {fileID: 11400000, guid: db087f16b3a1a104db6f6dcbeb5bb34c, type: 2}
+    - {fileID: 11400000, guid: 69ee16896e24f8d4e99f6a9870d832d8, type: 2}
+    - {fileID: 11400000, guid: c93b494478ef8914a85508738f3b1f15, type: 2}
+    - {fileID: 11400000, guid: 69ee16896e24f8d4e99f6a9870d832d8, type: 2}
+    RandomCount: 4
+  DefaultAbilityCost: 2
+  AbilityCosts:
+  - Ability: {fileID: 11400000, guid: ed447ec3502aa394ea725969066ad9ac, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: e79c27fd67d2ac148b4b5e5c8a38c6ab, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 8aa261cb29640e24e9fcf974f6f309b0, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 804269327a3dc114caac234d2c14f839, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 992fdcefa6a270e4a9b45a54fdff68d7, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: d53286b3cd683b94a893056620996001, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: a4f4773e49e3ea44481848ca112f8fa6, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 96c0392ca5dad4f4aafab48f5a26b021, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 8a94c10ea8430dd4fb371a848fa41435, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 75bf72b01ddd8b742992a083ad15700c, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: b39804455d66a104c8314500ee330270, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: d758801727242194dbd6f99521bfcbb0, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: d6136dcc489e5284d8b3f71bedbb9e13, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 3e38bc8d895694b418649d7a6fa26929, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 21b5f4e1b93dd154e8c4d5db83dedcd6, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: c61c8afcd9c12a243866e184ae07dd91, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 470fadec892047c4c9cd8241a05bd965, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: d02dafc6b2de1bd4a82420ff33e94c39, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: b6ec1bbfd8c979249b653c9bf64dbd25, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 8d503594631c6304eab71912f968b659, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 054e55497b7ae0f498e94895d8fad8f5, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: be7126f513a662f4aa3e4698e74ddd43, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: f2ff342cf93c51f4fbb36989923d3d5b, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: d7ebf1ba5a75e72409928babfabda946, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 024417c845c21fb42be7c79f4a2b2127, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 89c425610acc93343802068419dad0d2, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 5f766a43f40a66e4c95aab556b2e1338, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 70b2a9303d8007d41bb3dbbb028c9be2, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 5527f3bda48cdbe46b9023f9efc0e39e, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 9f7e7ad6405913b49bea20ca49f60764, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: fc2e8dbe4b319b74f979ffcbe10844cc, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: c525e06230308c04e9197d70d385aab0, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 69ee16896e24f8d4e99f6a9870d832d8, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: db087f16b3a1a104db6f6dcbeb5bb34c, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 30a0c3cddcb90c84c9088162dc75e1ef, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: c93b494478ef8914a85508738f3b1f15, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 636cd06b6273b214c8c359b59e9ec314, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 224a9986618eae048b37d1922d79a673, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 5e02e71cf8ebdd649a4d33a1fd316ac0, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 9097ce0cdffdf3c47989fd1ba7cc81ac, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: e372d47123abfb544ad97c14b028b967, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 40a540221bfae974f84cfb17a13acdd7, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 10f76dd7dc6987f4f9bc9f6ddae414eb, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: ec929a2d16adf37409c4ef47739ea136, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 34f4c2068097208499830a3cbcb7a5ed, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: e9efe18f06677ef41a088738ea4e41fd, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: fa680acf924e31144a146c6f3e408445, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 6926aa57d45a1d24fa447fecbafcf2aa, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 111f74f594fb58e4b9f6e311e260f3f4, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 7597eb904873ed744b92d1f6c8ec6dff, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 78710ca59070a3643a73d66811114661, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: ab774ac40e9c7594db3c51a7d50a5948, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 1b3d807d3d608424893e521bdd9914fd, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 7179662d8b21d8644b817cfb476f538d, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: b46093a9b498ff1439151b8cb3158052, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 7216a5687a8f6dc48a4356a68e6e6846, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: b4b3b7360d8423e43a153e2a3390c5d9, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 3261866804ef5ec4fbbb11693dc815bb, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 7904612fa8ace5048b871a5a2812f391, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: ab86c53f26e675e469554d84fbab632b, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 472f9240083db6745894df677cd0c311, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 0a2bcded824a85047943725a1b92634c, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 6a5cd362e29d8a44ba42e04bff36afbe, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 4896568d5c4cf5e488bf13c2e39ae88f, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 8121f2e9a05ee924fb9e09f328249ffb, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: fe9a08a0bb8da994b8ab4c3d47294b59, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: a7ab9457c7512714c9096a54c8199aa1, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: c6b0c744386be3644a61d261acf6a1c5, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 68025a0293196b745a8f5ac620822522, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 6ccc81c39058bb042b090858c17b2688, type: 2}
+    Cost: 3
+  AbilitiesOffered: 6
+  Etchings:
+  - Id: minds_reach
+    Name: The Mind's Reach Grows
+    Description: Increase maximum strain by 30 and the range of all of your abilities
+      by 30%.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 1
+      Op: 0
+      Value: 30
+    ActionModifiers:
+    - ActionId: 
+      Stat: 4
+      Op: 1
+      Value: 1.3
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: senses_of_closure
+    Name: Senses of Closure
+    Description: Your targeted abilities wind up faster the closer you are to your
+      target when the windup starts, up to 50% faster.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: closing_windup
+    Params:
+    - Key: max_bonus
+      Value: 0.5
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: senses_of_space
+    Name: Senses of Space
+    Description: Gain 2 m/s movement speed and 50% increased dash distance.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 7
+      Op: 0
+      Value: 2
+    - Stat: 8
+      Op: 1
+      Value: 1.5
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: living_carapace
+    Name: Living Carapace
+    Description: Gain 30 maximum health. Guarding grants 25% more Block.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 0
+      Op: 0
+      Value: 30
+    - Stat: 12
+      Op: 1
+      Value: 1.25
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: mantra_of_focus
+    Name: Mantra of Focus
+    Description: Reach Clear Mind 50% faster (stacks multiplicatively) and shed 5
+      more strain per second while in Clear Mind.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 13
+      Op: 1
+      Value: 0.5
+    - Stat: 14
+      Op: 0
+      Value: 5
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: persistent_algorithms
+    Name: Persistent Algorithms
+    Description: Using strain grants a stack of Compiled for 1 second, up to 5. Each
+      stack reduces your strain costs by 10%, up to 50%.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: compiled
+    Params:
+    - Key: seconds
+      Value: 1
+    - Key: max_stacks
+      Value: 5
+    - Key: per_stack
+      Value: 0.1
+    - Key: max_reduction
+      Value: 0.5
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: etching_of_efficiency
+    Name: Etching of Efficiency
+    Description: 'Etch onto an ability: 40% reduced cooldown (stacks multiplicatively).'
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers:
+    - ActionId: 
+      Stat: 3
+      Op: 1
+      Value: 0.6
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: etching_of_summation
+    Name: Etching of Summation
+    Description: 'Etch onto an ability: 30% increased damage (stacks multiplicatively).'
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers:
+    - ActionId: 
+      Stat: 0
+      Op: 1
+      Value: 1.3
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: etching_of_complexity
+    Name: Etching of Complexity
+    Description: 'Etch onto an ability: 50% increased range, radius and knockback
+      (stacks multiplicatively).'
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers:
+    - ActionId: 
+      Stat: 4
+      Op: 1
+      Value: 1.5
+    - ActionId: 
+      Stat: 10
+      Op: 1
+      Value: 1.5
+    - ActionId: 
+      Stat: 12
+      Op: 1
+      Value: 1.5
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: etching_of_recurrence
+    Name: Etching of Recurrence
+    Description: 'Etch onto an ability: 40% increased duration of its stuns, buffs
+      and debuffs (stacks multiplicatively).'
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers:
+    - ActionId: 
+      Stat: 5
+      Op: 1
+      Value: 1.4
+    - ActionId: 
+      Stat: 15
+      Op: 1
+      Value: 1.4
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: symbols_of_memory
+    Name: Symbols of Memory
+    Description: Gain 2 ability points.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 2
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: burst_of_cognition
+    Name: Burst of Cognition
+    Description: 'Etch onto an ability: 30% shorter windup (stacks multiplicatively).'
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers:
+    - ActionId: 
+      Stat: 1
+      Op: 1
+      Value: 0.7
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: processing_proxies
+    Name: Processing Proxies
+    Description: 'Etch onto an ability: 30% shorter recovery (stacks multiplicatively).'
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers:
+    - ActionId: 
+      Stat: 2
+      Op: 1
+      Value: 0.7
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: revenge_maxim
+    Name: Revenge Maxim
+    Description: 'After a Transcended Block, gain REVENGE for 1 second: your next
+      ability in that time spends it and winds up 75% faster.'
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: revenge_maxim
+    Params:
+    - Key: seconds
+      Value: 1
+    - Key: windup_mult
+      Value: 0.25
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: suffer_beyond_your_limits
+    Name: Suffer Beyond Your Limits
+    Description: You can spend strain at or past maximum strain. A strain cost that
+      goes past your maximum also costs health equal to 60% of it (20% less for each
+      extra copy).
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: suffer_beyond
+    Params:
+    - Key: health_share
+      Value: 0.6
+    - Key: per_copy
+      Value: 0.2
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: perception_for_violence
+    Name: Perception for Violence
+    Description: Your abilities wind up 30% faster against stunned enemies.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: perception_for_violence
+    Params:
+    - Key: bonus
+      Value: 0.3
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: cannibalize_cognition
+    Name: Cannibalize Cognition
+    Description: Dealing the killing blow to an enemy reduces your strain by 40.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: cannibalize_cognition
+    Params:
+    - Key: relief
+      Value: 40
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: despair_and_panic
+    Name: Despair and Panic
+    Description: Your abilities put 25% more strain on the enemies they hit.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 15
+      Op: 1
+      Value: 1.25
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: imperceptible_steps
+    Name: Imperceptible Steps
+    Description: Gain 20% dodge. Dodging has a 50% chance to break every ranged attack
+      winding up at you.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 4
+      Op: 0
+      Value: 0.2
+    ActionModifiers: []
+    Trait: imperceptible_steps
+    Params:
+    - Key: chance
+      Value: 0.5
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: body_on_strings
+    Name: Body On Strings
+    Description: Etch onto an ability, gaining the option to Transcend it for +10
+      strain and granting you Unstoppable while it winds up.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 1
+    GrantStrain: 10
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: uncloud_the_mind
+    Name: Uncloud The Mind
+    Description: Etch onto an ability, gaining the option to Transcend it for +15
+      strain and reducing its recovery to 0.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 2
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: repetition_is_strength
+    Name: Repetition Is Strength
+    Description: Gain ramping movement speed while moving. After 1 second of moving
+      you become Unstoppable until you stop.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: repetition_is_strength
+    Params:
+    - Key: speed_per_second
+      Value: 0.25
+    - Key: unstoppable_after
+      Value: 1
+    - Key: faster
+      Value: 0.3
+    - Key: max_seconds
+      Value: 8
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: imprinted_memory
+    Name: Imprinted Memory
+    Description: Etch onto an ability to lower its strain cost by 40%. An ability
+      with no strain cost instead sheds 7 strain when used.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers:
+    - ActionId: 
+      Stat: 7
+      Op: 1
+      Value: 0.6
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers:
+    - ActionId: 
+      Stat: 7
+      Op: 0
+      Value: -7
+    RemovesBehaviors: []
+  - Id: witless
+    Name: Witless
+    Description: Gain 40% maximum health. You can no longer Block.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 0
+      Op: 1
+      Value: 1.4
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors:
+    - block
+  - Id: dance_between_their_rage
+    Name: Dance Between Their Rage
+    Description: Gain 35% dodge. You can no longer Dash.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 4
+      Op: 0
+      Value: 0.35
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors:
+    - dash
+  - Id: echo
+    Name: Carved Echo
+    Description: Etch onto an ability to gain the option to Transcend it for +30
+      strain and refund its cooldown upon use.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 3
+    GrantStrain: 30
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: fractures_of_stress
+    Name: Fractures Of Stress
+    Description: Once per battle, when a hit takes you under 30% health, become UNSTOPPABLE
+      and heal 30% of your maximum health over 3 seconds.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: fractures_of_stress
+    Params:
+    - Key: below
+      Value: 0.3
+    - Key: heal_share
+      Value: 0.3
+    - Key: seconds
+      Value: 3
+    - Key: once_per_battle
+      Value: 1
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: flow_state
+    Name: Flow State
+    Description: Etch onto an ability to grant you the option to Transcend it for
+      +15 Strain. When Transcended, you gain 75% Dodge for 2s when cast.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params:
+    - Key: dodge
+      Value: 0.75
+    - Key: seconds
+      Value: 2
+    AbilityPoints: 0
+    Grant: 4
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: untethered_to_sanity
+    Name: Untethered To Sanity
+    Description: Reduce your maximum Strain by 30%. Unravel's stun is 75% shorter
+      for you.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 1
+      Op: 1
+      Value: 0.7
+    ActionModifiers: []
+    Trait: untethered_to_sanity
+    Params:
+    - Key: stun_mult
+      Value: 0.25
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: quickness_and_lethargy
+    Name: Quickness And Lethargy
+    Description: Etch onto an ability to grant the option to Transcend it for +25
+      Strain. When Transcended, the ability's windup is reduced by 75%, but its recovery
+      is increased by 25%.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params:
+    - Key: windup_mult
+      Value: 0.25
+    - Key: recovery_mult
+      Value: 1.25
+    AbilityPoints: 0
+    Grant: 5
+    GrantStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: stepweaver
+    Name: Stepweaver
+    Description: Reduce your maximum health and strain by 30%. Dash and Transcended
+      Dash cost 75% less Strain.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 0
+      Op: 1
+      Value: 0.7
+    - Stat: 1
+      Op: 1
+      Value: 0.7
+    ActionModifiers:
+    - ActionId: dash
+      Stat: 7
+      Op: 1
+      Value: 0.25
+    - ActionId: dash
+      Stat: 16
+      Op: 1
+      Value: 0.25
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: avidous_march
+    Name: Avidous March
+    Description: Gain a burst of 100% increased movespeed at the start of each unique
+      move action that decays to 25% over 0.75 seconds.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: avidous_march
+    Params:
+    - Key: start_bonus
+      Value: 1
+    - Key: end_bonus
+      Value: 0.25
+    - Key: seconds
+      Value: 0.75
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: desecrate_your_being
+    Name: Desecrate Your Being
+    Description: Becoming Unraveled deals 35% maximum health damage to you but no
+      longer stuns you. Instead, you deal 50% more damage for as long as the stun
+      would have lasted.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: desecrate_your_being
+    Params:
+    - Key: health_share
+      Value: 0.35
+    - Key: damage_bonus
+      Value: 0.5
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: instinct_overtakes_methods
+    Name: Instinct Overtakes Methods
+    Description: Gain 50% Dodge. You now always automatically Dodge directly towards
+      your target.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 4
+      Op: 0
+      Value: 0.5
+    ActionModifiers: []
+    Trait: instinct_overtakes_methods
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: lucid_dreams
+    Name: Lucid Dreams
+    Description: While you have Clear Mind, your ability cooldowns are also reduced
+      by 0.1s every 0.25 seconds.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: lucid_dreams
+    Params:
+    - Key: every
+      Value: 0.25
+    - Key: cut
+      Value: 0.1
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  EtchingsOffered: 3
+  EtchingsTaken: 1

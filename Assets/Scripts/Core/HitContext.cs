@@ -36,5 +36,7 @@ namespace TacticsGame.Core
         public bool Unravel;               // a Heavy hit at max strain: unravels, whatever the target is immune to
         public float StunFor;              // seconds of stun this hit gives (0 = none)
         public bool WillStun { get { return Unravel || StunFor > 0f; } }
+        /// <summary>How it lands: the ability's impact, or Heavy if the attack says so (AttackEffect.Heavy).</summary>
+        public ImpactType Impact { get { return Effect != null && Effect.Heavy ? ImpactType.Heavy : Definition.Impact; } }
     }
 }

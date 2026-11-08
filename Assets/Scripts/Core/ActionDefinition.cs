@@ -69,13 +69,15 @@ namespace TacticsGame.Core
         [Tooltip("Only usable while the actor has this status (e.g. Final Cut needs 'trance'). Several, separated by '|': any one will do (Fatebreak: 'trance|wrath').")]
         public string RequiredStatus = "";
         public bool ConsumesRequiredStatus = false;
+        [Tooltip("The required status must be tied to this order's target (its TargetId, set by SelfStatusesOnHit): the follow-up only goes at the unit the opener hit (Fate Encumbers Its Prey).")]
+        public bool RequiredStatusOnTarget = false;
         [Tooltip("Consume the required status(es) when the action lands instead of when its windup starts (so it still counts for the hit).")]
         public bool ConsumeOnResolve = false;
 
         [Header("Offense")]
         public ImpactType Impact = ImpactType.Light;
         public float Damage = 10f;
-        public float BaseAccuracy = 0.9f;
+        public float BaseAccuracy = 1f;
         public float StunDuration = 0.5f;
         public float StrainOnTarget = 0f;     // strain added to units this action HITS (0 for most actions)
         public float StrainOnSelf = 0f;       // strain the user gains for using it; negative relieves strain (behaviors may discount it)
@@ -100,12 +102,45 @@ namespace TacticsGame.Core
         public List<StatusSpec> AuraStatuses = new List<StatusSpec>();
         [Tooltip("How long the dome lasts once the action lands. A channeled action's dome lasts as long as the channel instead.")]
         public float AuraSeconds = 0f;
+        [Tooltip("The dome is left on the ground at the target point (a zone: Abstract Decay) instead of moving with the user.")]
+        public bool AuraAtTarget = false;
+        [Tooltip("Damage per second to every enemy inside the dome (no hit roll).")]
+        public float AuraDamagePerSecond = 0f;
+        [Tooltip("Strain per second added to every enemy inside the dome.")]
+        public float AuraStrainPerSecond = 0f;
+        [Tooltip("Each second the dome has been up adds this share to its damage per second (Baneful Domain: 0.2 = +20% a second).")]
+        public float AuraDamageGrowth = 0f;
+        [Tooltip("An always-on ability: never ordered; its dome is up around the unit from the start of the battle (or its arrival) until it dies (Wasteful Thought).")]
+        public bool InnatePassive = false;
+
+        [Header("Summon (behavior summon)")]
+        [Tooltip("The unit it brings into the battle, on the user's side.")]
+        public UnitDefinition SummonUnit;
+        [Tooltip("Units it brings in, one of each (Split The Minds' parts).")]
+        public List<UnitDefinition> SummonUnits = new List<UnitDefinition>();
+        [Tooltip("Statuses a hit can put on its target: one of them, picked at random, with each hit (Joyous Dance).")]
+        public List<StatusSpec> RandomStatusesOnHit = new List<StatusSpec>();
+        [Min(0)] public int SummonCount = 0;
+        [Tooltip("Summons on the player's side are played by this AI style (UnitAIs: seek_strike chases the nearest enemy with its basic attack) instead of being ordered by the player. Empty: the player orders them.")]
+        public string SummonAIStyle = "";
+
+        [Header("Guard break")]
+        [Tooltip("Above 0: when it lands, the target's Block comes down and can't be used for this many seconds (Stutter).")]
+        public float GuardBreakSeconds = 0f;
+
+        [Header("Cooldown")]
+        [Tooltip("The battle starts with it on cooldown (Tear Apart Reality).")]
+        public bool StartsOnCooldown = false;
 
         [Header("Channel")]
         [Tooltip("Above 0: once it lands, the user channels it for up to this many seconds, then recovers (Recovery). A channel can't be cancelled, the user can't do anything else meanwhile (the AI never cancels one either), and any damage or stun breaks it.")]
         public float ChannelSeconds = 0f;
+        [Tooltip("Extra damage: this share of the target's missing health (Witness To The End: 0.2), added to Damage before multipliers and block.")]
+        public float MissingHealthDamage = 0f;
         [Tooltip("The channel also breaks when its target unit leaves the user's sight or Range.")]
         public bool ChannelNeedsSight = false;
+        [Tooltip("Damage on the user doesn't break the channel (it still ends if the user is stunned or dies).")]
+        public bool ChannelIgnoresDamage = false;
 
         [Header("Aerial slam (behavior aerial_slam: DisplaceDistance is the height)")]
         [Tooltip("Seconds rising with the target, hanging at the top, and slamming down.")]
@@ -124,6 +159,8 @@ namespace TacticsGame.Core
         public bool SelfStatusesOnWindup = false;
         [Tooltip("Applied to each unit this action hits (or that springs this trap). Each one's AppliesTo can limit it to allies or enemies.")]
         public List<StatusSpec> TargetStatusesOnHit = new List<StatusSpec>();
+        [Tooltip("Statuses the user gains when this lands on an enemy (blocked hits count; dodged or missed ones don't): Spark the Flame opening Light the Pyre.")]
+        public List<StatusSpec> SelfStatusesOnHit = new List<StatusSpec>();
         [Tooltip("Put on the target unit while the windup runs, and taken off when it lands or is interrupted (Fatebreak's slow). Durations are ignored.")]
         public List<StatusSpec> TargetStatusesDuringWindup = new List<StatusSpec>();
         [Tooltip("Put on the user while the windup runs, and taken off when it lands or is interrupted (Hidden Strike's stealth). Durations are ignored.")]
@@ -150,6 +187,8 @@ namespace TacticsGame.Core
         public float ChargeHealMultiplier = 1f;
 
         [Header("Follow-up")]
+        [Tooltip("Abilities this one opens (its follow-up chain): they come with it in any loadout, so unlocking it unlocks them (Destiny Closes In).")]
+        public List<ActionDefinition> FollowUps = new List<ActionDefinition>();
         [Tooltip("While this is the last ability the unit used, Space re-casts it (same target) and its button is highlighted.")]
         public bool IsFollowup = false;
         [Tooltip("Chain: right after it, it can be used this many more times in a row on the same target (each within ChainWindow seconds of the last one's recovery), ignoring its cooldown, for ChainCostMultiplier of its strain. 0 = no chain. Behavior chain_attack.")]

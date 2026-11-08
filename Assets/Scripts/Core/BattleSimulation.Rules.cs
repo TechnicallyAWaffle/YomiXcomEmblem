@@ -34,10 +34,12 @@ namespace TacticsGame.Core
         private void ApplyStun(Unit target, float duration, Unit source, bool piercesImmunity = false, bool unravel = false)
         {
             if (target.Phase == UnitPhase.Dead) return;
+            if (IsSplitting(target)) return;   // Split The Minds: nothing stops it, not even an Unravel
             BreakJump(target, source);    // stunned mid-jump: it falls (and that fall's own stun lands first)
             if (unravel) piercesImmunity = true;
             else if (target.IsUnstoppable) return;   // nothing but Unravel stops an Unstoppable unit, not even a fall
-            if (target.IsStunImmune && !piercesImmunity) return;   // Block
+            if (target.IsStunImmune && !piercesImmunity) return;   // Transcended Block, Brace, a grapple
+            if (!piercesImmunity) duration *= Mathf.Max(0f, target.Stat(StatId.StunTaken, 1f));   // Block halves it
             target.ResumeAction = null;   // a stun mid-dodge drops the remembered action
             ClearChase(target);           // and a stun ends a chase (a queued ranged order survives it)
             if (target.Phase == UnitPhase.Windup)
@@ -62,25 +64,27 @@ namespace TacticsGame.Core
             Triggers.Fire(new TriggerContext { Type = TriggerType.Stunned, Sim = this, Subject = target, Other = source, Amount = duration });
         }
 
-        /// <summary>Strain drains on its own once a unit has gone StrainRecoveryDelay without gaining any. Applied in
-        /// StrainRecoveryTicks steps so the timeline gets a few events per second rather than one per tick.</summary>
+        /// <summary>Strain drains on its own once a unit has gone StrainRecoveryDelay without gaining any, in StrainRecoveryTicks
+        /// steps so the timeline gets a few events per second rather than one per tick. In Clear Mind, it drains FocusStrainOf on
+        /// top (even right after a strain gain), in finer FocusDrainTicks steps.</summary>
         private void RecoverStrain()
         {
-            if (tick % StrainRecoveryTicks != 0) return;
-            float step = StrainRecoveryTicks * TickLength;
+            bool recover = tick % StrainRecoveryTicks == 0, focus = tick % FocusDrainTicks == 0;
+            if (!recover && !focus) return;
             foreach (var u in State.Units)
             {
                 if (!u.IsAlive || u.Strain <= 0f) continue;
-                float rate = u.HasStatus(StatusIds.Focused) ? FocusStrainPerSecond : 0f;   // focus drains even right after a strain gain
-                if (u.StrainRecoveryPerSecond > 0f && Now - u.LastStrainGainAt >= u.StrainRecoveryDelay) rate += u.StrainRecoveryPerSecond;
-                if (rate > 0f) AddStrain(u, -rate * step);
+                float drain = 0f;
+                if (focus && u.HasStatus(StatusIds.ClearMind)) drain += FocusStrainOf(u) * FocusDrainTicks * TickLength;
+                if (recover && u.StrainRecoveryPerSecond > 0f && Now - u.LastStrainGainAt >= u.StrainRecoveryDelay) drain += u.StrainRecoveryPerSecond * StrainRecoveryTicks * TickLength;
+                if (drain > 0f) AddStrain(u, -drain);
             }
         }
 
         /// <summary>
         /// Focus bookkeeping, first thing every tick. A unit that isn't in a Wait any more has stopped focusing (back-to-back
         /// Waits never show a tick in between: the next one starts before the sim steps again). Once a unit has focused for
-        /// FocusDelay without a break it gets the Focused status, which RecoverStrain drains strain for.
+        /// FocusDelayOf without a break it enters Clear Mind (a status), which RecoverStrain drains strain for.
         /// </summary>
         private void TickFocus()
         {
@@ -88,28 +92,28 @@ namespace TacticsGame.Core
             {
                 bool waiting = u.IsAlive && u.Phase == UnitPhase.Recovery && u.Waiting && !u.Idling;
                 if (!waiting) { if (u.FocusSince >= 0f) BreakFocus(u, false); continue; }
-                if (u.FocusSince >= 0f && Now - u.FocusSince >= FocusDelay - 1e-4f && !u.HasStatus(StatusIds.Focused))
+                if (u.FocusSince >= 0f && Now - u.FocusSince >= FocusDelayOf(u) - 1e-4f && !u.HasStatus(StatusIds.ClearMind))
                 {
                     RemoveStatus(u, StatusIds.Focusing);
-                    ApplyStatus(u, new StatusEffect { Id = StatusIds.Focused, SourceId = u.Id, ExpiresAt = float.MaxValue  }, u);
+                    ApplyStatus(u, new StatusEffect { Id = StatusIds.ClearMind, SourceId = u.Id, ExpiresAt = float.MaxValue  }, u);
+
                 }
             }
         }
 
-        /// <summary>Stop (or, restart: hit while focusing) a unit's run of focus. A Transcended Focus keeps going until Focused.</summary>
+        /// <summary>Stop (or, restart: hit while focusing) a unit's run of focus.</summary>
         private void BreakFocus(Unit u, bool restart)
         {
             u.FocusSince = restart ? Now : -1f;
-            if (u.HasStatus(StatusIds.Focused)) RemoveStatus(u, StatusIds.Focused);
-            if (!restart) { RemoveStatus(u, StatusIds.Focusing); u.FocusTranscended = false; return; }
-            ApplyStatus(u, new StatusEffect { Id = StatusIds.Focusing, SourceId = u.Id, ExpiresAt = Now + FocusDelay  }, u);
-            if (u.FocusTranscended && u.Waiting && u.Phase == UnitPhase.Recovery)
-                u.PhaseEndsAt = Mathf.Max(u.PhaseEndsAt, Now + FocusDelay + TickLength);
+            if (u.HasStatus(StatusIds.ClearMind)) RemoveStatus(u, StatusIds.ClearMind);
+            if (!restart) { RemoveStatus(u, StatusIds.Focusing); return; }
+            ApplyStatus(u, new StatusEffect { Id = StatusIds.Focusing, SourceId = u.Id, ExpiresAt = Now + FocusDelayOf(u) }, u);
         }
 
         /// <summary>Add (or, negative, relieve) strain, clamped to 0..MaxStrain.</summary>
         public void AddStrain(Unit u, float delta)
         {
+            if (delta > 0f && u.HasFlag(StatusFlags.InvertsStrainGain)) delta = -delta;   // True Inversion: gains become losses
             if (delta > 0f) u.LastStrainGainAt = Now;
             float before = u.Strain;
             u.Strain = Mathf.Clamp(u.Strain + delta, 0f, u.MaxStrain);

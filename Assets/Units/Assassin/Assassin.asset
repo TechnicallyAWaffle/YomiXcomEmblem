@@ -17,13 +17,13 @@ MonoBehaviour:
   MaxHealth: 80
   BaseDodge: 0.3
   BaseBlock: 0
-  MaxStrain: 100
+  MaxStrain: 60
   StrainRecoveryPerSecond: 6
   StrainRecoveryDelay: 0.5
   MaxEnergy: 0
   StartingEnergy: 0
   ActionSpeed: 1
-  MoveSpeed: 7
+  MoveSpeed: 6.5
   DashDistance: 4
   EyeHeight: 1.6
   BodyHeight: 1.8
@@ -38,4 +38,6 @@ MonoBehaviour:
   AIProfile: assassin
   AI: {fileID: 0}
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Icon: {fileID: 0}
+  GrantedActions: []
   DataVersion: 15

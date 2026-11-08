@@ -13,17 +13,17 @@ MonoBehaviour:
   m_Name: TrackingShot
   m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
   Id: tracking_shot
-  DisplayName: Tracking Shot
+  DisplayName: Worldpiercer
   BehaviorId: basic_attack
   Roles: 0
   Description: Enter intense focus, tracking your target. If you aren't interrupted
-    by damage or crowd control, fire a shot that pierces terrain and 50% block.
+    by damage or crowd control, fire a shot that pierces terrain and 75% block.
   Targeting: 2
   Range: 35
   IsRanged: 1
   CannotTargetSelf: 0
   DestinationRange: 0
-  Windup: 2.2
+  Windup: 2.1
   Recovery: 0.6
   Cooldown: 8
   EnergyCost: 0
@@ -33,14 +33,14 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 1
   Damage: 40
-  BaseAccuracy: 0.95
+  BaseAccuracy: 1
   StunDuration: 0.8
   StrainOnTarget: 20
   StrainOnSelf: 0
   HealthCost: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
-  BlockPierce: 0.5
+  BlockPierce: 0.75
   StunnedDamageMultiplier: 1
   Shape: 0
   AreaRadius: 0
@@ -48,8 +48,17 @@ MonoBehaviour:
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonCount: 0
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5

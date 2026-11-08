@@ -39,7 +39,12 @@ namespace TacticsGame.Core
         public string AIProfile = "";
         [Tooltip("How the AI plays it, as data: a style and its tuned numbers. Overrides AIProfile when set.")]
         public AIProfileDefinition AI;
+        [Tooltip("A boss: while any boss is in the battle, defeating every boss wins it, whatever else is left on the field (endless reinforcements).")]
+        public bool Boss;
         public GameObject ViewPrefab;
+        [Tooltip("Portrait in the battle's unit panel (lower left). Empty: the unit's initials on a coloured tile.")]
+        public Texture2D Icon;
+        [HideInInspector] public List<string> GrantedActions = new List<string>();   // new abilities SquadAssets already handed this unit once (SquadAssets.Grant)
         [HideInInspector] public int DataVersion;   // which SquadAssets data revision this asset was last written with
     }
 }

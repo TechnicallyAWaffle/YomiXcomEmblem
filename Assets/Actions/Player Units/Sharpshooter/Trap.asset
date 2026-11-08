@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Trap
   m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
   Id: trap
-  DisplayName: Trap
+  DisplayName: Ensnare
   BehaviorId: trap
   Roles: 0
   Description: Toss out a trap that arms after a short delay. The first enemy to
@@ -33,7 +33,7 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 0
   Damage: 0
-  BaseAccuracy: 0.9
+  BaseAccuracy: 1
   StunDuration: 0
   StrainOnTarget: 0
   StrainOnSelf: 0
@@ -48,8 +48,17 @@ MonoBehaviour:
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonCount: 0
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5
@@ -72,6 +81,9 @@ MonoBehaviour:
       Color: {r: 0, g: 0, b: 0, a: 0}
       CountsUp: 0
       Hidden: 0
+      Important: 0
+    HealPerSecond: 0
+    BreakStun: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -93,6 +105,9 @@ MonoBehaviour:
     - Stat: 9
       Op: 0
       Value: 0.25
+    - Stat: 4
+      Op: 0
+      Value: -0.25
     ActionModifiers: []
     Flags: 0
     ForbidsActions: []
@@ -103,6 +118,9 @@ MonoBehaviour:
       Color: {r: 0, g: 0, b: 0, a: 0}
       CountsUp: 0
       Hidden: 0
+      Important: 0
+    HealPerSecond: 0
+    BreakStun: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0

@@ -16,9 +16,10 @@ MonoBehaviour:
   DisplayName: Block
   BehaviorId: block
   Roles: 0
-  Description: Raise your guard for 1 second, halving incoming damage. Blocking Heavy
-    Impacts put this ability on a cooldown. Transcend this ability to fully block
-    all damage and impact types.
+  Description: Raise your guard for 1 second, halving incoming damage and how long
+    incoming stuns last. Blocking Heavy Impacts put this ability on a cooldown. Transcend
+    this ability to raise your Block to 100% and ignore stuns (block-piercing hits
+    still get through).
   Targeting: 1
   Range: 15
   IsRanged: 0
@@ -34,7 +35,7 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 0
   Damage: 0
-  BaseAccuracy: 0.9
+  BaseAccuracy: 1
   StunDuration: 0
   StrainOnTarget: 0
   StrainOnSelf: 20
@@ -64,8 +65,11 @@ MonoBehaviour:
     - Stat: 5
       Op: 0
       Value: 0.5
+    - Stat: 16
+      Op: 1
+      Value: 0.5
     ActionModifiers: []
-    Flags: 8
+    Flags: 0
     ForbidsActions: []
     AppliesTo: 0
     Look:

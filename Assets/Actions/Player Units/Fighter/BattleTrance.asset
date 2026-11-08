@@ -33,7 +33,7 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 0
   Damage: 0
-  BaseAccuracy: 0.9
+  BaseAccuracy: 1
   StunDuration: 0
   StrainOnTarget: 0
   StrainOnSelf: -35

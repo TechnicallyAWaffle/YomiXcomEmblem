@@ -23,12 +23,15 @@ namespace TacticsGame.Core
     {
         /// <summary>Height changes up to this are just walked over.</summary>
         public const float StepHeight = 0.3f;
-        /// <summary>A jump takes JumpBaseSeconds plus JumpSecondsPerMeter for every meter of height it changes.</summary>
-        public const float JumpBaseSeconds = 0.25f;
-        public const float JumpSecondsPerMeter = 0.12f;
+        /// <summary>A jump takes JumpBaseSeconds plus JumpSecondsPerMeter for every meter of height it changes
+        /// (was 0.25 + 0.12/m; 30% faster now).</summary>
+        public const float JumpBaseSeconds = 0.25f / 1.3f;
+        public const float JumpSecondsPerMeter = 0.12f / 1.3f;
         private const float SampleStep = 0.1f;   // how finely paths are scanned for edges
 
         public List<TerrainBlock> Blocks = new List<TerrainBlock>();
+        /// <summary>The playable ground (XZ), for picking spots on it (reinforcement drops). Defaults to the Arena's 40 x 50 m.</summary>
+        public Vector2 AreaMin = new Vector2(-20f, -25f), AreaMax = new Vector2(20f, 25f);
 
         public bool IsFlat { get { return Blocks.Count == 0; } }
 

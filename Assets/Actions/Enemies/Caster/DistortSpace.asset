@@ -22,7 +22,7 @@ MonoBehaviour:
   IsRanged: 1
   CannotTargetSelf: 0
   DestinationRange: 0
-  Windup: 0.6
+  Windup: 1
   Recovery: 0.5
   Cooldown: 6
   EnergyCost: 0
@@ -32,7 +32,7 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 1
   Damage: 17
-  BaseAccuracy: 0.9
+  BaseAccuracy: 1
   StunDuration: 0.6
   StrainOnTarget: 12
   StrainOnSelf: 0
@@ -42,13 +42,22 @@ MonoBehaviour:
   BlockPierce: 0
   StunnedDamageMultiplier: 1
   Shape: 1
-  AreaRadius: 1.5
+  AreaRadius: 4
   LineWidth: 1
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonCount: 0
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5

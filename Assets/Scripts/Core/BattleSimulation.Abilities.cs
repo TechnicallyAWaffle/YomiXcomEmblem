@@ -97,6 +97,7 @@ namespace TacticsGame.Core
             Relocate(unit, to, duration, true, source);
         }
 
+
         /// <summary>Break a unit's windup or charge, if it has one (Stutter). True if something was interrupted.</summary>
         public bool InterruptUnit(Unit unit, string reason)
         {

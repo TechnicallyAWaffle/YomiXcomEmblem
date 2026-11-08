@@ -29,7 +29,7 @@ namespace TacticsGame.Core
         /// </summary>
         public void StartGrapple(Unit unit, Unit target, ActionDefinition def)
         {
-            if (!unit.IsAlive || !target.IsAlive || unit.Grapple != null || target.Phase != UnitPhase.Stunned || target.IsLifted || target.FallLandAt >= 0f) return;
+            if (!unit.IsAlive || !target.IsAlive || unit.Grapple != null || target.Phase != UnitPhase.Stunned || target.IsLifted || target.FallLandAt >= 0f || !CanDisplace(target, unit)) return;
             if (target.HeldById != null) ReleaseHeld(target);   // taken out of someone else's grip
             if (target.Grapple != null) EndGrapple(target);     // and it lets go of whoever it was holding
             target.GlideEnd = -1f;                              // a shove in progress stops here
@@ -156,7 +156,7 @@ namespace TacticsGame.Core
                 {
                     // A player picks the throw's direction: the unit is handed back for that order (HoldGrapple/Wait throw ahead).
                     // The AI throws the way it faces.
-                    if (u.Team == Team.Player)
+                    if (u.PlayerOrdered)
                     {
                         g.AwaitingThrow = true;
                         if (held.Phase == UnitPhase.Stunned) held.PhaseEndsAt = Mathf.Max(held.PhaseEndsAt, Now + 0.25f);

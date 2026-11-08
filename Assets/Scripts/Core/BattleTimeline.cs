@@ -47,6 +47,11 @@ namespace TacticsGame.Core
         HitRedirected,         // a hit aimed at target went to actor instead (Sanctity's dome); payload RedirectInfo
         AerialSlam,            // actor carries target up into the air and slams it down (Heretic's Ascent); payload AerialSlamInfo
         AerialSlamEnded,       // that slam is over: landed (payload false), or knocked out of the air (true) and both fall
+        UnitSpawned,           // target joined the battle mid-way (a summon; actor = its summoner); payload SpawnInfo
+        BlastPending,          // a delayed explosion was placed (actor = its owner); payload BlastInfo. It goes off at BlastInfo.At
+        BlastDetonated,        // that explosion went off; payload BlastInfo (its hits are Damage events)
+        AbilityFx,             // a look an ability asks for that no other event carries (a rift, an unmaking shot); payload FxInfo
+        DropStarted,           // target (a reinforcement) drops in from the sky; payload DropInfo. A Dash with Fall if it is knocked out of it
     }
 
     /// <summary>
@@ -127,7 +132,15 @@ namespace TacticsGame.Core
     public struct ChargeInfo { public string ActionId; public float MaxSeconds; }
     public struct QueuedActionInfo { public string ActionId; public bool Chase; }   // Chase: melee, walking at the target
     public struct TrapInfo { public string Id; public Vector3 Position; public float Radius; public float ArmsAt; public Team OwnerTeam; }
-    public struct AuraInfo { public string Id; public string ActionId; public float Radius; public float Height; public float EndsAt; }
+    // Anchored: the dome stays at Center (a zone) instead of moving with actor.
+    public struct AuraInfo { public string Id; public string ActionId; public float Radius; public float Height; public float EndsAt; public bool Anchored; public Vector3 Center; }
+    // Unit: the newcomer as it arrives (for its view); Definition: what it is (its model).
+    public struct SpawnInfo { public Unit Unit; public UnitDefinition Definition; }
+    public struct BlastInfo { public string Id; public string ActionId; public Vector3 Center; public float Radius; public float At; }
+    // Kind: which look ("rift", "unmade"...); From: where it starts, for one drawn between two points.
+    public struct FxInfo { public string Kind; public string ActionId; public Vector3 Center; public Vector3 From; public float Radius; }
+    // From: up in the sky; To: where it lands, Seconds later.
+    public struct DropInfo { public Vector3 From; public Vector3 To; public float Seconds; }
     // Seconds: how long the channel runs at most (ChannelStarted). Recovery: what follows it (0 when Broken). Reason: why it broke.
     public struct ChannelInfo { public string ActionId; public float Seconds; public float Recovery; public bool Broken; public string Reason; }
     public struct RedirectInfo { public string ActionId; public string AttackerId; }

@@ -35,51 +35,89 @@ namespace TacticsGame.Presentation
         private EncounterSpec spec;
         private string encounterId;
         private readonly Dictionary<string, string> unitOfMember = new Dictionary<string, string>();
+        private readonly List<EnemySlot> later = new List<EnemySlot>();   // this encounter's reinforcements
 
-        /// <summary>Fight 'encounter' (its map and spec) with the deployable members of 'roster'.</summary>
-        public void Launch(SquadRoster squad, ContentCatalog catalog, EncounterDefinition encounter)
+        /// <summary>Fight 'encounter' (its map and spec) with the deployable members of 'roster' ('progression': what their
+        /// bought stat steps are priced in, if they progress).</summary>
+        public void Launch(SquadRoster squad, ContentCatalog catalog, EncounterDefinition encounter, ProgressionConfig progression = null)
         {
-            Launch(squad, catalog, encounter.Map, encounter.Spec, encounter.EncounterId);
+            Launch(squad, catalog, encounter.Map, encounter.Spec, encounter.EncounterId, progression);
         }
 
         /// <summary>Fight 'encounterSpec' on 'map' (null: the loaded one) with the deployable members of 'squad'.</summary>
-        public void Launch(SquadRoster squad, ContentCatalog catalog, MapTemplate map, EncounterSpec encounterSpec, string id)
+        public void Launch(SquadRoster squad, ContentCatalog catalog, MapTemplate map, EncounterSpec encounterSpec, string id, ProgressionConfig progression = null)
         {
             roster = squad;
             spec = encounterSpec;
             encounterId = id;
+            var memberAt = Deploy(squad, catalog, map, encounterSpec, progression);
+            var placements = Context.Placements;
+            Controller.OnBattleFinished -= Finished;
+            Controller.OnBattleFinished += Finished;
+            Controller.OnSimCreated -= ScheduleReinforcements;
+            Controller.OnSimCreated += ScheduleReinforcements;
+            Controller.StartBattle();
+            // The context gave each placed view its unit id while building the battle: remember whose unit is whose.
+            unitOfMember.Clear();
+            for (int i = 0; i < placements.Count; i++) if (memberAt[i] != null) unitOfMember[memberAt[i]] = placements[i].View.UnitId;
+        }
+
+        /// <summary>Set the encounter out without starting it (a mission's preparation screen shows the map and who is on it).</summary>
+        public void Preview(SquadRoster squad, ContentCatalog catalog, EncounterDefinition encounter, ProgressionConfig progression = null)
+        {
+            Deploy(squad, catalog, encounter.Map, encounter.Spec, progression);
+        }
+
+        /// <summary>Build the map and swap the units standing in the scene for the squad and the encounter's enemies (as
+        /// Context.Placements). Returns, per placement, the roster member it is (null for enemies).</summary>
+        private List<string> Deploy(SquadRoster squad, ContentCatalog catalog, MapTemplate map, EncounterSpec encounterSpec, ProgressionConfig progression)
+        {
             if (Maps != null && map != null && Maps.Current != map) Maps.Load(map);
             if (PlayerMaterial == null) PlayerMaterial = SceneMaterial(Team.Player);
 
             foreach (var p in Context.Placements) if (p.View != null) Destroy(p.View.gameObject);
             var placements = new List<BattleContext.Placement>();
             var memberAt = new List<string>();
-            var squadSlots = Campaign.Squad(squad, catalog);
+            var squadSlots = Campaign.Squad(squad, catalog, progression);
             for (int i = 0; i < squadSlots.Count; i++)
             {
                 var s = squadSlots[i];
                 var view = Spawn(s.Definition, Team.Player, StartBattle(Team.Player, i, squadSlots.Count), PlayerMaterial, "Player_" + s.Definition.DisplayName + "_" + (i + 1));
                 if (view == null) continue;
-                placements.Add(new BattleContext.Placement { View = view, Team = Team.Player, Definition = s.Definition, Upgrades = s.Upgrades, Loadout = s.Loadout, Wounds = s.Member.Wounds });
+                placements.Add(new BattleContext.Placement
+                {
+                    View = view, Team = Team.Player, Definition = s.Definition, Upgrades = s.Upgrades, Loadout = s.Loadout, Wounds = s.Member.Wounds,
+                    Growth = s.Growth,
+                });
                 memberAt.Add(s.Member.Id);
             }
             var enemySlots = Campaign.Enemies(encounterSpec);
+            later.Clear();
+            later.AddRange(enemySlots.FindAll(e => e.ArriveAfter > 0f));   // later waves drop in from the sky (Launch schedules them)
+            enemySlots.RemoveAll(e => e.ArriveAfter > 0f);
             for (int i = 0; i < enemySlots.Count; i++)
             {
                 var e = enemySlots[i];
-                var view = Spawn(e.Definition, Team.Enemy, StartBattle(Team.Enemy, i, enemySlots.Count), EnemyMaterial, "Enemy_" + e.Definition.DisplayName + "_" + (i + 1));
+                var view = Spawn(e.Definition, e.Side, StartBattle(Team.Enemy, i, enemySlots.Count), EnemyMaterial, "Enemy_" + e.Definition.DisplayName + "_" + (i + 1));
                 if (view == null) continue;
-                placements.Add(new BattleContext.Placement { View = view, Team = Team.Enemy, Definition = e.Definition, Upgrades = e.Upgrades });
+                placements.Add(new BattleContext.Placement { View = view, Team = e.Side, Definition = e.Definition, Upgrades = e.Upgrades });
                 memberAt.Add(null);
             }
 
             Context.Placements = placements;
-            Controller.OnBattleFinished -= Finished;
-            Controller.OnBattleFinished += Finished;
-            Controller.StartBattle();
-            // The context gave each placed view its unit id while building the battle: remember whose unit is whose.
-            unitOfMember.Clear();
-            for (int i = 0; i < placements.Count; i++) if (memberAt[i] != null) unitOfMember[memberAt[i]] = placements[i].View.UnitId;
+            return memberAt;
+        }
+
+        /// <summary>The encounter's later waves, handed to the battle as it is made: each drops in at its ArriveAfter.</summary>
+        private void ScheduleReinforcements(BattleSimulation sim)
+        {
+            Controller.OnSimCreated -= ScheduleReinforcements;
+            foreach (var e in later) sim.ScheduleDrop(e.Definition, e.Side, e.ArriveAfter, e.Upgrades);
+            var waves = spec != null ? spec.Waves : null;   // endless reinforcements (the final encounter)
+            if (waves != null && waves.Pool != null && waves.Pool.Count > 0)
+                sim.StartReinforcementWaves(waves.Pool, Team.Enemy, waves.FirstAfter, waves.Every, waves.PerWave, waves.MaxUp);
+            var map = Maps != null ? Maps.Current : null;
+            if (map != null) { sim.State.Terrain.AreaMax = map.GroundSize / 2f; sim.State.Terrain.AreaMin = -map.GroundSize / 2f; }
         }
 
         private void Finished(BattleOutcome outcome)

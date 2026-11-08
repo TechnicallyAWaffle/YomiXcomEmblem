@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c83e3f586d4cd04888f8b9260afe47f, type: 3}
+  m_Name: LevelFinal
+  m_EditorClassIdentifier: Apotheom.Presentation::TacticsGame.Presentation.EncounterDefinition
+  DisplayName: Deliverance
+  Description: The end of the road. Deliverance waits at the Threshold, and the enemy
+    keeps pouring in from everywhere, at war with it as much as with you. Bring it
+    down, and then bring down what it becomes.
+  Map: {fileID: 11400000, guid: 97df434dce3955646b88e3dc75e024f6, type: 2}
+  Spec:
+    Id: 
+    Enemies:
+    - Unit: {fileID: 11400000, guid: 56c7ad4f6b00fba49a1d6226515de479, type: 2}
+      Count: 1
+      Upgrades: []
+      ArriveAfter: 0
+      Side: 2
+    Objective: 0
+    Waves:
+      Pool:
+      - {fileID: 11400000, guid: dafc72907786a7047b178f9b0053191c, type: 2}
+      - {fileID: 11400000, guid: 83cb6da5dfd1a1b4b9abb25a0305e2cf, type: 2}
+      - {fileID: 11400000, guid: 0d44a1eeb31fbf044a97835909eade0d, type: 2}
+      - {fileID: 11400000, guid: 6f68201e8fd253d429c466fdad6f1969, type: 2}
+      - {fileID: 11400000, guid: e95ee1d8a76adb142a7fb71940391e01, type: 2}
+      - {fileID: 11400000, guid: 0f1833ed2b2883c469a1093e9f4303e8, type: 2}
+      - {fileID: 11400000, guid: 34772a92fcd716444a8e59c7aca4a735, type: 2}
+      - {fileID: 11400000, guid: ac52d1cc6a76fa3419af737d6105f6c1, type: 2}
+      FirstAfter: 0.5
+      Every: 10
+      PerWave: 6
+      MaxUp: 6
+    Rewards:
+      Experience: 100
+      AbilityPoints: 3
+      Currency: 0
+      Upgrades: []
+    CarryOverWounds: 0

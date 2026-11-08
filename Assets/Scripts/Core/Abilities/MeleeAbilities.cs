@@ -175,6 +175,7 @@ namespace TacticsGame.Core
         public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Opener; }
 
         public override bool MovesUser { get { return true; } }   // not while airborne
+        public override bool Dashes { get { return true; } }      // a CRIPPLED unit can't
 
         public override IEnumerable<BehaviorParam> Parameters { get { yield return new BehaviorParam("strike_reach", 2f); } }   // the slash lands if the dash ends this close
 
@@ -235,6 +236,116 @@ namespace TacticsGame.Core
                 sim.RemoveStatus(ctx.Subject, StatusIds.Mesmerized);
                 sim.StartMesmerCounter(ctx.Subject, ctx.Other, stance.LinkedAction, CounterStrikes);
             });
+        }
+    }
+
+    /// <summary>
+    /// A Million Cuts (flurry): dash to the target like Phantom Strike (Range is the dash's reach), then channel
+    /// (ChannelSeconds): 'strikes' (15) hits spread over it, each its own hit for the ability's Damage and stun. A channel
+    /// can't be cancelled by orders; damage on the user still breaks it. Ends with its recovery once the strikes are in,
+    /// at once if the dash didn't reach (strike_reach) or the target falls. Before every cut after the first the user
+    /// blinks to a random spot around the target, at striking distance.
+    /// </summary>
+    public partial class FlurryBehavior : ActionBehavior
+    {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Opener; }
+
+        public override bool Dashes { get { return true; } }      // a CRIPPLED unit can't
+        public override bool MovesUser { get { return true; } }
+        public override bool ClosesDistance { get { return true; } }
+
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get { yield return new BehaviorParam("strikes", 15f); yield return new BehaviorParam("strike_reach", 2f); }
+        }
+
+        public override void Describe(AbilityTip tip)
+        {
+            DescribeHit(tip, "Per strike", "Stun per strike", true);
+            tip.Add("Strikes", string.Format("{0:0} over {1}", Param(tip.Def, "strikes"), AbilityTip.Secs(tip.Def.ChannelSeconds)));
+            tip.Add("Once started", "can't be cancelled");
+        }
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            a.Steps = -1;
+            var target = sim.GetUnit(a.TargetUnitId);
+            if (target == null || !target.IsAlive) return;
+            var actor = a.Actor;
+            Vector3 from = target.Position - actor.Position; from.y = 0f;
+            from = from.sqrMagnitude > 1e-6f ? from.normalized : Vector3.forward;
+            Vector3 beside = target.Position - from * (actor.BodyRadius + target.BodyRadius + 0.3f);
+            Vector3 landed = sim.Paths.ClampDash(target.Position, beside);
+            sim.SlideUnitTo(actor, landed, BattleSimulation.DashDuration, target.Position);
+            if (Vector3.Distance(landed, target.Position) > Param(a.Definition, "strike_reach")) return;
+            a.Steps = 0;
+            a.NextStepAt = sim.Now + BattleSimulation.DashDuration;   // the first cut as it arrives
+        }
+
+        public override bool OnChannelTick(BattleSimulation sim, ActionInstance a)
+        {
+            var target = sim.GetUnit(a.TargetUnitId);
+            int strikes = Mathf.Max(1, Mathf.RoundToInt(Param(a.Definition, "strikes")));
+            if (a.Steps < 0 || target == null || !target.IsAlive) { sim.CutChannel(a.Actor, sim.Now); return true; }
+            float interval = Mathf.Max(BattleSimulation.TickLength, (a.Definition.ChannelSeconds - BattleSimulation.DashDuration) / strikes);
+            while (a.Steps < strikes && sim.Now + 1e-4f >= a.NextStepAt && target.IsAlive)
+            {
+                if (a.Steps > 0) BlinkAround(sim, a.Actor, target);
+                sim.StrikeNow(new AttackEffect { Source = a.Actor, TargetId = target.Id, Definition = a.Definition, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag, IgnoreRange = true });
+                a.Steps++;
+                a.NextStepAt += interval;
+            }
+            if (a.Steps >= strikes) sim.CutChannel(a.Actor, sim.Now);
+            return true;
+        }
+    }
+
+    public partial class FlurryBehavior
+    {
+        /// <summary>Blink 'actor' to a random point around 'target', just outside both bodies (the battle's seeded random).</summary>
+        private static void BlinkAround(BattleSimulation sim, Unit actor, Unit target)
+        {
+            float angle = sim.RandomValue() * Mathf.PI * 2f;
+            Vector3 dir = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+            Vector3 spot = target.Position + dir * (actor.BodyRadius + target.BodyRadius + 0.3f);
+            sim.TeleportUnit(actor, sim.WalkablePointNear(spot, target.Position), actor);
+        }
+    }
+
+    /// <summary>
+    /// The Endless Hunt (hunt): a long windup on any enemy in Range, seen or not (PiercesTerrain), that slows the target
+    /// while it lasts (TargetStatusesDuringWindup: Fated), then a blink to its side.
+    /// </summary>
+    public class HuntBehavior : ActionBehavior
+    {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Gapcloser; }
+
+        public override bool MovesUser { get { return true; } }
+
+        public override bool RollsToHit(ActionDefinition def) { return false; }
+
+        public override void Describe(AbilityTip tip)
+        {
+            base.Describe(tip);
+            tip.Add("Blink", "to the target's side");
+            tip.Add("Sight", "not needed");
+        }
+
+        public override bool CanStart(BattleSimulation sim, Unit actor, UnitCommand cmd, out string reason)
+        {
+            reason = actor.IsRooted ? "immobilized" : null;
+            return reason == null;
+        }
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var actor = a.Actor;
+            var target = sim.GetUnit(a.TargetUnitId);
+            if (target == null || !target.IsAlive || actor.IsRooted) return;
+            Vector3 from = target.Position - actor.Position; from.y = 0f;
+            from = from.sqrMagnitude > 1e-6f ? from.normalized : Vector3.forward;
+            Vector3 beside = target.Position - from * (actor.BodyRadius + target.BodyRadius + 0.3f);
+            sim.TeleportUnit(actor, sim.WalkablePointNear(beside, target.Position), actor);
         }
     }
 }

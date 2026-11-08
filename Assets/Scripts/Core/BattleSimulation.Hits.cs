@@ -87,6 +87,19 @@ namespace TacticsGame.Core
         {
             // An ability's StunnedDamageMultiplier (Lethal Prescience): more against a target stunned as the hit lands.
             AddHitRule(HitStage.Damage, (sim, hit) => { if (hit.Target.Phase == UnitPhase.Stunned) hit.DamageMultiplier *= hit.Definition.StunnedDamageMultiplier; });
+            // A status that arms its holder's hits (ArmsHits: Crippling Pursuit's rounds): damage they deal puts that ability's
+            // TargetStatusesOnHit on the target too.
+            AddHitRule(HitStage.Landed, (sim, hit) =>
+            {
+                var src = hit.Source;
+                if (src == null || hit.Dealt <= 0f) return;
+                foreach (var s in src.Statuses.ToArray())
+                {
+                    if (!s.Has(StatusFlags.ArmsHits) || s.FromAction == null || s.FromAction.TargetStatusesOnHit == null) continue;
+                    foreach (var spec in s.FromAction.TargetStatusesOnHit)
+                        if (spec != null && spec.AppliesToUnit(src, hit.Target)) sim.ApplyStatus(hit.Target, spec.Create(sim.Now, src.Id, null, src.DurationScale(s.FromAction)), src);
+                }
+            });
         }
 
         /// <summary>
@@ -102,11 +115,25 @@ namespace TacticsGame.Core
             if (!RollToHit(hit)) return;
             if (!RollDodge(hit, snapshot)) return;
             DealDamage(hit);
+            GainOnHit(hit);
             if (hit.Target.Health <= 0f) return;   // a dead unit needs no reactions or stun
             RunHitRules(HitStage.Landed, hit);
             ReactToHit(hit);
             StunFromHit(hit);
             if (atk.OnLanded != null && hit.Target.IsAlive) atk.OnLanded(this, hit.Target);
+        }
+
+        /// <summary>The attacker's SelfStatusesOnHit, now that the hit has landed (a block doesn't stop them; a dodge would have).</summary>
+        private void GainOnHit(HitContext hit)
+        {
+            var src = hit.Source; var def = hit.Definition;
+            if (src == null || !src.IsAlive || def.SelfStatusesOnHit == null || def.SelfStatusesOnHit.Count == 0) return;
+            foreach (var spec in def.SelfStatusesOnHit)
+            {
+                var s = spec.Create(Now, src.Id, def.LinkedAction, src.DurationScale(def));
+                s.TargetId = hit.Target.Id;   // whom it was earned on (RequiredStatusOnTarget follow-ups go at them)
+                ApplyStatus(src, s, src);
+            }
         }
 
         /// <summary>Who the attack reaches: a dome's owner instead (Sanctity), nobody if the target hid or moved out of reach.</summary>
@@ -147,6 +174,7 @@ namespace TacticsGame.Core
             hit.AccuracyBonus = atk.AccuracyBonus + HeightAccuracyBonus(src, target, def);
             hit.AccuracyBonus += target.IncomingAccuracyBonus();
             RunHitRules(HitStage.Aiming, hit);
+            if (atk.Unerring) { hit.HitChance = 1f; return true; }
             float accuracy = src.ActionStat(def, ActionStat.Accuracy);
             hit.HitChance = Mathf.Clamp01(accuracy * hit.Exposure + hit.AccuracyBonus);
             double roll = rng.NextDouble();
@@ -174,7 +202,9 @@ namespace TacticsGame.Core
             CombatSnapshot snap;
             if (!snapshot.TryGetValue(hit.Target.Id, out snap)) snap = new CombatSnapshot { Dodge = hit.Target.EffectiveDodge(), Block = hit.Target.EffectiveBlock() };
             hit.Dodge = snap.Dodge; hit.Block = snap.Block;
-            if (rng.NextDouble() >= snap.Dodge) return true;
+            if (hit.Effect.Unerring) return true;   // can't be dodged
+            bool forced = PlayersAlwaysDodge && hit.Target.Team == Team.Player;   // the tutorial's dodge lesson
+            if (rng.NextDouble() >= snap.Dodge && !forced) return true;
             OnDodged(hit.Source, hit.Target, hit.Definition);
             return false;
         }
@@ -186,31 +216,38 @@ namespace TacticsGame.Core
             // A Transcended Block (NegatesDamage) stops all of it, pierce or not: no damage, no strain, no wear on block.
             hit.Negated = target.HasFlag(StatusFlags.NegatesDamage);
             RunHitRules(HitStage.Damage, hit);
-            hit.Raw = src.ActionStat(def, ActionStat.Damage) * atk.DamageMultiplier * hit.DamageMultiplier;
+            float missing = def.MissingHealthDamage > 0f ? def.MissingHealthDamage * Mathf.Max(0f, target.MaxHealth - target.Health) : 0f;   // Witness To The End
+            hit.Raw = (src.ActionStat(def, ActionStat.Damage) + missing) * atk.DamageMultiplier * hit.DamageMultiplier;
             float effectiveBlock = hit.Negated ? 1f : Mathf.Clamp01(hit.Block * (1f - Mathf.Clamp01(src.ActionStat(def, ActionStat.BlockPierce) + atk.BlockPierceBonus)));
             hit.Dealt = hit.Raw * (1f - effectiveBlock);
+            float dealt = hit.Dealt; DevAdjustDamage(src, target, ref dealt); hit.Dealt = dealt;
             target.Health -= hit.Dealt;
             target.LastAttackerId = src.Id;
             target.LastHitAction = def;
             target.LastHitTag = atk.Tag;
-            if (hit.Block > 0f && !hit.Negated) target.ReduceBlock(def.Impact == ImpactType.Heavy ? HeavyBlockBreak : LightBlockBreak);
+            if (hit.Block > 0f && !hit.Negated) target.ReduceBlock(hit.Impact == ImpactType.Heavy ? HeavyBlockBreak : LightBlockBreak);
 
             // Strain and Unravel (checked against strain BEFORE this hit adds to it). Nothing is immune to Unravel: not Block,
             // not a Transcended Block that stops the damage, not Unstoppable.
             bool atMaxStrain = target.Strain >= target.MaxStrain - 0.001f;
-            hit.Unravel = atMaxStrain && def.Impact == ImpactType.Heavy;
-            if (!hit.Negated) AddStrain(target, src.ActionStat(def, ActionStat.StrainOnTarget));
+            hit.Unravel = atMaxStrain && hit.Impact == ImpactType.Heavy;
+            if (!hit.Negated) AddStrain(target, src.ActionStat(def, ActionStat.StrainOnTarget) * src.StrainDealtMult());
 
             Emit(EventType.Damage, src.Id, target.Id, new DamageInfo
             {
-                ActionId = def.Id, Amount = hit.Dealt, BlockedAmount = hit.Raw - hit.Dealt, Impact = def.Impact,
+                ActionId = def.Id, Amount = hit.Dealt, BlockedAmount = hit.Raw - hit.Dealt, Impact = hit.Impact,
                 RemainingHealth = target.Health, CausedUnravel = hit.Unravel,
             });
-            Triggers.Fire(new TriggerContext { Type = TriggerType.DamageTaken, Sim = this, Subject = target, Other = src, Amount = hit.Dealt, Impact = def.Impact, Action = def });
+            Triggers.Fire(new TriggerContext { Type = TriggerType.DamageTaken, Sim = this, Subject = target, Other = src, Amount = hit.Dealt, Impact = hit.Impact, Action = def });
 
-            // Taking damage breaks fragile statuses (Marking Shot's stealth).
+            // Taking damage breaks fragile statuses (Marking Shot's stealth); a seal that breaks (BreakStun) stuns the enemy who broke it.
             for (int i = target.Statuses.Count - 1; i >= 0; i--)
-                if (target.Statuses[i].Has(StatusFlags.BreaksOnDamage)) RemoveStatus(target, target.Statuses[i].Id);
+            {
+                if (i >= target.Statuses.Count || !target.Statuses[i].Has(StatusFlags.BreaksOnDamage)) continue;
+                var broken = target.Statuses[i];
+                RemoveStatus(target, broken.Id);
+                if (broken.BreakStun > 0f && src.IsAlive && src.Team != target.Team) ApplyStun(src, broken.BreakStun, target);
+            }
         }
 
         /// <summary>
@@ -222,7 +259,12 @@ namespace TacticsGame.Core
             var src = hit.Source; var target = hit.Target; var def = hit.Definition; var atk = hit.Effect;
             BreakJump(target, src);   // any hit that lands knocks a jumping unit out of the air
             foreach (var s in target.States.ToArray()) s.OnStruck(this, hit);   // damage knocks a hovering unit down (ControlState.OnStruck)
-            foreach (var spec in def.TargetStatusesOnHit) if (spec.AppliesToUnit(src, target)) ApplyStatus(target, spec.Create(Now, src.Id), src);
+            foreach (var spec in def.TargetStatusesOnHit) if (spec.AppliesToUnit(src, target)) ApplyStatus(target, spec.Create(Now, src.Id, null, src.DurationScale(def)), src);
+            if (def.RandomStatusesOnHit != null && def.RandomStatusesOnHit.Count > 0)   // one of these, at random (Joyous Dance)
+            {
+                var pick = def.RandomStatusesOnHit[Mathf.Min(def.RandomStatusesOnHit.Count - 1, (int)(rng.NextDouble() * def.RandomStatusesOnHit.Count))];
+                if (pick != null && pick.AppliesToUnit(src, target)) ApplyStatus(target, pick.Create(Now, src.Id, null, src.DurationScale(def)), src);
+            }
             if (def.Displace == DisplaceMode.TowardSource || def.Displace == DisplaceMode.AwayFromSource) DisplaceUnit(target, src, def);
             hit.StunFor = src.ActionStat(def, ActionStat.StunDuration) * atk.StunMultiplier;
             bool willStun = hit.WillStun;
@@ -232,8 +274,8 @@ namespace TacticsGame.Core
             if (target.Phase == UnitPhase.Charging && !unstoppable) Interrupt(target, "charge broken", !willStun);
             foreach (var s in target.States.ToArray()) s.OnDamaged(this, hit);   // breaks a channel, knocks a slam out of the air (ControlState.OnDamaged)
             if (target.Phase == UnitPhase.Windup && target.ActiveAction != null && !unstoppable &&
-                (def.Impact == ImpactType.Heavy || target.ActiveAction.Definition.InterruptedByDamage))
-                Interrupt(target, def.Impact == ImpactType.Heavy ? "heavy impact" : "damage", !willStun);
+                (hit.Impact == ImpactType.Heavy || target.ActiveAction.Definition.InterruptedByDamage))
+                Interrupt(target, hit.Impact == ImpactType.Heavy ? "heavy impact" : "damage", !willStun);
         }
 
         /// <summary>The hit's stun, or an Unravel in its place.</summary>
@@ -250,10 +292,31 @@ namespace TacticsGame.Core
             if (!target.IsAlive || target.IsRooted) return;   // rooted units still dodge, but can't dash
             if (target.AnyState(s => s.BlocksDodgeDash)) return;   // a Mesmerize counter, a channel, a slam: it dodges where it stands
 
-            if (target.Team == Team.Player)
+            if (EtchingTraits.DodgesOnInstinct(target)) { DodgeTo(target, InstinctDodgeSpot(target, attacker)); return; }   // Instinct Overtakes Methods
+            if (target.PlayerOrdered)
                 pendingDashes.Add(new DecisionRequest { Kind = DecisionKind.DodgeDash, UnitId = target.Id, AttackerId = attacker.Id });
             else
                 ExecuteDash(target, BestDashDirection(target, attacker));
+        }
+
+        /// <summary>
+        /// Instinct Overtakes Methods: where a dodge dashes, straight at the unit's own target: what its windup is aimed at
+        /// (a unit, else the point), else what it chases or has queued, else the attacker it dodged. It stops at arm's length
+        /// from a unit (no dash if already there), and goes no further than a dash reaches.
+        /// </summary>
+        private Vector3 InstinctDodgeSpot(Unit unit, Unit attacker)
+        {
+            var a = unit.ActiveAction;
+            string id = a != null ? a.TargetUnitId : unit.Chase != null ? unit.Chase.TargetUnitId : unit.Queued != null ? unit.Queued.TargetUnitId : null;
+            var aim = GetUnit(id);
+            if (aim == unit || (aim != null && !aim.IsAlive)) aim = null;
+            if (aim == null && a != null && a.Definition.Targeting == TargetType.Position) return DashDestination(unit, a.TargetPos);
+            if (aim == null) aim = attacker;
+            if (aim == null) return unit.Position;
+            Vector3 d = aim.Position - unit.Position; d.y = 0f;
+            float stop = unit.BodyRadius + aim.BodyRadius + StandingGap;
+            if (d.magnitude <= stop + 0.05f) return unit.Position;
+            return DashDestination(unit, unit.Position + d.normalized * (d.magnitude - stop));
         }
 
         private void ExecuteDash(Unit unit, int direction8)

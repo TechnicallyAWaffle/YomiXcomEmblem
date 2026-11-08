@@ -15,12 +15,34 @@ namespace TacticsGame.Core
         public UnitDefinition Unit;
         [Min(1)] public int Count = 1;
         public List<UpgradeDefinition> Upgrades = new List<UpgradeDefinition>();
+        [Tooltip("Seconds into the battle these arrive, dropped from the sky (0: with the first wave, on the map's spawns). Melee units land near one of your units; ranged ones at an open spot away from everyone.")]
+        [Min(0f)] public float ArriveAfter = 0f;
+        [Tooltip("Their side. Rogue: a third side, hostile to the squad and the other enemies alike (Deliverance).")]
+        public Team Side = Team.Enemy;
+    }
+
+    /// <summary>Reinforcements that never stop (the final encounter): units dropped in at random spots, wave after wave.</summary>
+    [System.Serializable]
+    public class ReinforcementWaves
+    {
+        [Tooltip("Who comes, in turn. Empty: no waves.")]
+        public List<UnitDefinition> Pool = new List<UnitDefinition>();
+        [Min(0f)] public float FirstAfter = 8f;
+        [Tooltip("Seconds between waves.")]
+        [Min(0.5f)] public float Every = 12f;
+        [Min(1)] public int PerWave = 2;
+        [Tooltip("No new wave while this many of them are up (0: no limit).")]
+        [Min(0)] public int MaxUp = 6;
     }
 
     /// <summary>What winning an encounter earns.</summary>
     [System.Serializable]
     public class EncounterRewards
     {
+        [Tooltip("Experience every squad member gains (nothing spends it for now: upgrades are Etchings).")]
+        public int Experience = 30;
+        [Tooltip("Ability points every squad member gains (spent on unlocking abilities).")]
+        public int AbilityPoints = 1;
         public int Currency;
         [Tooltip("Upgrades added to the squad's stock, to give to members later.")]
         public List<UpgradeDefinition> Upgrades = new List<UpgradeDefinition>();
@@ -35,9 +57,11 @@ namespace TacticsGame.Core
         public string Id = "";
         public List<EnemyEntry> Enemies = new List<EnemyEntry>();
         public EncounterObjective Objective = EncounterObjective.DefeatAllEnemies;
+        [Tooltip("Endless reinforcements on the enemy side, dropped in at random spots (pair it with a boss: beating the bosses wins).")]
+        public ReinforcementWaves Waves = new ReinforcementWaves();
         public EncounterRewards Rewards = new EncounterRewards();
-        [Tooltip("The squad keeps its wounds afterwards (members brought to 0 health are down until they rest).")]
-        public bool CarryOverWounds = true;
+        [Tooltip("The squad keeps its wounds afterwards (members brought to 0 health are down until they rest). Campaign missions don't.")]
+        public bool CarryOverWounds = false;
     }
 
     // ------------------------------------------------------------------ the squad between battles
@@ -54,9 +78,21 @@ namespace TacticsGame.Core
         public List<string> Loadout = new List<string>();     // ActionDefinition ids
         public List<string> Upgrades = new List<string>();    // UpgradeDefinition ids
         [Range(0f, 1f)] public float Wounds;                  // share of max health missing; 1 = down (can't deploy until it rests)
+        // Progression (Progression): a progressing member brings exactly its unlocked abilities, and its Etchings.
+        public bool Progressing;
+        public int Experience, AbilityPoints;
+        public List<string> Unlocked = new List<string>();    // ActionDefinition ids
+        public List<EtchingPick> Etchings = new List<EtchingPick>();
+        // The upgrade phase under way: the Etchings offered (ids) and how many more it takes.
+        public List<string> Offer = new List<string>();
+        public int PicksLeft;
+        public List<string> AbilityOffer = new List<string>();   // locked class abilities it may unlock this phase (ids)
 
         public bool Down { get { return Wounds >= 1f - 1e-4f; } }
     }
+
+    /// <summary>Where a campaign is between battles. New values go at the end.</summary>
+    public enum CampaignStage { Preparation, Upgrading, Finished }
 
     /// <summary>The player's squad between battles: members, currency, upgrades not yet given out, encounters won.</summary>
     [System.Serializable]
@@ -67,6 +103,10 @@ namespace TacticsGame.Core
         public List<string> OwnedUpgrades = new List<string>();      // earned or bought, not given to anyone yet
         public List<string> CompletedEncounters = new List<string>();
         public int NextMemberNumber = 1;
+        // Where a campaign stands (CampaignDefinition): the next mission, and which screen comes up.
+        public int MissionIndex;
+        public CampaignStage Stage = CampaignStage.Preparation;
+        public int Seed;   // the campaign's draws (Etching offers) come from it
 
         public RosterMember Find(string memberId) { return Members.Find(m => m.Id == memberId); }
 
@@ -112,6 +152,7 @@ namespace TacticsGame.Core
         public UnitDefinition Definition;
         public List<ActionDefinition> Loadout;
         public List<UpgradeDefinition> Upgrades = new List<UpgradeDefinition>();
+        public UnitGrowth Growth = new UnitGrowth();   // its Etchings (Progression.Growth)
     }
 
     /// <summary>One enemy to deploy.</summary>
@@ -119,6 +160,8 @@ namespace TacticsGame.Core
     {
         public UnitDefinition Definition;
         public List<UpgradeDefinition> Upgrades = new List<UpgradeDefinition>();
+        public float ArriveAfter;   // 0: on the field at the start; otherwise dropped in then (BattleSimulation.ScheduleDrop)
+        public Team Side = Team.Enemy;   // EnemyEntry.Side
     }
 
     /// <summary>How an encounter went, for the results screen.</summary>
@@ -127,6 +170,7 @@ namespace TacticsGame.Core
         public BattleOutcome Outcome;
         public bool Won { get { return Outcome == BattleOutcome.PlayerVictory; } }
         public int CurrencyEarned;
+        public int ExperienceEarned, AbilityPointsEarned;   // each member
         public List<string> UpgradesEarned = new List<string>();
         public List<string> MembersDown = new List<string>();
     }
@@ -134,8 +178,9 @@ namespace TacticsGame.Core
     /// <summary>Turning a roster and an encounter into a battle's units, and a finished battle back into the roster.</summary>
     public static class Campaign
     {
-        /// <summary>The members who can deploy (not down, class known), with their loadouts and upgrades resolved.</summary>
-        public static List<SquadSlot> Squad(SquadRoster roster, ContentCatalog catalog)
+        /// <summary>The members who can deploy (not down, class known), with their loadouts, upgrades and Etchings
+        /// ('progression': the config they are defined in) resolved. A progressing member brings its unlocked abilities.</summary>
+        public static List<SquadSlot> Squad(SquadRoster roster, ContentCatalog catalog, ProgressionConfig progression = null)
         {
             var slots = new List<SquadSlot>();
             foreach (var m in roster.Members)
@@ -143,7 +188,9 @@ namespace TacticsGame.Core
                 var def = catalog.Unit(m.Class);
                 if (def == null || m.Down) continue;
                 var slot = new SquadSlot { Member = m, Definition = def };
-                if (m.HasLoadout) slot.Loadout = def.Actions.FindAll(a => a != null && m.Loadout.Contains(a.Id));
+                if (m.Progressing) slot.Loadout = def.Actions.FindAll(a => a != null && a != def.BasicAttack && m.Unlocked.Contains(a.Id) && (!m.HasLoadout || m.Loadout.Contains(a.Id)));
+                else if (m.HasLoadout) slot.Loadout = def.Actions.FindAll(a => a != null && m.Loadout.Contains(a.Id));
+                slot.Growth = Progression.Growth(m, progression, def);
                 foreach (var id in m.Upgrades) { var up = catalog.Upgrade(id); if (up != null) slot.Upgrades.Add(up); }
                 slots.Add(slot);
             }
@@ -157,7 +204,7 @@ namespace TacticsGame.Core
             foreach (var e in spec.Enemies)
             {
                 if (e == null || e.Unit == null) continue;
-                for (int i = 0; i < Mathf.Max(1, e.Count); i++) slots.Add(new EnemySlot { Definition = e.Unit, Upgrades = new List<UpgradeDefinition>(e.Upgrades ?? new List<UpgradeDefinition>()) });
+                for (int i = 0; i < Mathf.Max(1, e.Count); i++) slots.Add(new EnemySlot { Definition = e.Unit, Upgrades = new List<UpgradeDefinition>(e.Upgrades ?? new List<UpgradeDefinition>()), ArriveAfter = Mathf.Max(0f, e.ArriveAfter), Side = e.Side == Team.Player ? Team.Enemy : e.Side });
             }
             return slots;
         }
@@ -165,7 +212,7 @@ namespace TacticsGame.Core
         /// <summary>A squad member's unit for the battle: built from its class with its loadout and upgrades, carrying its wounds.</summary>
         public static Unit MakeUnit(SquadSlot slot, string id, Vector3 position)
         {
-            var u = Unit.FromDefinition(slot.Definition, id, Team.Player, position, slot.Loadout, slot.Upgrades);
+            var u = Unit.FromDefinition(slot.Definition, id, Team.Player, position, slot.Loadout, slot.Upgrades, slot.Growth);
             ApplyWounds(u, slot.Member != null ? slot.Member.Wounds : 0f);
             return u;
         }
@@ -195,6 +242,9 @@ namespace TacticsGame.Core
             }
             if (!result.Won) return result;
             var rewards = spec.Rewards ?? new EncounterRewards();
+            Progression.Award(roster, rewards);
+            result.ExperienceEarned = rewards.Experience;
+            result.AbilityPointsEarned = rewards.AbilityPoints;
             roster.Currency += rewards.Currency;
             result.CurrencyEarned = rewards.Currency;
             if (rewards.Upgrades != null)

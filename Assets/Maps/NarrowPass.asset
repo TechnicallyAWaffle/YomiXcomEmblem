@@ -1,0 +1,103 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e28427a253197334b818cdd26df77c81, type: 3}
+  m_Name: NarrowPass
+  m_EditorClassIdentifier: Apotheom.Presentation::TacticsGame.Presentation.MapTemplate
+  DisplayName: Narrow Pass
+  Description: 'A long lane between two ledges: staggered walls below, high ground
+    on the flanks.'
+  GroundSize: {x: 32, y: 56}
+  Pieces:
+  - Name: Ledge_W
+    Kind: 1
+    Position: {x: -13, y: 0, z: 0}
+    Size: {x: 6, y: 1.2, z: 40}
+    Yaw: 0
+  - Name: Ledge_W_Top
+    Kind: 1
+    Position: {x: -14.5, y: 1.2, z: 0}
+    Size: {x: 3, y: 1.2, z: 16}
+    Yaw: 0
+  - Name: Ledge_E
+    Kind: 1
+    Position: {x: 13, y: 0, z: 0}
+    Size: {x: 6, y: 1.2, z: 40}
+    Yaw: 0
+  - Name: Ledge_E_Top
+    Kind: 1
+    Position: {x: 14.5, y: 1.2, z: 0}
+    Size: {x: 3, y: 1.2, z: 16}
+    Yaw: 0
+  - Name: Steps_SW
+    Kind: 1
+    Position: {x: -8.5, y: 0, z: -16}
+    Size: {x: 2, y: 0.9, z: 2}
+    Yaw: 0
+  - Name: Steps_NE
+    Kind: 1
+    Position: {x: 8.5, y: 0, z: 16}
+    Size: {x: 2, y: 0.9, z: 2}
+    Yaw: 0
+  - Name: LowWall_S
+    Kind: 0
+    Position: {x: -4, y: 0, z: -12}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: LowWall_N
+    Kind: 0
+    Position: {x: 4, y: 0, z: 12}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: LowWall_SE
+    Kind: 0
+    Position: {x: 5, y: 0, z: -5}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: LowWall_NW
+    Kind: 0
+    Position: {x: -5, y: 0, z: 5}
+    Size: {x: 4, y: 1, z: 0.5}
+    Yaw: 0
+  - Name: Pillar_S
+    Kind: 0
+    Position: {x: 0, y: 0, z: -8}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_N
+    Kind: 0
+    Position: {x: 0, y: 0, z: 8}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_W
+    Kind: 0
+    Position: {x: -2.5, y: 0, z: 0}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_E
+    Kind: 0
+    Position: {x: 2.5, y: 0, z: 0}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  PlayerSpawns:
+  - {x: -4.5, y: 0, z: -22}
+  - {x: -1.5, y: 0, z: -22}
+  - {x: 1.5, y: 0, z: -22}
+  - {x: 4.5, y: 0, z: -22}
+  EnemySpawns:
+  - {x: -4.5, y: 0, z: 22}
+  - {x: -1.5, y: 0, z: 22}
+  - {x: 1.5, y: 0, z: 22}
+  - {x: 4.5, y: 0, z: 22}
+  - {x: -4.5, y: 0, z: 25}
+  - {x: -1.5, y: 0, z: 25}
+  - {x: 1.5, y: 0, z: 25}
+  - {x: 4.5, y: 0, z: 25}

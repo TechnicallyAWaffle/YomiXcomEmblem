@@ -201,6 +201,7 @@ namespace TacticsGame.Core
         private void Relocate(Unit unit, Vector3 to, float duration, bool forced, Unit source = null, Vector3? phaseFrom = null)
         {
             if (unit.FallLandAt >= 0f || unit.IsLifted) return;   // falling or held up in the air: nothing moves it
+            if (forced && !CanDisplace(unit, source)) return;     // Unstoppable: shoves, pulls and knockbacks don't move it
             foreach (var s in unit.States.ToArray()) s.OnShoved(this);   // shoved out of a grip (HeldState)
             if (unit.IsJumping)
             {
@@ -208,6 +209,7 @@ namespace TacticsGame.Core
                 HaltWalk(unit);
             }
             Vector3 from = unit.Position;
+            to = Paths.ClampDash(phaseFrom ?? from, to);   // a slide or shove stops at the map's edge, whoever picked the spot
             to = Terrain.OnGround(FreeSpotNear(unit, to, phaseFrom ?? from, false));
             if (unit.Phase == UnitPhase.Moving) EndMove(unit, false);   // assumption: being relocated ends a walk in progress
             float drop = from.y - to.y;

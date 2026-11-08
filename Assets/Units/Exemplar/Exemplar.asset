@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
+  m_Name: Exemplar
+  m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
+  DisplayName: Exemplar
+  MaxHealth: 90
+  BaseDodge: 0.2
+  BaseBlock: 0
+  MaxStrain: 70
+  StrainRecoveryPerSecond: 6
+  StrainRecoveryDelay: 0.5
+  MaxEnergy: 0
+  StartingEnergy: 0
+  ActionSpeed: 1
+  MoveSpeed: 6
+  DashDistance: 3
+  EyeHeight: 1.6
+  BodyHeight: 1.8
+  BodyRadius: 0.4
+  BasicAttack: {fileID: 11400000, guid: 073bed7de4d2ddb4186a271512162b4d, type: 2}
+  Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
+  Actions:
+  - {fileID: 11400000, guid: 1b3d5f44a3340b649841e45c4e4bae8f, type: 2}
+  - {fileID: 11400000, guid: 270a5296cfb543f4ca95547c4097dff9, type: 2}
+  - {fileID: 11400000, guid: b94e46c70d6475d40a641155c211a1b3, type: 2}
+  - {fileID: 11400000, guid: 16f01df48f795c040a11398d18340579, type: 2}
+  Passives: []
+  AIProfile: exemplar
+  AI: {fileID: 0}
+  ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Icon: {fileID: 0}
+  GrantedActions: []
+  DataVersion: 15

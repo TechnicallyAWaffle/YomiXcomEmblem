@@ -36,7 +36,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: b39804455d66a104c8314500ee330270, type: 2}
   - {fileID: 11400000, guid: d758801727242194dbd6f99521bfcbb0, type: 2}
   - {fileID: 11400000, guid: d6136dcc489e5284d8b3f71bedbb9e13, type: 2}
-  - {fileID: 11400000, guid: 3e38bc8d895694b418649d7a6fa26929, type: 2}
   - {fileID: 11400000, guid: 21b5f4e1b93dd154e8c4d5db83dedcd6, type: 2}
   - {fileID: 11400000, guid: c61c8afcd9c12a243866e184ae07dd91, type: 2}
   - {fileID: 11400000, guid: 470fadec892047c4c9cd8241a05bd965, type: 2}
@@ -45,9 +44,19 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 8d503594631c6304eab71912f968b659, type: 2}
   - {fileID: 11400000, guid: 054e55497b7ae0f498e94895d8fad8f5, type: 2}
   - {fileID: 11400000, guid: be7126f513a662f4aa3e4698e74ddd43, type: 2}
+  - {fileID: 11400000, guid: 40a540221bfae974f84cfb17a13acdd7, type: 2}
+  - {fileID: 11400000, guid: 10f76dd7dc6987f4f9bc9f6ddae414eb, type: 2}
+  - {fileID: 11400000, guid: ec929a2d16adf37409c4ef47739ea136, type: 2}
+  - {fileID: 11400000, guid: 472f9240083db6745894df677cd0c311, type: 2}
   Passives:
   - strain_relief_on_dodge
   AIProfile: 
   AI: {fileID: 0}
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Icon: {fileID: 0}
+  GrantedActions:
+  - a_million_cuts
+  - fighter_polystep
+  - the_endless_hunt
+  - you
   DataVersion: 15

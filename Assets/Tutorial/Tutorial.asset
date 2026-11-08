@@ -1,0 +1,523 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e20e6bbe6f9fd9c4788ab5df3fb26a77, type: 3}
+  m_Name: Tutorial
+  m_EditorClassIdentifier: Apotheom.Presentation::TacticsGame.Presentation.TutorialDefinition
+  DisplayName: Tutorial
+  Description: A guided battle with a Fighter and a Sharpshooter that shows every
+    control, step by step.
+  Map: {fileID: 11400000, guid: f9df28007b1f7b6408add43d0cde1b7d, type: 2}
+  Squad:
+  - Unit: {fileID: 11400000, guid: 1398d33ac4149994fa4256a30fb4114a, type: 2}
+    Abilities:
+    - {fileID: 11400000, guid: 804269327a3dc114caac234d2c14f839, type: 2}
+    - {fileID: 11400000, guid: 96c0392ca5dad4f4aafab48f5a26b021, type: 2}
+  - Unit: {fileID: 11400000, guid: a9ec52e8845028b418402d54387b46b9, type: 2}
+    Abilities:
+    - {fileID: 11400000, guid: 3e38bc8d895694b418649d7a6fa26929, type: 2}
+    - {fileID: 11400000, guid: 21b5f4e1b93dd154e8c4d5db83dedcd6, type: 2}
+  StartingEnemies: []
+  SquadHealthFloor: 0.2
+  Steps:
+  - Title: Welcome
+    Text: 'This battle teaches you the controls with two units: a <b>Fighter</b>
+      (melee) and a <b>Sharpshooter</b> (ranged).
+
+
+      Battles play out in real
+      time, but the world holds still whenever one of your units is ready for new
+      orders, so take as long as you like to decide.
+
+
+      Read each note, then
+      press Continue (or Enter). Notes that ask you to do something move on by themselves
+      once you''ve done it.'
+    Goal: 0
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 1
+  - Title: Panning the camera
+    Text: Pan the camera with <b>WASD</b> or the <b>arrow keys</b>, or drag with
+      the <b>middle mouse button</b>.
+    Goal: 2
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Rotating the camera
+    Text: Rotate with <b>Q</b> and <b>E</b>, or hold the <b>right mouse button</b>
+      and drag (dragging up and down tilts the view).
+    Goal: 3
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Zooming
+    Text: 'Zoom in and out with the <b>mouse wheel</b>.
+
+
+      Press <b>Z</b> at
+      any time to centre the camera on the unit you''re giving orders to.'
+    Goal: 4
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Who's giving orders
+    Text: 'The panel at the bottom gives orders to one unit at a time: the one pulsing
+      on the field. When you''ve given it its orders, the next unit that''s ready
+      comes up.
+
+
+      Bottom left: that unit''s <b>health</b> (green) and <b>strain</b>
+      (orange). Along the top: the <b>timeline</b>, showing when each unit will be
+      free to act next. Hover over a chip on it to centre the camera on that unit.'
+    Goal: 0
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Moving
+    Text: 'Press <b>F</b> (or click Move), then click the ground to walk there.
+
+
+      The
+      line shows the route and how long the walk takes, and the enemies the unit
+      would see from there light up.'
+    Goal: 5
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Waypoints
+    Text: Press <b>F</b>, then hold <b>Shift</b> and click to drop waypoints. Click
+      without Shift for the last point. The unit walks through each one in turn without
+      stopping.
+    Goal: 6
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Something to hit
+    Text: 'A <b>Training Dummy</b> has been set up in front of you. It won''t fight
+      back.
+
+
+      Every unit''s basic attack is always on key <b>1</b>; its other
+      abilities are on the next keys, as their buttons show.'
+    Goal: 0
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns:
+    - Unit: {fileID: 11400000, guid: a088850889b9c8b43af47e0b4c5a255f, type: 2}
+      Position: {x: 0, y: 0, z: -6}
+      Count: 1
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Attacking
+    Text: 'Press <b>1</b>, then click the dummy. Hit it with both units.
+
+
+      Ordered
+      out of reach, a melee attack walks the unit in and strikes when it gets there.
+      A ranged attack ordered out of range waits until the target is in range.'
+    Goal: 8
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 2
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Line of sight and cover
+    Text: 'Ranged attacks need <b>line of sight</b> from where the unit stands. Pillars
+      block it completely.
+
+
+      Low walls are <b>cover</b>: a shot from the far
+      side at a unit behind one can strike the wall instead. Raised ground lets you
+      see over cover. While aiming, targets you can''t hit are marked in red.'
+    Goal: 0
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Abilities
+    Text: 'Hover over a button in the panel to see what an ability does, its <b>windup</b>
+      (before it lands), <b>recovery</b> (after) and <b>cooldown</b>.
+
+
+      Use
+      the Fighter''s basic attack <b>Rend The Flesh</b> on the dummy.'
+    Goal: 7
+    AbilityId: basic_attack
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Strain
+    Text: Some abilities cost <b>strain</b>, and every attack that lands adds strain
+      to its target. At maximum Strain, certain attacks will <b>Unravel </b>you,
+      stunning you for a lengthy duration.
+    Goal: 0
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Focus
+    Text: 'Hold <b>Space</b> while a unit is up for orders to <b>Focus</b>: it stands
+      still and sheds strain, and time runs slowly for as long as you hold.'
+    Goal: 9
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Plans
+    Text: 'Hold <b>Shift</b> while giving orders to queue several in a row, such
+      as a move and then an attack. <b>Enter</b> confirms the plan, <b>Backspace</b>
+      undoes the last order, and <b>right-click</b> or <b>Esc</b> goes back a step.
+
+
+      Queue
+      two orders and confirm them.'
+    Goal: 10
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Follow-ups
+    Text: '<b>Rapid Slices</b> is a follow-up: right after it, press its key again
+      to repeat it on the same target for half the strain, up to four more times.
+
+
+      Use
+      it twice in a row on the dummy.'
+    Goal: 7
+    AbilityId: rapid_slices
+    UnitClass: 
+    Key: 0
+    Count: 2
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 1
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Transcend
+    Text: '<b>Hold</b> an ability''s key (or its button) instead of tapping it to
+      <b>Transcend</b> it: a stronger version for extra strain. The screen darkens
+      as the hold builds.
+
+
+      Transcend the Fighter''s Steady Strikes: it becomes
+      a hit that can''t miss and pierces block. Block and Dash can be Transcended
+      too.'
+    Goal: 11
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 1
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Targeting the ground
+    Text: 'Some abilities are aimed at a point on the ground. Have the Sharpshooter
+      throw a <b>Trap</b>: it arms after a moment, and the first enemy to step in
+      is immobilised and marked.'
+    Goal: 7
+    AbilityId: trap
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: A real opponent
+    Text: 'The dummy''s done its job. A <b>Raider</b> has arrived to the north.
+
+
+      Enemies
+      show what they''re about to do: the label over a unit''s head and its chip
+      on the timeline show its ability winding up and when it will land.'
+    Goal: 0
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 1
+    Spawns:
+    - Unit: {fileID: 11400000, guid: 86395be8757e7a542a45dcc70302be4c, type: 2}
+      Position: {x: 0, y: 0, z: 9}
+      Count: 1
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Blocking
+    Text: The Raider is coming. <b>Block</b> raises a unit's guard for a second,
+      halving the damage of whatever lands in that time. Use it on the unit the Raider
+      is about to hit.
+    Goal: 7
+    AbilityId: block
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 1
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 1
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Interrupting
+    Text: Heavy hits interrupt a windup. Hit the Raider with the Sharpshooter's <b>Snapshot</b>,
+      ideally while it's winding up an attack, to cancel it.
+    Goal: 8
+    AbilityId: snapshot
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 1
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Dodging
+    Text: 'Units sometimes <b>dodge</b> an attack. When one of yours does, time stops
+      and you pick where it dashes: click a point inside the ring around it.
+
+
+      For
+      this step, your units dodge every attack. Let the Raider swing at one.'
+    Goal: 12
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 1
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 1
+    Skippable: 1
+    Place: 0
+  - Title: Stopping a walk
+    Text: Send a unit on a long walk. While it's walking, the next time another of
+      your units is up for orders, the panel offers to <b>stop</b> the walker where
+      it stands, for some strain.
+    Goal: 13
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 1
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Finish the Raider
+    Text: Take the Raider down.
+    Goal: 16
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 1
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 0
+  - Title: Final exercise
+    Text: 'Two Raiders and a <b>Marksman</b>. The Marksman shoots from the north
+      perch: keep the pillars between it and your units, or close in on it. Use everything
+      you''ve learned.'
+    Goal: 16
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 1
+    RemoveEnemies: 0
+    Spawns:
+    - Unit: {fileID: 11400000, guid: 86395be8757e7a542a45dcc70302be4c, type: 2}
+      Position: {x: -1, y: 0, z: 10}
+      Count: 2
+    - Unit: {fileID: 11400000, guid: c857a4ad178a66d46a981a77e615bf30, type: 2}
+      Position: {x: 6, y: 1.2, z: 12}
+      Count: 1
+    RestoreSquad: 1
+    SquadAlwaysDodges: 0
+    Skippable: 0
+    Place: 0
+  - Title: A few more keys
+    Text: '<b>H</b>  shows or hides the controls list (top right)
+
+      <b>Alt</b> 
+      hides the interface so you can watch the battle (Alt again brings it back)
+
+      <b>C</b> 
+      switches the cinematic camera between key moments, everything and off
+
+      <b>R</b> 
+      replays a battle once it''s over'
+    Goal: 0
+    AbilityId: 
+    UnitClass: 
+    Key: 0
+    Count: 1
+    Amount: 0
+    Enemies: 0
+    RemoveEnemies: 0
+    Spawns: []
+    RestoreSquad: 0
+    SquadAlwaysDodges: 0
+    Skippable: 1
+    Place: 1
+  FinishedTitle: Tutorial complete
+  FinishedText: 'That''s everything a battle asks of you. Start a campaign from the
+    menu: between missions your units earn ability points to unlock new abilities,
+    and Etchings, permanent upgrades you choose from.'
+  FinishedButton: Back to the menu

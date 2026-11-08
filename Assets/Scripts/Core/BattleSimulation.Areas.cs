@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace TacticsGame.Core
@@ -18,8 +19,13 @@ namespace TacticsGame.Core
             public Unit Source;
             public ActionDefinition Definition;
             public float EndsAt;
+            public float StartedAt;  // when it went up (its damage grows from here: AuraDamageGrowth)
             public bool Channeled;   // ends with Source's channel
+            public bool Anchored;    // stays at Center (a zone) instead of moving with Source
+            public Vector3 Center;
             public readonly HashSet<string> Inside = new HashSet<string>();
+
+            public Vector3 Where { get { return Anchored ? Center : Source.Position; } }
         }
 
         private readonly List<Aura> auras = new List<Aura>();
@@ -30,19 +36,86 @@ namespace TacticsGame.Core
         /// step in get def.AuraStatuses (each one's AppliesTo picks allies or enemies; 'source' itself is left out), and lose them
         /// when they step out or the dome comes down. 'channeled': it also comes down when the source's channel ends.
         /// </summary>
-        public void StartAura(Unit source, ActionDefinition def, float seconds, bool channeled)
+        /// at: a zone left on the ground there (AuraAtTarget) rather than a dome that moves with 'source'. Either way, an enemy
+        /// inside also takes def.AuraDamagePerSecond and def.AuraStrainPerSecond (TickAuraEffects).
+        public void StartAura(Unit source, ActionDefinition def, float seconds, bool channeled, Vector3? at = null)
         {
             if (source == null || !source.IsAlive || seconds <= 0f) return;
-            var aura = new Aura { Id = "aura_" + (++auraCounter), Source = source, Definition = def, EndsAt = Now + seconds, Channeled = channeled };
+            var aura = new Aura { Id = "aura_" + (++auraCounter), Source = source, Definition = def, EndsAt = Now + seconds, StartedAt = Now, Channeled = channeled, Anchored = at.HasValue, Center = at.HasValue ? Terrain.OnGround(at.Value) : Vector3.zero };
             auras.Add(aura);
-            Emit(EventType.AuraStarted, source.Id, null, new AuraInfo { Id = aura.Id, ActionId = def.Id, Radius = source.ActionStat(def, ActionStat.AreaRadius), Height = def.AreaHeight, EndsAt = aura.EndsAt });
+            EmitAura(aura);
             UpdateAura(aura);
         }
 
-        /// <summary>Is any of u's body inside the dome of 'radius' by 'height' centred on 'center''s feet? (height 0: a cylinder of any height)</summary>
-        public static bool InDome(Unit center, float radius, float height, Unit u)
+        private void EmitAura(Aura aura)
         {
-            Vector3 d = u.Position - center.Position;
+            Emit(EventType.AuraStarted, aura.Source.Id, null, new AuraInfo
+            {
+                Id = aura.Id, ActionId = aura.Definition.Id, Radius = aura.Source.ActionStat(aura.Definition, ActionStat.AreaRadius), Height = aura.Definition.AreaHeight, EndsAt = aura.EndsAt,
+                Anchored = aura.Anchored, Center = aura.Center,
+            });
+        }
+
+        /// <summary>Is a dome of 'def' that 'source' raised still up (a zone it can renew: Baneful Domain)?</summary>
+        public bool HasAura(Unit source, ActionDefinition def) { return auras.Exists(a => a.Source == source && a.Definition == def); }
+
+        /// <summary>Where 'source''s dome of 'def' stands now (a moving one: at 'source'); false if it has none up.</summary>
+        public bool TryGetAuraCenter(Unit source, ActionDefinition def, out Vector3 center)
+        {
+            var aura = auras.Find(a => a.Source == source && a.Definition == def);
+            center = aura != null ? aura.Where : Vector3.zero;
+            return aura != null;
+        }
+
+        /// <summary>
+        /// Renew 'source''s dome of 'def': it lasts 'seconds' from now, where it is, and keeps how long it has been up (its
+        /// damage growth). Its statuses on those inside last as long. The views hear it as the dome starting again (same id).
+        /// False if there is none.
+        /// </summary>
+        public bool RefreshAura(Unit source, ActionDefinition def, float seconds)
+        {
+            var aura = auras.Find(a => a.Source == source && a.Definition == def);
+            if (aura == null || seconds <= 0f) return false;
+            aura.EndsAt = Now + seconds;
+            foreach (var id in aura.Inside)
+            {
+                var u = GetUnit(id);
+                if (u == null || !u.IsAlive) continue;
+                foreach (var spec in def.AuraStatuses)
+                {
+                    var st = spec != null ? u.GetStatus(spec.Id) : null;
+                    if (st == null || st.SourceId != source.Id) continue;
+                    st.ExpiresAt = aura.EndsAt;
+                    RefreshStatusTimer(u, st, source);
+                }
+            }
+            EmitAura(aura);
+            return true;
+        }
+
+        /// <summary>A dome's damage per second now: its AuraDamagePerSecond, grown by AuraDamageGrowth per second it has been up.</summary>
+        private float AuraDamageNow(Aura a)
+        {
+            return a.Definition.AuraDamagePerSecond * (1f + Mathf.Max(0f, a.Definition.AuraDamageGrowth) * Mathf.Max(0f, Now - a.StartedAt));
+        }
+
+        /// <summary>A unit's always-on abilities (InnatePassive) put their domes up: at the start of the battle, or on arrival.</summary>
+        private void StartInnateAuras(Unit u)
+        {
+            foreach (var def in u.Actions)
+                if (def != null && def.InnatePassive) StartAura(u, def, InnateSeconds, false);
+        }
+
+        /// <summary>How long an innate dome lasts: the whole battle (it comes down with its unit).</summary>
+        private const float InnateSeconds = 1e6f;
+
+        /// <summary>Is any of u's body inside the dome of 'radius' by 'height' centred on 'center''s feet? (height 0: a cylinder of any height)</summary>
+        public static bool InDome(Unit center, float radius, float height, Unit u) { return InDome(center.Position, radius, height, u); }
+
+        /// <summary>The same, for a dome whose feet are at 'center' (a zone on the ground).</summary>
+        public static bool InDome(Vector3 center, float radius, float height, Unit u)
+        {
+            Vector3 d = u.Position - center;
             float up = d.y; d.y = 0f;
             float flat = Mathf.Max(0f, d.magnitude - u.BodyRadius);
             if (flat > radius + 1e-4f) return false;
@@ -57,7 +130,7 @@ namespace TacticsGame.Core
         {
             var list = new List<AuraInfo>();
             foreach (var a in auras)
-                if (a.Source == u) list.Add(new AuraInfo { Id = a.Id, ActionId = a.Definition.Id, Radius = a.Source.ActionStat(a.Definition, ActionStat.AreaRadius), Height = a.Definition.AreaHeight, EndsAt = a.EndsAt });
+                if (a.Source == u) list.Add(new AuraInfo { Id = a.Id, ActionId = a.Definition.Id, Radius = a.Source.ActionStat(a.Definition, ActionStat.AreaRadius), Height = a.Definition.AreaHeight, EndsAt = a.EndsAt, Anchored = a.Anchored, Center = a.Center });
             return list;
         }
 
@@ -69,6 +142,26 @@ namespace TacticsGame.Core
                 if (!a.Source.IsAlive || Now + 1e-4f >= a.EndsAt) { EndAura(a); continue; }
                 UpdateAura(a);
             }
+            TickAuraEffects();
+        }
+
+        /// <summary>Domes that hurt or strain the enemies inside (AuraDamagePerSecond, AuraStrainPerSecond), in StrainRecoveryTicks steps.</summary>
+        private void TickAuraEffects()
+        {
+            if (tick % StrainRecoveryTicks != 0) return;
+            float step = StrainRecoveryTicks * TickLength;
+            foreach (var a in auras.ToArray())
+            {
+                var def = a.Definition;
+                if (def.AuraDamagePerSecond <= 0f && def.AuraStrainPerSecond <= 0f) continue;
+                foreach (var id in a.Inside.ToList())
+                {
+                    var u = GetUnit(id);
+                    if (u == null || !u.IsAlive || u.Team == a.Source.Team) continue;
+                    if (def.AuraStrainPerSecond > 0f) AddStrain(u, def.AuraStrainPerSecond * a.Source.StrainDealtMult() * step);
+                    if (def.AuraDamagePerSecond > 0f) DealTickDamage(a.Source, u, AuraDamageNow(a) * a.Source.DamageDealtMult() * step, def);
+                }
+            }
         }
 
         private void UpdateAura(Aura a)
@@ -76,7 +169,7 @@ namespace TacticsGame.Core
             foreach (var u in State.Units)
             {
                 if (u == a.Source) continue;
-                bool inside = u.IsAlive && InDome(a.Source, a.Source.ActionStat(a.Definition, ActionStat.AreaRadius), a.Definition.AreaHeight, u);
+                bool inside = u.IsAlive && InDome(a.Where, a.Source.ActionStat(a.Definition, ActionStat.AreaRadius), a.Definition.AreaHeight, u);
                 if (inside == a.Inside.Contains(u.Id)) continue;
                 if (!inside)
                 {
@@ -226,6 +319,7 @@ namespace TacticsGame.Core
         {
             if (carrier == null || target == null || !carrier.IsAlive || !target.IsAlive || carrier == target) return;
             if (target.Phase != UnitPhase.Stunned || def.DisplaceDistance <= 0f) return;   // a stun-immune target slipped the grab
+            if (!CanDisplace(target, carrier)) return;   // Unstoppable: not carried off
             if (carrier.IsLifted || target.IsLifted || carrier.FallLandAt >= 0f || target.FallLandAt >= 0f || carrier.Phase == UnitPhase.Stunned) return;
             if (target.HeldById != null) ReleaseHeld(target);
             if (target.Grapple != null) EndGrapple(target);
@@ -320,6 +414,7 @@ namespace TacticsGame.Core
         private void TakeFallDamage(Unit u, float amount, Unit source)
         {
             if (!u.IsAlive || amount <= 0f) return;
+            DevAdjustDamage(source, u, ref amount);
             u.Health -= amount;
             if (source != null) u.LastAttackerId = source.Id;
             u.LastHitAction = null;

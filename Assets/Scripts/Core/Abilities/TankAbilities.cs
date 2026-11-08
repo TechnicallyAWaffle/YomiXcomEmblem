@@ -61,7 +61,7 @@ namespace TacticsGame.Core
         {
             var headbutt = tip.Def.LinkedAction;
             if (headbutt != null)
-                tip.Add("Headbutts", string.Format("{0:0} / {1:0.#}s", tip.Who != null ? tip.Who.ActionStat(headbutt, ActionStat.Damage) : headbutt.Damage, tip.Sim != null ? tip.Sim.GrappleHeadbuttSeconds : 0.5f));
+                tip.Add("Headbutts", string.Format("{0:0} / {1:0.##}s", tip.Who != null ? tip.Who.ActionStat(headbutt, ActionStat.Damage) : headbutt.Damage, tip.Sim != null ? tip.Sim.GrappleHeadbuttSeconds : 0.5f));
             DescribeHit(tip, "Throw", "Hold", false);
         }
 
@@ -159,6 +159,126 @@ namespace TacticsGame.Core
                     IgnoreRange = true, IgnoreCover = true,
                     OnLanded = height > 0f ? (s, t) => s.LiftUnit(t, height, actor) : (System.Action<BattleSimulation, Unit>)null,
                 });
+        }
+    }
+
+    /// <summary>
+    /// Cognitive Burden (strain_burden): take up to 'transfer' (50) of an ally's strain onto yourself and be Burdened for
+    /// 'seconds' (3, scaled like a duration). While Burdened, the first hit an enemy lands on you hands that enemy the
+    /// strain you took on (as much of it as you still carry; the status's Stacks), and Burdened ends. No hit roll.
+    /// </summary>
+    public class StrainBurdenBehavior : ActionBehavior
+    {
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get { yield return new BehaviorParam("transfer", 50f); yield return new BehaviorParam("seconds", 3f); }
+        }
+
+        public override bool RollsToHit(ActionDefinition def) { return false; }
+
+        public override void Describe(AbilityTip tip)
+        {
+            base.Describe(tip);
+            tip.Add("Takes on", string.Format("up to {0:0} strain", Param(tip.Def, "transfer")));
+            tip.Add("Burdened", AbilityTip.Secs(Param(tip.Def, "seconds") * (tip.Who != null ? tip.Who.DurationScale(tip.Def) : 1f)));
+        }
+
+        public override void Attach(BattleSimulation sim)
+        {
+            sim.Triggers.Subscribe(TriggerType.DamageTaken, ctx =>
+            {
+                var u = ctx.Subject;
+                var burden = u.GetStatus(StatusIds.Burdened);
+                var enemy = ctx.Other;
+                if (burden == null || enemy == null || enemy.Team == u.Team || !enemy.IsAlive) return;
+                float amount = Mathf.Min(burden.Stacks, u.Strain);
+                sim.RemoveStatus(u, StatusIds.Burdened);
+                if (amount <= 0f) return;
+                sim.AddStrain(u, -amount);
+                sim.AddStrain(enemy, amount);
+            });
+        }
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var actor = a.Actor;
+            var ally = sim.GetUnit(a.TargetUnitId);
+            if (ally == null || ally == actor || !sim.InReach(actor, a.Definition, ally)) return;
+            float take = Mathf.Min(ally.Strain, Param(a.Definition, "transfer"));
+            if (take > 0f) { sim.AddStrain(ally, -take); sim.AddStrain(actor, take); }
+            sim.ApplyStatus(actor, new StatusEffect
+            {
+                Id = StatusIds.Burdened, SourceId = actor.Id, Stacks = Mathf.RoundToInt(take),
+                ExpiresAt = sim.Now + Param(a.Definition, "seconds") * actor.DurationScale(a.Definition),
+            }, actor);
+        }
+    }
+
+    /// <summary>
+    /// Death Sentence (telekinetic_pull): winds up on an enemy it must keep in sight (losing it breaks the windup), then
+    /// grabs it and channels (ChannelSeconds, at most): the target is held (stunned) and dragged toward the user at
+    /// pull_speed (4 m/s) until it arrives, the channel ends, or the user is hit (the pull stops where it is). An airborne
+    /// target is instead thrown straight down: air_speed (4) times as fast as a fall, air_fall_damage (2) times the fall
+    /// damage, and the channel ends there.
+    /// </summary>
+    public class TelekineticPullBehavior : ActionBehavior
+    {
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get
+            {
+                yield return new BehaviorParam("pull_speed", 4f);
+                yield return new BehaviorParam("air_speed", 4f);
+                yield return new BehaviorParam("air_fall_damage", 2f);
+            }
+        }
+
+        public override bool RollsToHit(ActionDefinition def) { return false; }
+
+        public override void Describe(AbilityTip tip)
+        {
+            base.Describe(tip);
+            tip.Add("Pull", string.Format("{0:0.#} m/s, up to {1}", Param(tip.Def, "pull_speed"), AbilityTip.Secs(tip.Def.ChannelSeconds)));
+            tip.Add("Airborne target", string.Format("slammed down x{0:0.#} speed, x{1:0.#} fall damage", Param(tip.Def, "air_speed"), Param(tip.Def, "air_fall_damage")));
+            tip.Add("Windup", "breaks if it loses sight of the target");
+        }
+
+        public override bool OnWindupTick(BattleSimulation sim, ActionInstance a)
+        {
+            var target = sim.GetUnit(a.TargetUnitId);
+            return target != null && target.IsAlive && sim.HasSightOf(a.Actor, a.Definition, target);
+        }
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var actor = a.Actor;
+            var target = sim.GetUnit(a.TargetUnitId);
+            a.Steps = -1;   // nothing to pull (the channel ends at once) unless set below
+            if (target == null || !target.IsAlive || !sim.InReach(actor, a.Definition, target)) return;
+            if (sim.SlamToGround(target, actor, Param(a.Definition, "air_speed"), Param(a.Definition, "air_fall_damage"))) return;
+            Vector3 dir = actor.Position - target.Position; dir.y = 0f;
+            float gap = dir.magnitude - (actor.BodyRadius + target.BodyRadius + 0.3f);
+            if (gap <= 0.05f) return;
+            float speed = Mathf.Max(0.1f, Param(a.Definition, "pull_speed"));
+            float dist = Mathf.Min(gap, speed * a.Definition.ChannelSeconds);
+            float seconds = dist / speed;
+            sim.StunUnit(target, seconds + BattleSimulation.TickLength, actor);   // held while it is dragged
+            sim.PushUnit(target, target.Position + dir.normalized * dist, seconds, actor);
+            a.Steps = 1;
+            a.NextStepAt = sim.Now + seconds;
+        }
+
+        public override bool OnChannelTick(BattleSimulation sim, ActionInstance a)
+        {
+            sim.CutChannel(a.Actor, a.Steps > 0 ? a.NextStepAt : sim.Now);   // over when the pull arrives, recovery after
+            var target = sim.GetUnit(a.TargetUnitId);
+            return a.Steps <= 0 || (target != null && target.IsAlive);
+        }
+
+        public override void OnChannelEnd(BattleSimulation sim, ActionInstance a, bool broken)
+        {
+            if (a.Steps > 0 && broken) sim.StopGlide(sim.GetUnit(a.TargetUnitId));   // let go: it stops where it is
+            a.Steps = 0;
         }
     }
 }

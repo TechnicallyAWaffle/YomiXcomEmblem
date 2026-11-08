@@ -41,8 +41,31 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a4f4773e49e3ea44481848ca112f8fa6, type: 2}
   - {fileID: 11400000, guid: 96c0392ca5dad4f4aafab48f5a26b021, type: 2}
   - {fileID: 11400000, guid: 8a94c10ea8430dd4fb371a848fa41435, type: 2}
+  - {fileID: 11400000, guid: 7597eb904873ed744b92d1f6c8ec6dff, type: 2}
+  - {fileID: 11400000, guid: 78710ca59070a3643a73d66811114661, type: 2}
+  - {fileID: 11400000, guid: ab774ac40e9c7594db3c51a7d50a5948, type: 2}
+  - {fileID: 11400000, guid: 1b3d807d3d608424893e521bdd9914fd, type: 2}
+  - {fileID: 11400000, guid: 7216a5687a8f6dc48a4356a68e6e6846, type: 2}
+  - {fileID: 11400000, guid: b4b3b7360d8423e43a153e2a3390c5d9, type: 2}
+  - {fileID: 11400000, guid: 3261866804ef5ec4fbbb11693dc815bb, type: 2}
+  - {fileID: 11400000, guid: 6a5cd362e29d8a44ba42e04bff36afbe, type: 2}
+  - {fileID: 11400000, guid: 4896568d5c4cf5e488bf13c2e39ae88f, type: 2}
+  - {fileID: 11400000, guid: 8121f2e9a05ee924fb9e09f328249ffb, type: 2}
   Passives: []
   AIProfile: 
   AI: {fileID: 0}
+  Boss: 0
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Icon: {fileID: 0}
+  GrantedActions:
+  - flurry
+  - pierce_the_wound
+  - extricate
+  - mark_of_the_unmaker
+  - soulseeker
+  - refraction_cloak
+  - destiny_closes_in
+  - dreadful_fixation
+  - crippling_pursuit
+  - mental_weapon
   DataVersion: 15

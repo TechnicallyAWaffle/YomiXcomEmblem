@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
+  m_Name: Deliverance
+  m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
+  DisplayName: Deliverance
+  MaxHealth: 250
+  BaseDodge: 0.35
+  BaseBlock: 0.25
+  MaxStrain: 170
+  StrainRecoveryPerSecond: 6
+  StrainRecoveryDelay: 0.5
+  MaxEnergy: 0
+  StartingEnergy: 0
+  ActionSpeed: 1
+  MoveSpeed: 7
+  DashDistance: 4
+  EyeHeight: 1.6
+  BodyHeight: 1.8
+  BodyRadius: 0.45
+  BasicAttack: {fileID: 11400000, guid: 0044e5c817d6f0f40848963052219061, type: 2}
+  Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
+  Actions:
+  - {fileID: 11400000, guid: c2991071ac32037459e1d6754098a60c, type: 2}
+  - {fileID: 11400000, guid: a774ee7b1934d42438057447f545effa, type: 2}
+  - {fileID: 11400000, guid: 63aa16c36bf3a4449a3413de216163b8, type: 2}
+  - {fileID: 11400000, guid: e1c8d7d50f3a3a34183ee92568948f8f, type: 2}
+  - {fileID: 11400000, guid: b4cfd8297902de8489184623962a0de1, type: 2}
+  - {fileID: 11400000, guid: b808399c57b7b17428e9eb031147f1e0, type: 2}
+  - {fileID: 11400000, guid: 90269d41cce30cb42b8d1a8b2a684790, type: 2}
+  - {fileID: 11400000, guid: ca7fe1602415a094f92e4e9bfe35abbd, type: 2}
+  Passives:
+  - unravel_resistance
+  - freedoms_embrace
+  - split_the_minds
+  AIProfile: deliverance
+  AI: {fileID: 0}
+  Boss: 1
+  ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Icon: {fileID: 0}
+  GrantedActions: []
+  DataVersion: 15

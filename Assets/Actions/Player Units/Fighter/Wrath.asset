@@ -30,10 +30,11 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 0
   Damage: 0
-  BaseAccuracy: 0.9
+  BaseAccuracy: 1
   StunDuration: 0
   StrainOnTarget: 0
   StrainOnSelf: 0
@@ -48,8 +49,21 @@ MonoBehaviour:
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonUnits: []
+  RandomStatusesOnHit: []
+  SummonCount: 0
+  SummonAIStyle: 
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
+  MissingHealthDamage: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5
@@ -65,7 +79,7 @@ MonoBehaviour:
       Value: 1.3
     - Stat: 11
       Op: 1
-      Value: 0.25
+      Value: 0.5
     ActionModifiers: []
     Flags: 0
     ForbidsActions:
@@ -78,6 +92,12 @@ MonoBehaviour:
       Color: {r: 0, g: 0, b: 0, a: 0}
       CountsUp: 0
       Hidden: 0
+      Important: 0
+    HealPerSecond: 0
+    StrainPerSecond: 0
+    BreakStun: 0
+    HealOnExpire: 0
+    HealMissingOnExpire: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -95,6 +115,7 @@ MonoBehaviour:
     RedirectsHits: 0
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  SelfStatusesOnHit: []
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -107,6 +128,7 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  FollowUps: []
   IsFollowup: 0
   ChainFollowups: 0
   ChainCostMultiplier: 1

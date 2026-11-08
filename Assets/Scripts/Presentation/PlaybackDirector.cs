@@ -30,6 +30,23 @@ namespace TacticsGame.Presentation
         public BattleTimeline Timeline { get; private set; }
         public float PlaybackClock { get { return playbackClock; } }
         public bool ReachedTarget { get; private set; }
+        /// <summary>
+        /// Freezes playback where it is (a tutorial popup being read): the clock stops and the engine timescale goes to
+        /// holdTimescale; clearing it carries on at playbackSpeed.
+        /// </summary>
+        public bool Paused
+        {
+            get { return paused; }
+            set
+            {
+                if (paused == value) return;
+                paused = value;
+                if (!syncEngineTimescale) return;
+                if (paused) Time.timeScale = holdTimescale;
+                else if (!ReachedTarget) ApplyTimescale();
+            }
+        }
+        private bool paused;
 
         public event System.Action<TimelineEvent> OnEventDispatched;
         /// <summary>Playback rewound to the opening state (battle load, replay, scrub). UI should rebuild from Timeline.InitialState.</summary>
@@ -57,6 +74,24 @@ namespace TacticsGame.Presentation
             targetSimTime = Mathf.Max(targetSimTime, simTime);
             ReachedTarget = false;
             ApplyTimescale();
+        }
+
+        /// <summary>
+        /// Time creeping on while orders are given (Deliverance's phase two): show the world up to 'simTime' now, with the
+        /// engine's animations at 'engineScale' of normal speed, and stay held there.
+        /// </summary>
+        public void CreepTo(float simTime, float engineScale)
+        {
+            if (Timeline == null) return;
+            targetSimTime = Mathf.Max(targetSimTime, simTime);
+            playbackClock = Mathf.Max(playbackClock, targetSimTime);
+            DispatchDueEvents();
+            ReachedTarget = true;
+            if (syncEngineTimescale && !paused)
+            {
+                Time.timeScale = Mathf.Max(holdTimescale, engineScale);
+                Time.fixedDeltaTime = 0.02f * Mathf.Max(0.01f, Time.timeScale);
+            }
         }
 
         /// <summary>Reset the scene to the opening state and play the whole battle back at real-time speed.</summary>
@@ -96,6 +131,7 @@ namespace TacticsGame.Presentation
         private void ApplyTimescale()
         {
             if (!syncEngineTimescale) return;
+            if (paused) { Time.timeScale = holdTimescale; return; }   // frozen for a popup until Paused is cleared
             Time.timeScale = playbackSpeed;
             Time.fixedDeltaTime = 0.02f * playbackSpeed;
         }
@@ -117,7 +153,8 @@ namespace TacticsGame.Presentation
 
         private void Update()
         {
-            if (Timeline == null || ReachedTarget) return;
+            if (Timeline == null) return;
+            if (paused || ReachedTarget) { DispatchDueEvents(); return; }   // held, but what happens at this instant (a unit placed) still shows
 
             // Custom clock decides WHAT happens WHEN, independent of Time.timeScale.
             playbackClock = Mathf.Min(playbackClock + Time.unscaledDeltaTime * playbackSpeed, targetSimTime);
@@ -180,6 +217,9 @@ namespace TacticsGame.Presentation
                     break;
                 case TacticsGame.Core.EventType.Lift:
                     if (target != null) { var l = (LiftInfo)evt.Payload; target.BeginLift(l.From, l.To, l.RiseSeconds, evt.SimTime); }
+                    break;
+                case TacticsGame.Core.EventType.DropStarted:   // a reinforcement coming down from the sky
+                    if (target != null) { var d = (DropInfo)evt.Payload; target.BeginLift(d.From, d.To, d.Seconds, evt.SimTime); }
                     break;
                 case TacticsGame.Core.EventType.AerialSlam:
                 {

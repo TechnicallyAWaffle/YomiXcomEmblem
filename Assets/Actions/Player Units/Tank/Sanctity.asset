@@ -33,7 +33,7 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 0
   Damage: 0
-  BaseAccuracy: 0.9
+  BaseAccuracy: 1
   StunDuration: 0
   StrainOnTarget: 0
   StrainOnSelf: 0
@@ -48,7 +48,7 @@ MonoBehaviour:
   AreaHeight: 4
   AuraStatuses:
   - Id: sheltered
-    Duration: 1.5
+    Duration: 2.5
     Modifiers: []
     ActionModifiers: []
     Flags: 64
@@ -60,6 +60,9 @@ MonoBehaviour:
       Color: {r: 0, g: 0, b: 0, a: 0}
       CountsUp: 0
       Hidden: 0
+      Important: 0
+    HealPerSecond: 0
+    BreakStun: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -76,8 +79,17 @@ MonoBehaviour:
     Unstoppable: 0
     RedirectsHits: 0
   AuraSeconds: 1.5
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonCount: 0
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5
@@ -98,6 +110,9 @@ MonoBehaviour:
       Color: {r: 0, g: 0, b: 0, a: 0}
       CountsUp: 0
       Hidden: 0
+      Important: 0
+    HealPerSecond: 0
+    BreakStun: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0

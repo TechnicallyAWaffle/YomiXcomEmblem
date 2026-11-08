@@ -10,8 +10,9 @@ namespace TacticsGame.Presentation
     ///   Action decision: pick an action (then click a target / point), Move (click the ground), Dash, Focus (a wait that sheds strain) or Auto.
     ///                    Unit targets must be in line of sight from where the unit will be; aiming a move highlights
     ///                    the units in sight from the destination.
-    ///                    Hold Shift while giving an order to queue it and keep planning; later orders are planned
-    ///                    from where the earlier ones leave the unit. Confirm (or an order without Shift) sends the plan.
+    ///                    Hold Shift while clicking moves to lay waypoints: the walk goes through each in turn, without
+    ///                    stopping. A click without Shift (a last move, or an ability, planned from the last waypoint) or
+    ///                    Confirm sends it.
     ///                    Player units still walking can also be stopped here, for a strain cost.
     ///   Dodge dash:      click any point inside the dash ring (or a compass button for a full-range dash).
     /// Keys: 1-0 abilities, F move, G dash, hold Space focus, Enter confirm, Backspace undo, Z re-center, Esc / right-click back
@@ -64,6 +65,7 @@ namespace TacticsGame.Presentation
         private enum Mode { ChooseAction, PickTarget, PickMove, PickDash, Mesmer, Grapple, PickDestination }
         private Unit destinationFor;   // PickDestination: the unit picked first
         private bool releasing;   // PickTarget for a charging ability's release: Space keeps charging, no going back
+        private bool redirecting;   // PickTarget for a channel's next target (Soulseeker: DecisionKind.Redirect); Stop or Esc ends it
 
         /// <summary>One order in the plan being built, plus where it leaves the unit (for planning the next one).</summary>
         private class PlannedOrder
@@ -99,12 +101,21 @@ namespace TacticsGame.Presentation
         private Camera Cam { get { return Camera != null ? Camera : Camera.main; } }
         private Unit Current { get { return Active ? sim.GetUnit(pending[0].UnitId) : null; } }
 
-        private void Awake() { markers = new WorldMarkers(transform); }
+        private void Awake()
+        {
+            markers = new WorldMarkers(transform);
+            if (GetComponent<UnitPanel>() == null) gameObject.AddComponent<UnitPanel>();   // the ordering unit's health, strain and Etchings
+        }
+
+        /// <summary>The unit giving orders now (null when nobody is), and the battle (for UnitPanel).</summary>
+        public Unit OrderingUnit { get { return Active ? Current : null; } }
+        public BattleSimulation Sim { get { return sim; } }
 
         public override void RequestDecisions(BattleSimulation sim, IReadOnlyList<DecisionRequest> requests, System.Action onComplete)
         {
             this.sim = sim;
             this.onComplete = onComplete;
+
             pending.Clear();
             // Dashes are reactions to an attack that just happened: answer those first.
             pending.AddRange(requests.OrderBy(r => r.Kind == DecisionKind.DodgeDash ? 0 : 1));
@@ -117,6 +128,13 @@ namespace TacticsGame.Presentation
                 return;
             }
             BeginCurrent();
+        }
+
+        public override void CancelDecisions()
+        {
+            pending.Clear();
+            plan.Clear();
+            onComplete = null;
         }
 
         // ------------------------------------------------------------------ flow
@@ -134,12 +152,13 @@ namespace TacticsGame.Presentation
 
             var current = sim.GetUnit(pending[0].UnitId);
             releasing = pending[0].Kind == DecisionKind.Charge && current.ActiveAction != null;
-            mode = pending[0].Kind == DecisionKind.DodgeDash ? Mode.PickDash : releasing ? Mode.PickTarget : current.Grapple != null ? Mode.Grapple
+            redirecting = pending[0].Kind == DecisionKind.Redirect && current.Channel != null;
+            mode = pending[0].Kind == DecisionKind.DodgeDash ? Mode.PickDash : releasing || redirecting ? Mode.PickTarget : current.Grapple != null ? Mode.Grapple
                  : current.MesmerStrikesLeft > 0 ? Mode.Mesmer : Mode.ChooseAction;
             destinationFor = null;
-            selected = releasing ? current.ActiveAction.Definition : null;
+            selected = releasing ? current.ActiveAction.Definition : redirecting ? current.Channel.Action.Definition : null;
             selectedTranscend = false;
-            holdDef = null; holdFocus = false;
+            holdDef = null;
             message = pending[0].Reason != null ? "Last order failed: " + pending[0].Reason : null;
             if (FocusOnReadyUnit) FocusCurrent();
         }
@@ -149,7 +168,10 @@ namespace TacticsGame.Presentation
         private void FocusCurrent()
         {
             var u = Current;
-            if (u != null && Rig != null) Rig.FocusOn(u.Position);
+            if (u == null || Rig == null) return;
+            // Redirecting Soulseeker's bullet: the camera follows the bullet (the unit it is in), not the shooter.
+            if (redirecting && u.Channel != null) { var b = sim.GetUnit(u.Channel.Action.TargetUnitId); Rig.FocusOn(b != null ? b.Position : u.Channel.Action.TargetPos, false); return; }
+            Rig.FocusOn(u.Position);
         }
 
         private void Next()
@@ -171,6 +193,7 @@ namespace TacticsGame.Presentation
             if (key == KeyCode.Z) { FocusCurrent(); return true; }
             if (mode == Mode.PickDash) return false;
             if (releasing) return AbilitySlot(key) >= 0 || key == KeyCode.F;   // a charge can only be released or kept going
+            if (redirecting) return false;   // pick a target or stop (Esc)
             if (mode == Mode.Mesmer)
             {
                 if (key == KeyCode.Alpha1 || key == KeyCode.Keypad1) { MesmerStrike(unit); return true; }
@@ -197,7 +220,7 @@ namespace TacticsGame.Presentation
                 bool usable; string why;
                 ActionDetail(unit, def, out usable, out why);
                 if (!usable) { message = def.DisplayName + ": can't use now (" + why + ")"; return true; }
-                if (def.CanTranscend) { BeginHold(def, key); return true; }   // acts on release, or Transcends if held
+                if (CanTranscendNow(def)) { BeginHold(def, key); return true; }   // acts on release, or Transcends if held
                 PressAbility(unit, def);
                 return true;
             }
@@ -225,10 +248,44 @@ namespace TacticsGame.Presentation
         }
 
         /// <summary>The numbered ability buttons: every action but Dash, which has its own key (G).</summary>
-        private static List<ActionDefinition> Slots(Unit unit) { return unit.Actions.Where(a => a.BehaviorId != "dash").ToList(); }
+        /// <summary>The abilities on the number keys, in order: the basic attack always first (key 1), then the rest as the unit has them. Dash has its own key (G).</summary>
+        /// Chain follow-ups (another of its abilities' FollowUps: Fate Encumbers Its Prey, Witness To The End) have no slot of
+        /// their own: while one is open it takes its opener's slot (and key), and the slot is framed as a follow-up.
+        private static List<ActionDefinition> Slots(Unit unit)
+        {
+            var list = unit.Actions.Where(a => a.BehaviorId != "dash" && !IsChainStage(unit, a)).Select(a => OpenStage(unit, a, 0)).ToList();
+            int basic = list.FindIndex(a => a.Id == unit.BasicAttackId);
+            if (basic > 0) { var b = list[basic]; list.RemoveAt(basic); list.Insert(0, b); }
+            return list;
+        }
+        /// <summary>Is 'a' a follow-up another of the unit's abilities opens (ActionDefinition.FollowUps)?</summary>
+        private static bool IsChainStage(Unit unit, ActionDefinition a)
+        {
+            return unit.Actions.Exists(o => o != null && o != a && o.FollowUps != null && o.FollowUps.Contains(a));
+        }
+
+        /// <summary>What 'a's slot shows: the furthest stage of its follow-up chain that is open now, else 'a' itself.</summary>
+        private static ActionDefinition OpenStage(Unit unit, ActionDefinition a, int depth)
+        {
+            if (a.FollowUps == null || depth > 8) return a;
+            foreach (var f in a.FollowUps)
+            {
+                if (f == null || !unit.Actions.Contains(f)) continue;
+                var deeper = OpenStage(unit, f, depth + 1);
+                if (deeper != f) return deeper;   // a later stage is open
+                var req = f.RequiredStatuses();
+                if (req.Length > 0 && System.Array.Exists(req, unit.HasStatus)) return f;
+            }
+            return a;
+        }
+
         private static ActionDefinition DashOf(Unit unit) { return unit.Actions.FirstOrDefault(a => a.BehaviorId == "dash"); }
 
         // ------------------------------------------------------------------ Transcend (hold to)
+
+        /// <summary>Can the unit giving orders Transcend 'def' (its own Transcend, or an Etching's), and for how much?</summary>
+        private bool CanTranscendNow(ActionDefinition def) { var u = Current; return u != null ? u.CanTranscend(def) : def.CanTranscend; }
+        private float TranscendStrainNow(ActionDefinition def) { var u = Current; return u != null ? u.TranscendStrainOf(def) : def.TranscendStrain; }
 
         private void BeginHold(ActionDefinition def, KeyCode key)
         {
@@ -238,7 +295,7 @@ namespace TacticsGame.Presentation
             holdFired = false;
         }
 
-        private float HoldProgress { get { return (holdDef != null || holdFocus) && !holdFired ? Mathf.Clamp01((Time.unscaledTime - holdStart) / Mathf.Max(0.05f, TranscendHoldSeconds)) : 0f; } }
+        private float HoldProgress { get { return holdDef != null && !holdFired ? Mathf.Clamp01((Time.unscaledTime - holdStart) / Mathf.Max(0.05f, TranscendHoldSeconds)) : 0f; } }
 
         /// <summary>
         /// Every frame while an ability is held: held long enough, it is Transcended; let go before that, it is a normal
@@ -246,7 +303,6 @@ namespace TacticsGame.Presentation
         /// </summary>
         private void UpdateHold(Unit unit)
         {
-            if (holdFocus) { UpdateFocusHold(unit); return; }
             if (holdDef == null) return;
             if (unit == null || !unit.Actions.Contains(holdDef)) { holdDef = null; return; }
             bool down = holdKey != KeyCode.None ? Input.GetKey(holdKey) : Input.GetMouseButton(0);
@@ -264,26 +320,10 @@ namespace TacticsGame.Presentation
             }
         }
 
-        // The Focus button held with the mouse: Transcended Focus once held long enough (Focus isn't an ActionDefinition).
-        private bool holdFocus;
-
-        private void UpdateFocusHold(Unit unit)
+        /// <summary>A Focus order (BattleSimulation.StartWait).</summary>
+        private void OrderFocus(Unit unit)
         {
-            if (unit == null || mode != Mode.ChooseAction) { holdFocus = false; return; }
-            if (HoldProgress >= 1f)
-            {
-                holdFocus = false;
-                transcendFlashUntil = Time.unscaledTime + 0.3f;
-                OrderFocus(unit, true);
-            }
-            else if (!Input.GetMouseButton(0)) { holdFocus = false; OrderFocus(unit, false); }
-        }
-
-        /// <summary>A Focus order; Transcended, it lasts until the unit is Focused (BattleSimulation.StartWait).</summary>
-        private void OrderFocus(Unit unit, bool transcend)
-        {
-            AddOrder(UnitCommand.Wait(unit.Id, WaitSeconds).Transcended(transcend),
-                transcend ? "Focus (until focused)" : string.Format("Focus {0:0.0}s", WaitSeconds), PlannedPosition(unit));
+            AddOrder(UnitCommand.Wait(unit.Id, WaitSeconds), string.Format("Focus {0:0.00}s", WaitSeconds), PlannedPosition(unit));
         }
 
         private void Transcend(Unit unit, ActionDefinition def)
@@ -324,18 +364,33 @@ namespace TacticsGame.Presentation
         /// </summary>
         private ActionDefinition Followup(Unit unit)
         {
-            if (plan.Count > 0 || string.IsNullOrEmpty(unit.LastActionId)) return null;
-            var def = unit.Actions.FirstOrDefault(a => a.Id == unit.LastActionId && a.IsFollowup);
-            if (def == null) return null;
+            if (plan.Count > 0) return null;
             bool usable; string why;
-            ActionDetail(unit, def, out usable, out why);
-            if (!usable) return null;
+            var def = string.IsNullOrEmpty(unit.LastActionId) ? null : unit.Actions.FirstOrDefault(a => a.Id == unit.LastActionId && a.IsFollowup);
+            if (def != null) { ActionDetail(unit, def, out usable, out why); if (!usable) def = null; }
+            if (def == null)
+            {
+                // Nothing to re-cast: a follow-up that is open by itself (Baneful Domain, its zone up).
+                foreach (var a in unit.Actions)
+                {
+                    if (a == null || !FollowupOpen(unit, a)) continue;
+                    ActionDetail(unit, a, out usable, out why);
+                    if (usable) return a;
+                }
+                return null;
+            }
             if (TargetsUnit(def))
             {
                 var t = sim.GetUnit(unit.LastActionTargetId);
                 if (t == null || !t.IsAlive || !sim.IsTargetableBy(t, unit) || !sim.HasSightOf(unit, def, t)) return null;
             }
             return def;
+        }
+
+        /// <summary>Is this point-aimed ability's follow-up open right now (ActionBehavior.FollowupOpen): no aiming needed?</summary>
+        private bool FollowupOpen(Unit unit, ActionDefinition def)
+        {
+            return def != null && def.Targeting == TargetType.Position && ActionBehaviors.Get(def.BehaviorId).FollowupOpen(sim, unit, def);
         }
 
         /// <summary>Aimed at a unit (an enemy, an ally, or either), rather than a point or the user.</summary>
@@ -348,7 +403,8 @@ namespace TacticsGame.Presentation
         {
             mode = Mode.ChooseAction;
             selected = null;
-            if (TargetsUnit(def) && def.DestinationRange <= 0f) TryAddAction(unit, def, sim.GetUnit(unit.LastActionTargetId));
+            if (FollowupOpen(unit, def)) ChooseAction(unit, def);
+            else if (TargetsUnit(def) && def.DestinationRange <= 0f) TryAddAction(unit, def, sim.GetUnit(unit.LastActionTargetId));
             else if (def.Targeting == TargetType.Position) AddOrder(UnitCommand.UseActionAt(unit.Id, def, unit.LastActionPos), def.DisplayName + " (point)", PlannedPosition(unit));
             else ChooseAction(unit, def);
         }
@@ -380,30 +436,42 @@ namespace TacticsGame.Presentation
 
         private void Back()
         {
+            if (redirecting) { StopRedirect(); return; }
             if (releasing || mode == Mode.Mesmer || mode == Mode.Grapple) return;   // charges can't be cancelled; a counter or a hold has its own buttons
             if (mode == Mode.PickMove && Current != null && Current.Grapple != null) { mode = Mode.Grapple; message = null; return; }
             if (mode == Mode.PickDestination) { mode = Mode.PickTarget; destinationFor = null; message = null; return; }
             if (mode == Mode.PickTarget || mode == Mode.PickMove) { mode = Mode.ChooseAction; selected = null; selectedTranscend = false; message = null; }
         }
 
-        /// <summary>Adds an order to the plan. Without Shift held the plan is sent right away.</summary>
+        /// <summary>
+        /// Adds an order to the plan. A move with Shift held is a waypoint: the plan waits for more (still picking a move). Anything
+        /// else sends the plan right away (the waypoints first).
+        /// </summary>
         private void AddOrder(UnitCommand cmd, string label, Vector3 endPosition, List<Vector3> path = null)
         {
             if (cmd.Transcend) label = "Transcended " + label;
             plan.Add(new PlannedOrder { Command = cmd, Label = label, EndPosition = endPosition, Path = path });
-            mode = Mode.ChooseAction;
             selected = null;
             selectedTranscend = false;
             message = null;
             // Either source: orders also come from Update (a released Transcend hold), where Event.current isn't this frame's.
-            bool queueMore = (Event.current != null && Event.current.shift) || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-            if (Current != null && Current.Grapple != null) queueMore = false;   // holding someone: one order at a time
-            if (!queueMore) ConfirmPlan();
+            bool shift = (Event.current != null && Event.current.shift) || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            bool waypoint = shift && cmd.Type == CommandType.Move && (Current == null || Current.Grapple == null);   // holding someone: one order at a time
+            mode = waypoint ? Mode.PickMove : Mode.ChooseAction;
+            if (!waypoint) ConfirmPlan();
         }
 
+        /// <summary>Send the plan: back-to-back moves go as one walk through their points (UnitCommand.MoveVia).</summary>
         private void ConfirmPlan()
         {
-            foreach (var p in plan) sim.SubmitCommand(p.Command);
+            var points = new List<Vector3>();
+            for (int i = 0; i < plan.Count; i++)
+            {
+                var cmd = plan[i].Command;
+                if (cmd.Type == CommandType.Move && i + 1 < plan.Count && plan[i + 1].Command.Type == CommandType.Move) { points.Add(cmd.TargetPos); continue; }
+                if (cmd.Type == CommandType.Move && points.Count > 0) { sim.SubmitCommand(UnitCommand.MoveVia(cmd.UnitId, points, cmd.TargetPos)); points.Clear(); continue; }
+                sim.SubmitCommand(cmd);
+            }
             Next();
         }
 
@@ -416,6 +484,7 @@ namespace TacticsGame.Presentation
                 var attacker = sim.GetUnit(r.AttackerId);
                 sim.SubmitDodgeDash(unit.Id, attacker != null ? sim.BestDashDirection(unit, attacker) : 0);
             }
+            else if (r.Kind == DecisionKind.Redirect) sim.SubmitCommand(sim.AutoRedirect(unit));
             else sim.SubmitCommand(ai.Decide(sim, unit));
         }
 
@@ -453,12 +522,18 @@ namespace TacticsGame.Presentation
         private void ChooseAction(Unit unit, ActionDefinition def, bool transcend = false)
         {
             message = null;
-            transcend &= def.CanTranscend;
+            transcend &= CanTranscendNow(def);
             var planned = PlannedUnit(unit);
             if (def.IsCharge)
             {
                 // Charges start at once; the target is picked when it is released.
                 AddOrder(UnitCommand.UseAction(unit.Id, def).Transcended(transcend), def.DisplayName + " (charge)", planned.Position);
+                return;
+            }
+            if (FollowupOpen(unit, def))
+            {
+                // Its follow-up is open (Baneful Domain, its zone up): no aiming, it goes straight in.
+                AddOrder(UnitCommand.UseActionAt(unit.Id, def, ActionBehaviors.Get(def.BehaviorId).FollowupPoint(sim, unit, def, planned.Position)).Transcended(transcend), def.DisplayName + " (follow-up)", planned.Position);
                 return;
             }
             switch (def.Targeting)
@@ -504,11 +579,38 @@ namespace TacticsGame.Presentation
             return view != null ? sim.GetUnit(view.UnitId) : null;
         }
 
+        /// <summary>End a redirectable channel (Soulseeker) where it is.</summary>
+        private void StopRedirect()
+        {
+            if (Current == null) return;
+            sim.SubmitCommand(UnitCommand.Redirect(Current.Id, null));
+            Next();
+        }
+
+        /// <summary>Redirecting: where the bullet is, and which enemies it can go on to (green) or not (red).</summary>
+        private void DrawRedirectMarkers(Unit unit)
+        {
+            var c = unit.Channel;
+            if (c == null) return;
+            Vector3 bullet = c.Action.TargetPos;
+            markers.Circle(bullet, 0.35f, SelectionColor, 0.08f);
+            foreach (var other in sim.State.Units)
+            {
+                if (!other.IsAlive || other.Team == unit.Team) continue;
+                string why;
+                bool ok = sim.CanRedirect(unit, other, out why);
+                bool isHovered = hovered != null && hovered.Id == other.Id;
+                markers.Circle(other.Position, other.BodyRadius + 0.3f, ok ? ValidTargetColor : InvalidTargetColor, isHovered ? 0.12f : 0.05f);
+                if (isHovered) { Highlight(other, ok ? ValidTargetColor : InvalidTargetColor, true); if (ok) markers.Segment(bullet, other.Position, ValidTargetColor, 0.05f); }
+            }
+        }
+
         /// <summary>While aiming an enemy-only (or ally-only) ability, units on the wrong side can't be picked.</summary>
         private bool Pickable(Unit unit, Unit other)
         {
             if (mode == Mode.PickDestination) return false;   // a destination is ground: see through everyone
             if (mode != Mode.PickTarget || selected == null) return true;
+            if (redirecting) return other.Team != unit.Team;
             if (selected.Targeting == TargetType.Enemy) return other.Team != unit.Team;
             if (selected.Targeting == TargetType.Ally) return other.Team == unit.Team && !(selected.CannotTargetSelf && other.Id == unit.Id);
             if (selected.Targeting == TargetType.AnyUnit) return !(selected.CannotTargetSelf && other.Id == unit.Id);
@@ -603,6 +705,15 @@ namespace TacticsGame.Presentation
             switch (mode)
             {
                 case Mode.PickTarget:
+                    if (redirecting)
+                    {
+                        if (clickedUnit == null) return;
+                        string cant;
+                        if (!sim.CanRedirect(unit, clickedUnit, out cant)) { message = "Can't: " + cant; return; }
+                        sim.SubmitCommand(UnitCommand.Redirect(unit.Id, clickedUnit.Id));
+                        Next();
+                        return;
+                    }
                     if (releasing)
                     {
                         if (selected.Targeting == TargetType.Position) sim.SubmitCommand(UnitCommand.ReleaseCharge(unit.Id, null, AimPoint(unit, screenPos, hit, clickedUnit)));
@@ -751,8 +862,8 @@ namespace TacticsGame.Presentation
             if (height > 0f) text += string.Format("\nHIGH GROUND: +{0:0}% hit", height * 100f);
             if (combo.HasValue)
                 text += combo.Value >= 0f
-                    ? string.Format("\nCOMBO: still stunned when it lands ({0:0.0}s to spare), can't dodge", combo.Value)
-                    : string.Format("\nNo combo: the stun wears off {0:0.0}s before it lands", -combo.Value);
+                    ? string.Format("\nCOMBO: still stunned when it lands ({0:0.00}s to spare), can't dodge", combo.Value)
+                    : string.Format("\nNo combo: the stun wears off {0:0.00}s before it lands", -combo.Value);
             return text;
         }
 
@@ -822,18 +933,19 @@ namespace TacticsGame.Presentation
             if (!holding || Dir == null) return;
             var style = new GUIStyle(GUI.skin.box) { fontSize = 18, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             style.normal.textColor = new Color(1f, 0.9f, 0.5f);
-            string text = string.Format("Focusing (Space)   +{0:0.0}s", Dir.PlaybackClock - holdStartClock);
+            string text = string.Format("Focusing (Space)   +{0:0.00}s", Dir.PlaybackClock - holdStartClock);
             GUI.Box(new Rect(UiScale.Width / 2f - 150f, 110f, 300f, 34f), text, style);
         }
 
         private void Update()
         {
-            UpdateHoldWait();
+            if (Suspended) { holdDef = null; if (holding) EndHoldWait(); }   // a tutorial popup is up: nothing held builds
+            else             UpdateHoldWait();
             markers.Begin();
             sightEnemies = -1;
             moveSeconds = -1f;
             var unit = Current;
-            UpdateHold(unit);
+            if (!Suspended) UpdateHold(unit);
             if (unit != null) UpdateHover();
             if (unit != null) Highlight(unit, SelectionColor, true);   // the unit being commanded pulses
             if (unit != null) DrawMarkers(unit);
@@ -841,6 +953,9 @@ namespace TacticsGame.Presentation
             if (unit != null && (HoldProgress > 0f || Transcending)) Highlight(unit, TranscendColor, true);
             markers.End();
         }
+
+        /// <summary>The player is aiming an order (a target, a point, a move): anything but the ability list is up.</summary>
+        public bool Aiming { get { return Active && mode != Mode.ChooseAction; } }
 
         private bool Transcending { get { return Active && (mode == Mode.PickTarget || mode == Mode.PickDestination) && selected != null && selectedTranscend; } }
 
@@ -918,6 +1033,7 @@ namespace TacticsGame.Presentation
                         }
                         break;
                     }
+                    if (redirecting) { DrawRedirectMarkers(unit); break; }
                     // Reach is measured in 3D, so the ring follows the height of whatever is being aimed at (see RangeRing).
                     Vector3? aimedAt = selected.Targeting == TargetType.Position ? (hoverOnGround ? hoverPoint : (Vector3?)null) : hovered != null ? hovered.Position : hoverOnGround ? hoverPoint : (Vector3?)null;
                     if (selected.Shape != AreaShape.Line) RangeRing(from, unit.ActionStat(selected, ActionStat.Range), aimedAt, false, selectedTranscend ? TranscendColor : RangeColor, 0.06f);
@@ -1031,7 +1147,7 @@ namespace TacticsGame.Presentation
             var cam = Cam;
             Vector2 at;
             if (moveSeconds < 0f || cam == null || !UiScale.WorldToGui(cam, moveLabelAt + Vector3.up * 0.6f, out at)) return;
-            string text = string.Format("{0:0.0}s walk", moveSeconds);
+            string text = string.Format("{0:0.00}s walk", moveSeconds);
             var style = new GUIStyle(GUI.skin.box) { fontSize = 13, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             style.normal.textColor = SelectionColor;
             float w = style.CalcSize(new GUIContent(text)).x + 12f;
@@ -1089,7 +1205,7 @@ namespace TacticsGame.Presentation
                 if (dir.sqrMagnitude < 1e-4f) return;
                 dir.Normalize();
                 Vector3 side = Vector3.Cross(Vector3.up, dir) * (selected.LineWidth / 2f);
-                // Ramps from the caster to the aimed elevation, then level (see BattleSimulation.LineHeightAt).
+                // A straight line from the caster through the aimed point (see BattleSimulation.LineHeightAt).
                 float aimDist = Mathf.Min(Vector3.Distance(Flat(from), Flat(hoverPoint)), unit.ActionStat(selected, ActionStat.Range));
                 Vector3 bend = LinePoint(from, dir, aimDist), end = LinePoint(from, dir, unit.ActionStat(selected, ActionStat.Range));
                 markers.Polyline(new[] { from + side, bend + side, end + side, end - side, bend - side, from - side, from + side }, SelectionColor, 0.05f);
@@ -1114,7 +1230,23 @@ namespace TacticsGame.Presentation
 
         // ------------------------------------------------------------------ panel
 
+        /// <summary>
+        /// Orders are on hold (a tutorial popup is waiting to be read): the panel still shows, greyed out, but no click, key or
+        /// held key does anything.
+        /// </summary>
+        public bool Suspended { get; set; }
+
         private void OnGUI()
+        {
+            var ev = Event.current;
+            if (Suspended && ev.type != UnityEngine.EventType.Repaint && ev.type != UnityEngine.EventType.Layout) return;
+            bool wasEnabled = GUI.enabled;
+            if (Suspended) GUI.enabled = false;
+            try { DrawOrders(); }
+            finally { GUI.enabled = wasEnabled; }
+        }
+
+        private void DrawOrders()
         {
             GUI.depth = -5;   // in front of the HUD's health and strain bars and the combat text, so the ability popup is never covered
             UiScale.Begin();
@@ -1189,7 +1321,7 @@ namespace TacticsGame.Presentation
             if (mode == Mode.PickTarget) DrawHoverPreview(unit, e.mousePosition);
             if (mode == Mode.PickMove) DrawSightLabel(e.mousePosition);
 
-            if (e.type == UnityEngine.EventType.MouseDown && !panelRect.Contains(e.mousePosition))
+            if (e.type == UnityEngine.EventType.MouseDown && !panelRect.Contains(e.mousePosition) && !UnitPanel.ScreenRect.Contains(e.mousePosition))
             {
                 if (e.button == 0 && mode != Mode.ChooseAction) HandleWorldClick(unit, GuiToScreen(e.mousePosition));
                 if (e.button == 0) e.Use();   // middle and right mouse belong to the camera (pan, rotate)
@@ -1204,8 +1336,10 @@ namespace TacticsGame.Presentation
             switch (mode)
             {
                 case Mode.PickTarget:
+                    if (redirecting)
+                        return string.Format("{0}: {1}, redirect the bullet ({2} left)", unit.DisplayName, selected.DisplayName, sim.RedirectsLeft(unit));
                     if (releasing)
-                        return string.Format("{0}: charging {1}  {2:0.0}s ({3:0}%)", unit.DisplayName, selected.DisplayName,
+                        return string.Format("{0}: charging {1}  {2:0.00}s ({3:0}%)", unit.DisplayName, selected.DisplayName,
                             unit.ActiveAction != null ? sim.Now - unit.ActiveAction.StartedAt : 0f, sim.ChargeLevel(unit) * 100f);
                 {
                     string name = (selectedTranscend ? "TRANSCENDED " : "") + selected.DisplayName;
@@ -1224,7 +1358,7 @@ namespace TacticsGame.Presentation
                 {
                     var g = unit.Grapple;
                     if (g != null && g.AwaitingThrow) return string.Format("{0}: the grab is up! Click where to throw {1} (2: toward the cursor, or the way you face)", unit.DisplayName, HeldName(unit));
-                    return g == null ? unit.DisplayName : string.Format("{0}: holding {1}!  next headbutt in {2:0.0}s, thrown in {3:0.0}s (click to aim it)", unit.DisplayName, HeldName(unit),
+                    return g == null ? unit.DisplayName : string.Format("{0}: holding {1}!  next headbutt in {2:0.00}s, thrown in {3:0.00}s (click to aim it)", unit.DisplayName, HeldName(unit),
                         Mathf.Max(0f, g.NextHeadbuttAt - sim.Now), Mathf.Max(0f, g.EndsAt - sim.Now));
                 }
                 case Mode.Mesmer:
@@ -1249,17 +1383,18 @@ namespace TacticsGame.Presentation
                 case Mode.PickDash: return "Click a point inside the ring to dash there, or click the unit to stand firm.";
                 case Mode.ChooseAction:
                 {
-                    if (plan.Count > 0) return "Keep adding orders (Shift), or Confirm / Enter to send the plan.";
+                    if (plan.Count > 0) return "Shift-click more waypoints, click without Shift to finish, or Confirm / Enter to send it.";
                     var followup = Current != null ? Followup(Current) : null;
-                    if (followup != null) return "Press " + FollowupKeyName(Current, followup) + " again: " + followup.DisplayName + " on the same target. Hold Space to focus.";
-                    return "Keys 1-0, - = [ ] abilities, G dash; hold one to Transcend it. Shift queues orders. Hold Space to focus (sheds strain).";
+                    if (followup != null) return "Press " + FollowupKeyName(Current, followup) + (FollowupOpen(Current, followup) ? ": " + followup.DisplayName + " again, no aiming." : " again: " + followup.DisplayName + " on the same target.") + " Hold Space to focus.";
+                    return "Keys 1-0, - = [ ] abilities, G dash; hold one to Transcend it. Shift-click moves for waypoints. Hold Space to focus (sheds strain).";
                 }
                 case Mode.Mesmer: return "Keep striking, or stop and give a normal order. Any other order ends the counter.";
                 case Mode.Grapple: return "1 keep headbutting, click or 2 throw now (toward the cursor), F move while carrying them.";
                 case Mode.PickDestination: return "Click a point inside the ring. Right-click or Esc to pick another unit.";
                 default:
-                    return releasing ? "Hold Space to keep charging (time runs slowly). Click to release it there."
-                                     : "Shift-click to queue and keep planning. Right-click or Esc to go back.";
+                    return redirecting ? "Click an enemy the bullet can see (green) to send it on. Esc or Stop ends it."
+                         : releasing ? "Hold Space to keep charging (time runs slowly). Click to release it there."
+                                     : "Shift-click to lay waypoints. Right-click or Esc to go back.";
             }
         }
 
@@ -1349,15 +1484,18 @@ namespace TacticsGame.Presentation
             string name = def.DisplayName;
             SetActionTip(rect, def, usable ? null : "Can't use now: " + why);
             var e = Event.current;
-            if (usable && def.CanTranscend && e.type == UnityEngine.EventType.MouseDown && e.button == 0 && rect.Contains(e.mousePosition))
+            if (usable && CanTranscendNow(def) && e.type == UnityEngine.EventType.MouseDown && e.button == 0 && rect.Contains(e.mousePosition))
             {
                 BeginHold(def, KeyCode.None);
                 e.Use();
             }
             GUI.enabled = usable;
-            if (def == followup)
+            bool chainStage = IsChainStage(unit, def);   // an open follow-up in its opener's slot
+            bool openFollowup = usable && FollowupOpen(unit, def);   // open by itself (Baneful Domain), even with another follow-up up
+            if (def == followup || chainStage || openFollowup)
             {
-                detail = string.IsNullOrEmpty(detail) ? "again" : "again · " + detail;
+                string tag = chainStage || openFollowup ? "follow-up" : "again";
+                detail = string.IsNullOrEmpty(detail) ? tag : tag + " · " + detail;
                 // The follow-up its key would re-cast: a gold frame and tint so it stands out.
                 Fill(new Rect(rect.x - 3f, rect.y - 3f, rect.width + 6f, rect.height + 6f), FollowupColor);
                 GUI.backgroundColor = FollowupColor;
@@ -1366,7 +1504,7 @@ namespace TacticsGame.Presentation
             bool clicked = Tile(rect, key, name, detail);
             GUI.backgroundColor = Color.white;
             GUI.enabled = true;
-            if (def.CanTranscend)
+            if (CanTranscendNow(def))
             {
                 Fill(new Rect(rect.x + 1f, rect.y + 3f, 3f, rect.height - 6f), new Color(TranscendColor.r, TranscendColor.g, TranscendColor.b, usable ? 0.9f : 0.35f));
                 if (def == holdDef && !holdFired) Fill(new Rect(rect.x + 2f, rect.yMax - 5f, (rect.width - 4f) * HoldProgress, 3f), TranscendColor);
@@ -1427,10 +1565,10 @@ namespace TacticsGame.Presentation
             if (flash > 0f) Fill(screen, new Color(TranscendColor.r, TranscendColor.g, TranscendColor.b, 0.35f * flash));
 
             var def = Transcending ? selected : holdDef;
-            if (def == null && !holdFocus) return;
+            if (def == null) return;
             var style = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             string text = Transcending
-                ? string.Format("TRANSCENDED {0}   (+{1:0} strain)", def.DisplayName.ToUpperInvariant(), def.TranscendStrain)
+                ? string.Format("TRANSCENDED {0}   (+{1:0} strain)", def.DisplayName.ToUpperInvariant(), TranscendStrainNow(def))
                 : string.Format("Transcending {0}...", def != null ? def.DisplayName : "Focus");
             var r = new Rect(0f, 150f, UiScale.Width, 34f);
             style.normal.textColor = new Color(0f, 0f, 0f, 0.8f * Mathf.Max(k, 0.3f));
@@ -1459,7 +1597,7 @@ namespace TacticsGame.Presentation
             usable = sim.CanAfford(unit, def, out why);
             float readyAt;
             if (!usable && why == "cooldown" && unit.CooldownReadyAt.TryGetValue(def.Id, out readyAt))
-                detail = string.Format("cooldown {0:0.0}s", readyAt - sim.Now);
+                detail = string.Format("cooldown {0:0.00}s", readyAt - sim.Now);
             return detail;
         }
 
@@ -1474,7 +1612,7 @@ namespace TacticsGame.Presentation
             public void Add(string label, string value) { Cells.Add(new KeyValuePair<string, string>(label, value)); }
         }
 
-        private static string Secs(float s) { return s <= 0f ? "instant" : string.Format("{0:0.##}s", s); }
+        private static string Secs(float s) { return s <= 0f ? "instant" : string.Format("{0:0.###}s", s); }
 
         /// <summary>What the ability is aimed at, in a word or two (no range: the targeting rings show that).</summary>
         private static string TargetKind(ActionDefinition def)
@@ -1494,11 +1632,12 @@ namespace TacticsGame.Presentation
 
         /// <summary>A status the ability grants or inflicts, as its own section: how long, and what it changes.</summary>
         /// <param name="lasts">Overrides the "Lasts" cell (a dome's statuses last while inside it).</param>
-        private static TipSection StatusSection(string who, StatusSpec s, bool duringWindup = false, string lasts = null)
+        /// <param name="durationScale">What its Duration is scaled by (the user's: Unit.DurationScale).</param>
+        private static TipSection StatusSection(string who, StatusSpec s, bool duringWindup = false, string lasts = null, float durationScale = 1f)
         {
             string whom = s.AppliesTo == StatusTarget.Allies ? " (ally)" : s.AppliesTo == StatusTarget.Enemies ? " (enemy)" : "";
             var sec = new TipSection { Title = string.Format("{0}{1}: {2}", who, whom, StatusDisplay.NameOf(s.Id).ToUpperInvariant()) };
-            sec.Add("Lasts", lasts ?? (duringWindup ? "the windup" : Secs(s.Duration)));
+            sec.Add("Lasts", lasts ?? (duringWindup ? "the windup" : Secs(s.Duration * durationScale)));
             if (s.Modifiers != null) foreach (var m in s.Modifiers) sec.Add(StatText.Name(m.Stat), StatText.Change(m));
             if (s.ActionModifiers != null) foreach (var m in s.ActionModifiers) sec.Add(StatText.Label(m, id => id.Replace('_', ' ')), StatText.Change(m));
             var flagCells = new List<KeyValuePair<string, string>>();
@@ -1516,6 +1655,7 @@ namespace TacticsGame.Presentation
         {
             // The numbers of the unit being ordered (its upgrades and statuses in), or the ability's own without one.
             System.Func<ActionStat, float> V = s => who != null ? who.ActionStat(def, s) : Stats.Base(def, s);
+            float lasts = who != null ? who.DurationScale(def) : 1f;
             var sections = new List<TipSection>();
             var use = new TipSection { Title = "USE" };
             use.Add("Target", TargetKind(def));
@@ -1524,7 +1664,7 @@ namespace TacticsGame.Presentation
             if (def.Shape == AreaShape.Circle && def.AreaHeight > 0f) use.Add("Dome height", string.Format("{0:0.#}m", def.AreaHeight));
             if (def.IsCharge) use.Add("Charge", "up to " + Secs(def.MaxChargeSeconds));
             if (def.ChannelSeconds > 0f) use.Add("Channel", "up to " + Secs(def.ChannelSeconds));
-            else if (def.AuraSeconds > 0f) use.Add("Dome lasts", Secs(def.AuraSeconds));
+            else if (def.AuraSeconds > 0f) use.Add("Dome lasts", Secs(def.AuraSeconds * lasts));
             use.Add("Windup", Secs(V(ActionStat.Windup)));
             use.Add("Recovery", Secs(V(ActionStat.Recovery)));
             if (V(ActionStat.Cooldown) > 0f) use.Add("Cooldown", Secs(V(ActionStat.Cooldown)));
@@ -1545,17 +1685,26 @@ namespace TacticsGame.Presentation
             if (def.EnergyGain > 0f) cost.Add("Energy gain", "+" + def.EnergyGain.ToString("0"));
             if (def.IsCharge && def.ChargeStrainPerSecond > 0f) cost.Add("Charging", string.Format("+{0:0} strain/s", def.ChargeStrainPerSecond));
             if (V(ActionStat.HealthCost) > 0f) cost.Add("Health", "-" + V(ActionStat.HealthCost).ToString("0"));
-            if (def.CanTranscend) cost.Add("Transcend", string.Format("+{0:0} strain", def.TranscendStrain));
+            if (CanTranscendNow(def)) cost.Add("Transcend", string.Format("+{0:0} strain", TranscendStrainNow(def)));
             if (cost.Cells.Count > 0) sections.Add(cost);
 
-            foreach (var s in def.SelfStatuses) if (s != null) sections.Add(StatusSection("YOU", s));
-            foreach (var s in def.TargetStatusesOnHit) if (s != null) sections.Add(StatusSection(tip.TargetStatusesTitle, s));
+            foreach (var s in def.SelfStatuses) if (s != null) sections.Add(StatusSection("YOU", s, false, null, lasts));
+            foreach (var s in def.TargetStatusesOnHit) if (s != null) sections.Add(StatusSection(tip.TargetStatusesTitle, s, false, null, lasts));
             if (def.TargetStatusesDuringWindup != null)
                 foreach (var s in def.TargetStatusesDuringWindup) if (s != null) sections.Add(StatusSection("TARGET", s, true));
             if (def.SelfStatusesDuringWindup != null)
                 foreach (var s in def.SelfStatusesDuringWindup) if (s != null) sections.Add(StatusSection("YOU", s, true));
             if (def.AuraStatuses != null)
                 foreach (var s in def.AuraStatuses) if (s != null) sections.Add(StatusSection("IN DOME", s, false, "while inside"));
+
+            // The Etchings on this ability, last. Unit-wide ones (even those that change every ability) are in UnitPanel's list.
+            if (who != null && who.Etchings != null)
+            {
+                var etched = new TipSection { Title = "ETCHED" };
+                foreach (var n in who.Etchings)
+                    if (n.ActionId == def.Id) etched.Notes.Add(n.Name + ": " + n.Description);
+                if (etched.Notes.Count > 0) sections.Add(etched);
+            }
             return sections;
         }
 
@@ -1683,7 +1832,7 @@ namespace TacticsGame.Presentation
             }
             bool rooted = plan.Count == 0 && unit.IsRooted;
             var moveRect = ButtonRect(index++, x, y);
-            SetTip(moveRect, "Move", "Walk to any point on the navmesh. Shift-click to queue more orders after it.",
+            SetTip(moveRect, "Move", "Walk to any point on the navmesh. Hold Shift to click waypoints to walk through on the way.",
                 string.Format("speed {0:0.#} m/s", unit.EffectiveMoveSpeed()), rooted ? "Can't move: immobilized" : null);
             GUI.enabled = !rooted;
             if (Tile(moveRect, "F", "Move", rooted ? "rooted" : string.Format("{0:0.#} m/s", unit.EffectiveMoveSpeed())))
@@ -1694,23 +1843,10 @@ namespace TacticsGame.Presentation
             var dash = DashOf(unit);
             if (dash != null && AbilityButton(unit, dash, ButtonRect(index++, x, y), "G", followup)) return true;
             var waitRect = ButtonRect(index++, x, y);
-            SetTip(waitRect, "Focus", string.Format("Stand still and focus for {0:0.0}s, then ask for orders again. After {1:0.##}s of focus in a row " +
-                "(back-to-back Focus orders, or hold Space to keep focusing with time running slowly) strain drains fast until you do anything else. A hit restarts the count. " +
-                "Transcend (hold the button): focus in one order until strain starts draining, however many hits restart the count.",
-                WaitSeconds, sim.FocusDelay), string.Format("sheds {0:0} strain/s once focused  ·  hold to Transcend{1}", sim.FocusStrainPerSecond,
-                sim.TranscendFocusStrain > 0f ? string.Format(" (+{0:0} strain)", sim.TranscendFocusStrain) : ""));
-            // Pressed through the hold, like a Transcend-able ability (UpdateHold): a quick click is a plain Focus.
-            var fe = Event.current;
-            if (fe.type == UnityEngine.EventType.MouseDown && fe.button == 0 && waitRect.Contains(fe.mousePosition))
-            {
-                holdDef = null; holdFocus = true; holdStart = Time.unscaledTime; holdFired = false;
-                fe.Use();
-            }
-            if (holdFocus) GUI.backgroundColor = Color.Lerp(Color.white, TranscendColor, 0.4f + 0.6f * HoldProgress);
-            Tile(waitRect, "Space", "Focus", string.Format("{0:0.0}s · hold: until focused", WaitSeconds));
-            GUI.backgroundColor = Color.white;
-            Fill(new Rect(waitRect.x + 1f, waitRect.y + 3f, 3f, waitRect.height - 6f), TranscendColor);
-            if (holdFocus) Fill(new Rect(waitRect.x + 2f, waitRect.yMax - 5f, (waitRect.width - 4f) * HoldProgress, 3f), TranscendColor);
+            SetTip(waitRect, "Focus", string.Format("Stand still and focus for {0:0.00}s, then ask for orders again. After {1:0.###}s of focus in a row " +
+                "(back-to-back Focus orders, or hold Space to keep focusing with time running slowly) the unit enters Clear Mind: strain drains fast until it does anything else. A hit restarts the count.",
+                WaitSeconds, sim.FocusDelayOf(unit)), string.Format("sheds {0:0} strain/s in Clear Mind", sim.FocusStrainOf(unit)));
+            if (Tile(waitRect, "Space", "Focus", string.Format("{0:0.00}s · hold Space: keep going", WaitSeconds))) { OrderFocus(unit); return true; }
             var autoRect = ButtonRect(index++, x, y);
             SetTip(autoRect, "Auto", "Let the AI pick this unit's order: its first usable attack on the nearest enemy, or close the distance.",
                 null, plan.Count > 0 ? "Clear the plan to use Auto." : null);
@@ -1809,7 +1945,8 @@ namespace TacticsGame.Presentation
 
         private bool DrawPicking(Unit unit, float x, ref float y)
         {
-            if (releasing) GUI.Label(new Rect(x, y, panelRect.width - 20f, 28f), "Can't be cancelled. Any damage breaks the charge.");
+            if (redirecting) { if (GUI.Button(new Rect(x, y, 120f, 28f), "Stop (Esc)")) { StopRedirect(); return true; } }
+            else if (releasing) GUI.Label(new Rect(x, y, panelRect.width - 20f, 28f), "Can't be cancelled. Any damage breaks the charge.");
             else if (GUI.Button(new Rect(x, y, 100f, 28f), "Back")) { Back(); return true; }
             y += 34f;
             if (plan.Count > 0)

@@ -18,6 +18,7 @@ namespace TacticsGame.Core
             AdvanceGlides();
             AdvanceMovement();
             TickGrapples();   // after movement, so the held unit is carried to where the grappler walked
+            TickTethers();    // after everyone has moved: chains pulled past their length snap
             TickOutOfRangeOrders();
             TickCharges();
             TickAuras();
@@ -28,7 +29,19 @@ namespace TacticsGame.Core
             ProcessDeaths();
             ExpireTimers();
             RecoverStrain();
+            TickHealOverTime();
+            TickBlasts();
+            TickDrops();   // reinforcements arriving (EnemyEntry.ArriveAfter)
+            TickReinforcementWaves();   // endless random reinforcements (StartReinforcementWaves)
+            TickMelds();   // Stitch
+            TickSettled();   // what waits for a unit to land (Close The Loop on a dodger)
+            TickParts();     // Deliverance's parts: SEE BEFORE ITSELF, EQUIPOSE at max strain, Wex's aura
+            AddSpawns();
+            EtchingTraits.Tick(this);
         }
+
+        /// <summary>Is this tick one of every 'ticks' (for rules that run in steps)?</summary>
+        public bool IsStep(int ticks) { return ticks <= 1 || tick % ticks == 0; }
 
         private void AdvanceMovement()
         {
@@ -119,7 +132,7 @@ namespace TacticsGame.Core
                 State.Traps.RemoveAt(i);
                 Emit(EventType.TrapTriggered, t.OwnerId, victim.Id, t.Id);
                 var owner = GetUnit(t.OwnerId);
-                foreach (var spec in t.Statuses) ApplyStatus(victim, spec.Create(Now, t.OwnerId), owner);
+                foreach (var spec in t.Statuses) ApplyStatus(victim, spec.Create(Now, t.OwnerId, null, t.DurationScale), owner);
             }
         }
 
@@ -180,9 +193,9 @@ namespace TacticsGame.Core
                     foreach (var id in a.Definition.RequiredStatuses()) RemoveStatus(a.Actor, id);
                 if (!a.Definition.SelfStatusesOnWindup)
                     foreach (var spec in a.Definition.SelfStatuses)
-                        effects.Add(new ApplyStatusEffect { Source = a.Actor, TargetId = a.Actor.Id, Status = spec.Create(Now, a.Actor.Id, a.Definition.LinkedAction) });
+                        effects.Add(new ApplyStatusEffect { Source = a.Actor, TargetId = a.Actor.Id, Status = SelfStatus(a.Actor, a.Definition, spec) });
                 if (a.Definition.EnergyGain > 0f) AddEnergy(a.Actor, a.Definition.EnergyGain);
-                float recovery = a.IsFree ? 0f : a.Stat(ActionStat.Recovery) / a.Actor.EffectiveActionSpeed();
+                float recovery = a.IsFree || a.NoRecovery ? 0f : a.Stat(ActionStat.Recovery) * a.RecoveryScale / a.Actor.EffectiveActionSpeed();
                 Emit(EventType.ActionResolved, a.Actor.Id, a.TargetUnitId, new ActionResolvedInfo { ActionId = a.Definition.Id, Recovery = recovery });
                 if (!a.IsFree)
                 {
@@ -207,9 +220,10 @@ namespace TacticsGame.Core
 
         private void ProcessDeaths()
         {
-            foreach (var u in State.Units)
+            foreach (var u in State.Units.ToArray())
             {
                 if (u.Health > 0f || u.Phase == UnitPhase.Dead) continue;
+                if (HoldsOn(u)) continue;   // Unkillable, or a boss whose last blow starts its next phase (Split The Minds)
                 // Killed in mid-air (jumping, shoved, falling, lifted): drop the body where it was headed.
                 bool airborne = u.IsJumping || u.GlideEnd >= 0f || u.IsLifted;
                 if (u.IsJumping) u.Position = u.JumpFrom.y <= u.JumpTo.y ? u.JumpFrom : u.JumpTo;
@@ -231,9 +245,14 @@ namespace TacticsGame.Core
                 Triggers.Fire(new TriggerContext { Type = TriggerType.Killed, Sim = this, Subject = u, Other = GetUnit(u.LastAttackerId), Action = u.LastHitAction, Tag = u.LastHitTag });
             }
 
-            bool playersAlive = State.Units.Any(u => u.Team == Team.Player && u.IsAlive);
-            bool enemiesAlive = State.Units.Any(u => u.Team == Team.Enemy && u.IsAlive);
-            if (playersAlive && enemiesAlive) return;
+            bool playersAlive = State.Units.Any(u => u.Team == Team.Player && u.IsAlive && !u.AIControlled);   // AI-played summons don't hold the field for a fallen squad
+            // With a boss in the fight, beating the bosses wins it (the endless reinforcements don't count); else every foe must fall.
+            bool bossFight = State.Units.Any(u => u.IsBoss) || drops.Exists(d => d.Definition.Boss) || spawns.Exists(s => s.Definition.Boss);
+            bool enemiesAlive = bossFight
+                ? State.Units.Any(u => u.IsBoss && u.IsAlive) || drops.Exists(d => d.Definition.Boss) || spawns.Exists(s => s.Definition.Boss)   // a boss's next phase on its way
+                : State.Units.Any(u => u.Team != Team.Player && u.IsAlive)
+                  || (!State.Units.Any(u => u.Team != Team.Player) && drops.Exists(d => d.Team != Team.Player));   // every foe down wins, reinforcements still to come or not; with none fielded yet, wait for them
+            if (playersAlive && (enemiesAlive || HoldVictory)) return;   // a scripted battle goes on with no enemies left
             Outcome = !playersAlive && !enemiesAlive ? BattleOutcome.Draw
                     : playersAlive ? BattleOutcome.PlayerVictory : BattleOutcome.PlayerDefeat;
             Emit(EventType.BattleEnd, null, null);
@@ -248,9 +267,12 @@ namespace TacticsGame.Core
                 {
                     if (u.Statuses[i].ExpiresAt > Now) continue;
                     float oldAction = u.EffectiveActionSpeed(), oldMove = u.EffectiveMoveSpeed();
-                    Emit(EventType.StatusExpired, u.Id, null, u.Statuses[i].Id);
+                    var expired = u.Statuses[i];
+                    Emit(EventType.StatusExpired, u.Id, null, expired.Id);
                     u.Statuses.RemoveAt(i);
                     HandleSpeedChange(u, oldAction, oldMove);
+                    if (expired.Has(StatusFlags.UnravelsOnExpire)) { UnravelUnit(u, GetUnit(expired.SourceId)); i = Mathf.Min(i, u.Statuses.Count); }
+                    if (expired.HealOnExpire > 0f || expired.HealMissingOnExpire > 0f) HealOnExpiry(u, expired);
                 }
                 bool locked = u.Phase == UnitPhase.Recovery || u.Phase == UnitPhase.Stunned;
                 if (locked && Now + 1e-4f >= u.PhaseEndsAt)

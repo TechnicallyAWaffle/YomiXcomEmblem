@@ -17,14 +17,14 @@ MonoBehaviour:
   MaxHealth: 85
   BaseDodge: 0.15
   BaseBlock: 0
-  MaxStrain: 100
+  MaxStrain: 50
   StrainRecoveryPerSecond: 6
   StrainRecoveryDelay: 1.5
   MaxEnergy: 0
   StartingEnergy: 0
   ActionSpeed: 1
-  MoveSpeed: 4
-  DashDistance: 3
+  MoveSpeed: 3
+  DashDistance: 2.5
   EyeHeight: 1.6
   BodyHeight: 1.8
   BodyRadius: 0.4
@@ -37,5 +37,8 @@ MonoBehaviour:
   Passives: []
   AIProfile: sniper
   AI: {fileID: 0}
+  Boss: 0
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Icon: {fileID: 0}
+  GrantedActions: []
   DataVersion: 15

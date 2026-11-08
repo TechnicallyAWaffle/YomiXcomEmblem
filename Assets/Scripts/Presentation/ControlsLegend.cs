@@ -3,7 +3,9 @@ using UnityEngine;
 namespace TacticsGame.Presentation
 {
     /// <summary>
-    /// Top-right panel listing the battle's keyboard and mouse shortcuts. H shows or hides it (it starts open).
+    /// Top-right panel listing the battle's keyboard and mouse shortcuts. H shows or hides it (it starts open). Whether it is
+    /// open is kept for the rest of the session: the scene reloads between screens (the upgrade phase), and a panel hidden
+    /// once stays hidden.
     /// Keep the lists in step with TacticsCamera, PlayerOrdersUI, InteractionCamera and DevInput.
     /// </summary>
     public class ControlsLegend : MonoBehaviour
@@ -27,25 +29,25 @@ namespace TacticsGame.Presentation
         {
             { "1 - 0, -, =, [, ]", "Use ability (again: repeat a follow-up)" },
             { "F", "Move" },
-            { "Hold Space", "Wait or keep charging (time slows)" },
-            { "1 / 2", "Mesmerize counter: strike / stop" },
-            { "1 / 2 / F", "Holding someone: headbutt / throw / move" },
+            { "Hold Space", "Focus or keep charging (time slows)" },
             { "Left-click", "Pick target / point / dash spot" },
             { "Shift + order", "Queue several orders" },
             { "Enter", "Confirm the queued plan" },
             { "Backspace", "Undo last queued order" },
             { "Right-click / Esc", "Back" },
             { "R", "Replay (after the battle)" },
+            { "~", "Dev tools (win, heal, god mode...)" },
         };
 
         private bool open;
+        private static bool? remembered;   // open or not, across scene loads (null: not yet decided this session)
         private GUIStyle keyStyle, textStyle, headStyle;
 
-        private void Awake() { open = StartOpen; }
+        private void Awake() { open = remembered ?? StartOpen; }
 
         private void Update()
         {
-            if (Input.GetKeyDown(ToggleKey)) open = !open;
+            if (Input.GetKeyDown(ToggleKey)) { open = !open; remembered = open; }
         }
 
         private void OnGUI()

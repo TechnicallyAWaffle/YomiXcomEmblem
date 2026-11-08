@@ -33,17 +33,18 @@ namespace TacticsGame.Core
         /// travel come first (a shove off a ledge); the drop itself takes sqrt(2h/g). The unit is stunned through the fall
         /// (Block doesn't help) and takes fall damage when it lands (see Land).
         /// </summary>
-        private void StartFall(Unit unit, Vector3 landing, float drop, float leadSeconds, Unit source, bool fromJump)
+        /// speed / damageMult: a thrown-down fall (SlamToGround) is that many times as fast and as damaging.
+        private void StartFall(Unit unit, Vector3 landing, float drop, float leadSeconds, Unit source, bool fromJump, float speed = 1f, float damageMult = 1f)
         {
             drop = Mathf.Max(0f, drop);
-            float seconds = Mathf.Max(TickLength, leadSeconds + Mathf.Sqrt(2f * drop / Mathf.Max(0.1f, FallGravity)));
+            float seconds = Mathf.Max(TickLength, leadSeconds + Mathf.Sqrt(2f * drop / Mathf.Max(0.1f, FallGravity)) / Mathf.Max(0.01f, speed));
             landing = Terrain.OnGround(landing);
             unit.GlideFrom = unit.Position;
             unit.GlideTo = landing;
             unit.GlideStart = Now;
             unit.GlideEnd = Now + seconds;
             unit.FallLandAt = unit.GlideEnd;
-            unit.FallDamage = FallDamageBase + FallDamagePerMeter * drop;
+            unit.FallDamage = (FallDamageBase + FallDamagePerMeter * drop) * damageMult;
             unit.FallSourceId = source != null ? source.Id : null;
             Emit(EventType.Dash, unit.Id, null, new DashInfo { From = unit.Position, To = landing, Duration = seconds, Forced = true, Fall = true });
             Emit(EventType.Fall, source != null ? source.Id : null, unit.Id, new FallInfo { Height = drop, Duration = seconds, FromJump = fromJump });
@@ -107,16 +108,25 @@ namespace TacticsGame.Core
             var def = cmd.Action;
             float speed = unit.EffectiveActionSpeed();
             bool resuming = windupLeft >= 0f;
-            bool transcend = cmd.Transcend && def.CanTranscend;
-            float windup = resuming ? windupLeft : WindupOf(unit, def) * (transcend ? def.TranscendWindupMultiplier : 1f);
+            bool transcend = cmd.Transcend && unit.CanTranscend(def);
+            // Plight Upon Structure (Alio): an imprinted ability that costs strain, Transcended, is cast again by a ghost instead.
+            bool ghost = !resuming && cmd.Transcend && unit.Passives.Contains(DeliveranceParts.PlightUponStructure) && unit.Imprinted.Contains(def.Id)
+                         && StrainCostOf(unit, def, cmd.TargetUnitId) > 0f;
+            if (ghost) transcend = false;
+            var grant = transcend ? unit.GrantOf(def) : TranscendGrant.None;   // a Transcend an Etching gave it
+            float windup = resuming ? windupLeft : WindupOf(unit, def) * (transcend && def.CanTranscend ? def.TranscendWindupMultiplier : 1f) * EtchingWindupScale(unit, def, cmd)
+                * (grant == TranscendGrant.QuickWindup ? Mathf.Max(0f, unit.GrantParam(def, "windup_mult", 0.25f)) : 1f);   // Quickness And Lethargy
+            if (!resuming) EtchingTraits.SpendRevenge(this, unit);   // spent by the next ability, whatever it is
             unit.Waiting = false;
-            if (!resuming && unit.Queued != cmd) ClearQueued(unit, null);   // using another ability overrides a queued ranged one
+            if (!resuming && unit.Queued != cmd && !behavior.KeepsQueuedOrder) ClearQueued(unit, null);   // using another ability overrides a queued ranged one (a Dash doesn't)
             var inst = new ActionInstance
             {
                 Actor = unit, Definition = def, Behavior = behavior,
                 TargetUnitId = cmd.TargetUnitId, TargetPos = cmd.TargetPos,
                 StartedAt = Now, ResolveAt = Now + windup, Charge = charge,
-                Transcended = cmd.Transcend && def.CanTranscend,
+                Transcended = transcend,
+                NoRecovery = grant == TranscendGrant.NoRecovery,
+                RecoveryScale = grant == TranscendGrant.QuickWindup ? Mathf.Max(0f, unit.GrantParam(def, "recovery_mult", 1.25f)) : 1f,
             };
             unit.Phase = UnitPhase.Windup;
             unit.PhaseEndsAt = inst.ResolveAt;
@@ -126,19 +136,31 @@ namespace TacticsGame.Core
             unit.LastActionPos = cmd.TargetPos;
             if (!resuming)
             {
+
                 inst.UnravelsActor = def.UnravelsOverMaxStrain && unit.Strain + StrainCostOf(unit, def, cmd.TargetUnitId, inst.Transcended) > unit.MaxStrain + 1e-4f;
                 PayCosts(unit, def, behavior, cmd.TargetUnitId, inst.Transcended);
-                if (unit.Hover != null) unit.Hover.EndsAfterAction = true;   // one ability from the air, then it comes down
+                if (unit.Hover != null && !unit.Hover.Permanent) unit.Hover.EndsAfterAction = true;   // one ability from the air, then it comes down
             }
             var mesmer = unit.Mesmer;
             if (mesmer != null && mesmer.Strike != null && def == mesmer.Strike && mesmer.StrikesLeft > 0) mesmer.StrikesLeft--;
 
+            // Body On Strings: a Transcend that makes the windup Unstoppable.
+            if (!resuming && grant == TranscendGrant.UnstoppableWindup)
+                ApplyStatus(unit, new StatusEffect { Id = StatusIds.Unstoppable, SourceId = unit.Id, ExpiresAt = inst.ResolveAt + TickLength, Flags = StatusFlags.Unstoppable }, unit);
+            // Flow State: a Transcend that gives Dodge for a while from the cast.
+            if (!resuming && grant == TranscendGrant.DodgeOnCast)
+                ApplyStatus(unit, new StatusEffect
+                {
+                    Id = EtchingTraits.FlowStateStatus, SourceId = unit.Id, ExpiresAt = Now + Mathf.Max(TickLength, unit.GrantParam(def, "seconds", 2f)),
+                    Modifiers = new List<Modifier> { Modifier.Add(StatId.Dodge, unit.GrantParam(def, "dodge", 0.75f)) },
+                }, unit);
             behavior.OnWindupStart(this, inst);
             Emit(EventType.ActionStarted, unit.Id, cmd.TargetUnitId,
-                new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = unit.ActionStat(def, ActionStat.Recovery) / speed, TargetPos = cmd.TargetPos, Transcended = inst.Transcended });
+                new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = inst.NoRecovery ? 0f : unit.ActionStat(def, ActionStat.Recovery) * inst.RecoveryScale / speed, TargetPos = inst.TargetPos, Transcended = inst.Transcended });   // inst.TargetPos: where OnWindupStart aimed it (the smite's circle)
             ApplyWindupStatuses(inst);
             Triggers.Fire(new TriggerContext { Type = TriggerType.ActionStarted, Sim = this, Subject = unit, Action = def });
             if (!resuming) AlertTarget(unit, cmd.TargetUnitId);
+            if (ghost) SummonGhost(unit, cmd);
         }
 
         /// <summary>ActionDefinition.TargetStatusesDuringWindup / SelfStatusesDuringWindup: on the target / the actor while the windup
@@ -202,8 +224,11 @@ namespace TacticsGame.Core
             float energyCost = behavior.EnergyCost(this, unit, def);   // before anything below changes the discount
             float strainCost = StrainCostOf(unit, def, targetId, transcended);
             float cooldown = unit.ActionStat(def, ActionStat.Cooldown);
-            if (cooldown > 0f) unit.CooldownReadyAt[def.Id] = Now + cooldown;
+            bool echo = transcended && unit.GrantOf(def) == TranscendGrant.NoCooldown;   // Echo: a Transcend with no cooldown
+            if (cooldown > 0f && !echo) unit.CooldownReadyAt[def.Id] = Now + cooldown;
+            EtchingTraits.SufferPastMax(this, unit, def, strainCost);   // before the strain lands: does it go past max?
             AddStrain(unit, strainCost);
+            if (strainCost > 0f) Triggers.Fire(new TriggerContext { Type = TriggerType.StrainSpent, Sim = this, Subject = unit, Action = def, Amount = strainCost });
             if (energyCost > 0f) AddEnergy(unit, -energyCost);
             if (def.HealthCost > 0f)
             {
@@ -218,7 +243,15 @@ namespace TacticsGame.Core
 
         private void ApplySelfStatuses(Unit unit, ActionDefinition def)
         {
-            foreach (var spec in def.SelfStatuses) ApplyStatus(unit, spec.Create(Now, unit.Id, def.LinkedAction), unit);
+            foreach (var spec in def.SelfStatuses) ApplyStatus(unit, SelfStatus(unit, def, spec), unit);
+        }
+
+        /// <summary>One of an ability's SelfStatuses for its user, made now (it remembers the ability: StatusEffect.FromAction).</summary>
+        private StatusEffect SelfStatus(Unit unit, ActionDefinition def, StatusSpec spec)
+        {
+            var s = spec.Create(Now, unit.Id, def.LinkedAction, unit.DurationScale(def));
+            s.FromAction = def;
+            return s;
         }
     }
 }

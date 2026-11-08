@@ -33,7 +33,7 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 1
   Damage: 15
-  BaseAccuracy: 0.95
+  BaseAccuracy: 1
   StunDuration: 0.9
   StrainOnTarget: 15
   StrainOnSelf: 0
@@ -48,10 +48,19 @@ MonoBehaviour:
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonCount: 0
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
   ChannelNeedsSight: 0
-  AirRiseSeconds: 0.75
-  AirHoldSeconds: 0.75
+  ChannelIgnoresDamage: 0
+  AirRiseSeconds: 0.5
+  AirHoldSeconds: 0.25
   AirSlamSeconds: 0.5
   Heal: 0
   Displace: 0
