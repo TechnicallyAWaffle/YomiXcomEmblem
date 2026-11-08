@@ -42,8 +42,18 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 9f7e7ad6405913b49bea20ca49f60764, type: 2}
   - {fileID: 11400000, guid: fc2e8dbe4b319b74f979ffcbe10844cc, type: 2}
   - {fileID: 11400000, guid: c525e06230308c04e9197d70d385aab0, type: 2}
+  - {fileID: 11400000, guid: 34f4c2068097208499830a3cbcb7a5ed, type: 2}
+  - {fileID: 11400000, guid: e9efe18f06677ef41a088738ea4e41fd, type: 2}
+  - {fileID: 11400000, guid: fa680acf924e31144a146c6f3e408445, type: 2}
+  - {fileID: 11400000, guid: 0a2bcded824a85047943725a1b92634c, type: 2}
   Passives: []
   AIProfile: 
   AI: {fileID: 0}
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Icon: {fileID: 0}
+  GrantedActions:
+  - cognitive_burden
+  - banishment
+  - death_sentence
+  - savior
   DataVersion: 15

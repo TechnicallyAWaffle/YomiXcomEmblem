@@ -33,7 +33,7 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 1
   Damage: 0
-  BaseAccuracy: 0.9
+  BaseAccuracy: 1
   StunDuration: 0.5
   StrainOnTarget: 10
   StrainOnSelf: 0
@@ -50,9 +50,9 @@ MonoBehaviour:
   AuraSeconds: 0
   ChannelSeconds: 0
   ChannelNeedsSight: 0
-  AirRiseSeconds: 0.75
+  AirRiseSeconds: 0.5
   AirHoldSeconds: 0.75
-  AirSlamSeconds: 0.5
+  AirSlamSeconds: 0.4
   Heal: 0
   Displace: 0
   DisplaceDistance: 5

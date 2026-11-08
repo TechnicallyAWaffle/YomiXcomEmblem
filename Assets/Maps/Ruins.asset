@@ -1,0 +1,108 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e28427a253197334b818cdd26df77c81, type: 3}
+  m_Name: Ruins
+  m_EditorClassIdentifier: Apotheom.Presentation::TacticsGame.Presentation.MapTemplate
+  DisplayName: Ruins
+  Description: 'A courtyard with a raised dais in the middle: whoever holds it sees
+    everything. Broken walls and pillars around it.'
+  GroundSize: {x: 44, y: 44}
+  Pieces:
+  - Name: Dais
+    Kind: 1
+    Position: {x: 0, y: 0, z: 0}
+    Size: {x: 8, y: 1.2, z: 8}
+    Yaw: 0
+  - Name: Dais_Top
+    Kind: 1
+    Position: {x: 0, y: 1.2, z: 0}
+    Size: {x: 3, y: 1.2, z: 3}
+    Yaw: 0
+  - Name: Pillar_W
+    Kind: 0
+    Position: {x: -6.5, y: 0, z: 0}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_E
+    Kind: 0
+    Position: {x: 6.5, y: 0, z: 0}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_S
+    Kind: 0
+    Position: {x: 0, y: 0, z: -7}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Pillar_N
+    Kind: 0
+    Position: {x: 0, y: 0, z: 7}
+    Size: {x: 1.2, y: 3, z: 1.2}
+    Yaw: 0
+  - Name: Wall_SW
+    Kind: 0
+    Position: {x: -9, y: 0, z: -7}
+    Size: {x: 5, y: 1, z: 0.49999997}
+    Yaw: 35
+  - Name: Wall_NE
+    Kind: 0
+    Position: {x: 9, y: 0, z: 7}
+    Size: {x: 5, y: 1, z: 0.49999997}
+    Yaw: 35
+  - Name: Wall_SE
+    Kind: 0
+    Position: {x: 10, y: 0, z: -8}
+    Size: {x: 3, y: 1, z: 0.5}
+    Yaw: 340
+  - Name: Wall_NW
+    Kind: 0
+    Position: {x: -10, y: 0, z: 8}
+    Size: {x: 3, y: 1, z: 0.5}
+    Yaw: 340
+  - Name: Arch_S
+    Kind: 0
+    Position: {x: 0, y: 0, z: -14}
+    Size: {x: 6, y: 3, z: 0.6}
+    Yaw: 0
+  - Name: Arch_N
+    Kind: 0
+    Position: {x: 0, y: 0, z: 14}
+    Size: {x: 6, y: 3, z: 0.6}
+    Yaw: 0
+  - Name: Rubble_SE
+    Kind: 1
+    Position: {x: 15, y: -0, z: -13}
+    Size: {x: 4, y: 0.9, z: 4}
+    Yaw: 0
+  - Name: Rubble_NW
+    Kind: 1
+    Position: {x: -15, y: -0, z: 13}
+    Size: {x: 4, y: 0.9, z: 4}
+    Yaw: 0
+  PlayerSpawns:
+  - {x: -6, y: 0, z: -17}
+  - {x: -2, y: 0, z: -18}
+  - {x: 2, y: 0, z: -18}
+  - {x: 6, y: 0, z: -17}
+  EnemySpawns:
+  - {x: 6, y: 0, z: 17}
+  - {x: 2, y: 0, z: 18}
+  - {x: -2, y: 0, z: 18}
+  - {x: -6, y: 0, z: 17}
+  - {x: -10, y: 0, z: 16}
+  - {x: 10, y: 0, z: 15}
+  - {x: -4, y: 0, z: 20}
+  - {x: 4, y: 0, z: 20}
+  - {x: -1.5, y: 0, z: 12}
+  - {x: 5.5, y: 0, z: 10.5}
+  - {x: -7.5, y: 0, z: 10.5}
+  - {x: -15.5, y: 0, z: 19}
+  - {x: 17, y: 0, z: 19}

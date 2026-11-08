@@ -19,8 +19,12 @@ namespace TacticsGame.Core
     /// The sim wakes waiting enemies when something starts winding up on them (BattleSimulation.AlertTarget), so the
     /// reactions get their chance.
     /// </summary>
-    public class BasicEnemyAI : IUnitAI
+    public class BasicEnemyAI : IUnitAI, IDropPreference
     {
+        /// <summary>Where it wants to land as a reinforcement (IDropPreference): by default the most hurt enemy if it fights up
+        /// close, else nowhere in particular (a clear spot). Styles override it to pick their kind of target.</summary>
+        public virtual Unit DropNear(BattleSimulation sim, Unit unit) { return sim.DefaultDropTarget(unit); }
+
         public const float ReleaseAtCharge = 0.6f;
 
         /// <summary>Ranged units back off when a melee enemy gets this close.</summary>
@@ -293,7 +297,7 @@ namespace TacticsGame.Core
                 {
                     string why;
                     if (!sim.CanUse(shooter, def, e, out why)) continue;
-                    float v = Mathf.Max(1f, shooter.ActionStat(def, ActionStat.Damage)) * (0.1f + HitChance(sim, shooter, def, e));   // a long shot still beats no shot
+                    float v = Mathf.Max(1f, shooter.ActionStat(def, ActionStat.Damage)) * (0.1f + HitChance(sim, shooter, def, e)) / sim.TargetWeight(unit, e);   // a long shot still beats no shot
                     if (v > best) { best = v; shot = def; target = e; }
                 }
             }
@@ -395,7 +399,7 @@ namespace TacticsGame.Core
                     if (a.Damage > 0f && !a.IsCharge && LandsInStun(sim, unit, a, e) && (comboDef == null || a.Damage > comboDef.Damage)) comboDef = a;
                 }
                 if (first == null) continue;
-                float dist = Flat(unit.Position, e.Position);
+                float dist = Flat(unit.Position, e.Position) * sim.TargetWeight(unit, e);
                 float score = -dist + 3f * (1f - e.Health / Mathf.Max(1f, e.MaxHealth)) + (comboDef != null ? 25f : 0f);
                 if (score > best) { best = score; target = e; combo = comboDef != null; def = comboDef ?? first; }
             }

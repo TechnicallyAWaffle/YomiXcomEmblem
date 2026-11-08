@@ -14,10 +14,24 @@ namespace TacticsGame.Core
         public void UnravelUnit(Unit target, Unit source)
         {
             if (target == null || !target.IsAlive) return;
+            if (target.Passives.Contains(DeliveranceParts.SingleMindedPerfection) && CastEquipose(target)) return;   // Revl never Unravels: EQUIPOSE instead
             AddStrain(target, -target.Strain);   // assumption: Unravel resets strain
             Emit(EventType.Unravel, source != null ? source.Id : null, target.Id);
             if (target.Slam != null) BreakAerialSlam(target, source);   // unravelled in mid-air: it drops what it carries, and falls
-            ApplyStun(target, UnravelStunSeconds, source, true, true);
+            float stun = UnravelStunSeconds * EtchingTraits.UnravelStunScale(target);   // Untethered To Sanity: shorter
+            // Desecrate Your Being: health and a damage surge, not a stun.
+            if (!EtchingTraits.Desecrate(this, target, stun)) ApplyStun(target, stun, source, true, true);
+            Triggers.Fire(new TriggerContext { Type = TriggerType.Unraveled, Sim = this, Subject = target, Other = source, Amount = stun });   // Splinters
+        }
+
+        /// <summary>
+        /// Lengthen the stun 'u' is in by 'seconds' (Splinters on an Unravel): it pierces immunity as the Unravel's does. Nothing
+        /// happens to a unit that isn't stunned (Desecrate Your Being took its Unravel's stun away).
+        /// </summary>
+        public void ExtendStun(Unit u, float seconds, Unit source)
+        {
+            if (u == null || !u.IsAlive || u.Phase != UnitPhase.Stunned || seconds <= 0f) return;
+            ApplyStun(u, Mathf.Max(0f, u.PhaseEndsAt - Now) + seconds, source, true, true);
         }
 
         private bool StartChase(Unit unit, UnitCommand cmd, Unit target, out string reason)
@@ -27,6 +41,7 @@ namespace TacticsGame.Core
             if (unit.IsLifted) { reason = "in the air"; return false; }
             ClearQueued(unit, null);   // committing to an ability overrides a queued ranged one
             unit.LastActionId = null;
+            EtchingTraits.BeginMarch(this, unit);   // a chase is a new walk too (its re-paths aren't)
             if (!RepathChase(unit, target, cmd.Action)) { reason = "no path"; return false; }
             unit.Chase = cmd;
             unit.ChaseUntil = Now + MaxRangeWait;
@@ -62,7 +77,7 @@ namespace TacticsGame.Core
         /// <summary>A chase only strikes once inside this fraction of the ability's range, so a target stepping back doesn't
         /// leave it swinging at the edge (never closer than the two bodies allow). Abilities that close the distance themselves
         /// (ActionBehavior.ClosesDistance: Phantom Strike) go as soon as the target is in range.</summary>
-        public float ChaseStrikeFraction = 0.5f;
+        public float ChaseStrikeFraction = 0.25f;
 
         private bool ChaseCloseEnough(Unit u, ActionDefinition def, Unit target)
         {

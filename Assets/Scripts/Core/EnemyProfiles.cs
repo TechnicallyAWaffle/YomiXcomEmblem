@@ -24,6 +24,18 @@ namespace TacticsGame.Core
             { "healer", () => new HealerAI() },
             { "caster", () => new CasterAI() },
             { "brutebeast", () => new BrutebeastAI() },
+            { "wraith", () => new WraithAI() },
+            { "monarch", () => new MonarchAI() },
+            { "zola", () => new ZolaAI() },
+            { "primavaeran", () => new PrimavaeranAI() },
+            { IdleAI.Style, () => new IdleAI() },
+            { "exemplar", () => new ExemplarAI() },
+            { SeekStrikeAI.Style, () => new SeekStrikeAI() },
+            { "deliverance", () => new DeliveranceAI() },
+            { SyneAI.Style, () => new SyneAI() },
+            { AlioAI.Style, () => new AlioAI() },
+            { RevlAI.Style, () => new RevlAI() },
+            { WexAI.Style, () => new WexAI() },
         };
 
         private static readonly Dictionary<string, IUnitAI> shared = new Dictionary<string, IUnitAI>();
@@ -73,8 +85,14 @@ namespace TacticsGame.Core
     /// The default enemy AI: each unit is played by its AI asset (a style with tuned numbers), else its AIProfile style
     /// ("auto" picks one from its abilities), else BasicEnemyAI.
     /// </summary>
-    public class AIRouter : IUnitAI
+    public class AIRouter : IUnitAI, IDropPreference
     {
+        public Unit DropNear(BattleSimulation sim, Unit unit)
+        {
+            var pref = For(unit) as IDropPreference;
+            return pref != null ? pref.DropNear(sim, unit) : sim.DefaultDropTarget(unit);
+        }
+
         private readonly BasicEnemyAI fallback = new BasicEnemyAI();
         // One AI per asset and style ("auto" can pick differently for different kits), built once with the asset's numbers.
         private readonly Dictionary<KeyValuePair<AIProfileDefinition, string>, IUnitAI> tuned = new Dictionary<KeyValuePair<AIProfileDefinition, string>, IUnitAI>();
@@ -190,7 +208,7 @@ namespace TacticsGame.Core
                 foreach (var e in sim.EnemiesOf(unit))
                 {
                     if (!e.HasStatus(StatusIds.Marked) || !Reach(sim, unit, snipe, e)) continue;
-                    float s = HitChance(sim, unit, snipe, e) + 0.5f * (1f - e.Health / Mathf.Max(1f, e.MaxHealth));
+                    float s = (HitChance(sim, unit, snipe, e) + 0.5f * (1f - e.Health / Mathf.Max(1f, e.MaxHealth))) / sim.TargetWeight(unit, e);
                     if (s > bestScore) { bestScore = s; best = e; }
                 }
             if (best != null) return UnitCommand.UseAction(unit.Id, snipe, best.Id);
@@ -200,7 +218,7 @@ namespace TacticsGame.Core
                 foreach (var e in sim.EnemiesOf(unit))
                 {
                     if (e.HasStatus(StatusIds.Marked) || !Reach(sim, unit, mark, e)) continue;
-                    float s = HitChance(sim, unit, mark, e) + (snipe != null && Reach(sim, unit, snipe, e) ? 0.5f : 0f) + 0.3f * (1f - e.Health / Mathf.Max(1f, e.MaxHealth));
+                    float s = (HitChance(sim, unit, mark, e) + (snipe != null && Reach(sim, unit, snipe, e) ? 0.5f : 0f) + 0.3f * (1f - e.Health / Mathf.Max(1f, e.MaxHealth))) / sim.TargetWeight(unit, e);
                     if (s > bestScore) { bestScore = s; best = e; }
                 }
             if (best != null) return UnitCommand.UseAction(unit.Id, mark, best.Id);
@@ -236,14 +254,20 @@ namespace TacticsGame.Core
     }
 
     /// <summary>
-    /// Assassin: hunts, going for ranged units first. It spends strain freely to close in (Dash, Polystep beside the target
-    /// when it is beyond a dash), opens with Hidden Strike when it can, then Strikes. At high strain it breaks off: a Polystep
-    /// to the safest spot it can reach if it is threatened, then rests (Focus) like everyone.
+    /// Assassin: hunts, going for ranged units first. It walks in, saving its strain for the fight: it only Dashes (strain)
+    /// once one dash puts its target in Strike reach (DashWithin), and never past DashStrainCeiling, so it arrives with room
+    /// to strike and guard. Polystep (no strain) takes it beside a target beyond a dash. It opens with Hidden Strike when it
+    /// can, then Strikes. At high strain it breaks off: a Polystep to the safest spot it can reach if it is threatened, then
+    /// rests (Focus) like everyone.
     /// </summary>
     public class AssassinAI : ProfileAI
     {
         /// <summary>Metres of extra distance a ranged target is worth chasing over a melee one.</summary>
         public float RangedTargetBonus = 12f;
+        /// <summary>Dash at the target only when it is this close (metres); 0 = when one dash puts it in Strike reach.</summary>
+        public float DashWithin = 0f;
+        /// <summary>Never Dash when the dash would leave its strain above this share of its max.</summary>
+        public float DashStrainCeiling = 0.35f;
 
         public override UnitCommand Decide(BattleSimulation sim, Unit unit)
         {
@@ -278,7 +302,10 @@ namespace TacticsGame.Core
                 float dashReach = dash != null ? sim.DashReach(unit) : 0f;
                 if (Ready(sim, unit, blink) && d > dashReach + unit.ActionStat(strike, ActionStat.Range) && d <= unit.ActionStat(blink, ActionStat.Range) + unit.ActionStat(strike, ActionStat.Range))
                     return UnitCommand.UseActionAt(unit.Id, blink, Beside(unit, prey));
-                if (dash != null && d > unit.ActionStat(strike, ActionStat.Range) + 0.5f && Affordable(sim, unit, dash, false))
+                float reach = unit.ActionStat(strike, ActionStat.Range);
+                float within = DashWithin > 0f ? DashWithin : dashReach + reach;
+                if (dash != null && d > reach + 0.5f && d <= within && Affordable(sim, unit, dash, false) &&
+                    (unit.Strain + sim.StrainCostOf(unit, dash)) / Mathf.Max(1f, unit.MaxStrain) <= DashStrainCeiling)
                     return UnitCommand.UseActionAt(unit.Id, dash, Beside(unit, prey));
             }
             return UnitCommand.UseActionWhenInRange(unit.Id, strike, prey.Id);
@@ -291,7 +318,7 @@ namespace TacticsGame.Core
             float bestScore = float.MinValue;
             foreach (var e in sim.EnemiesOf(unit))
             {
-                float s = -Flat(unit.Position, e.Position) + (IsRangedUnit(e) ? RangedTargetBonus : 0f) + 4f * (1f - e.Health / Mathf.Max(1f, e.MaxHealth));
+                float s = -Flat(unit.Position, e.Position) * sim.TargetWeight(unit, e) + (IsRangedUnit(e) ? RangedTargetBonus : 0f) + 4f * (1f - e.Health / Mathf.Max(1f, e.MaxHealth));
                 if (s > bestScore) { bestScore = s; best = e; }
             }
             return best;
@@ -529,6 +556,68 @@ namespace TacticsGame.Core
                 if (plan.Walled && plan.Caught.Count > best) { best = plan.Caught.Count; aim = at; }
             }
             return best > 0;
+        }
+    }
+
+    /// <summary>
+    /// The simplest fighter (AIProfile "seek_strike"): it goes for the nearest enemy and uses its basic attack on it, walking
+    /// in while out of reach. No guarding, dodging or resting. Recollections of Self's Wraiths play this way on the squad's side.
+    /// </summary>
+    public class SeekStrikeAI : IUnitAI
+    {
+        public const string Style = "seek_strike";
+
+        public UnitCommand Decide(BattleSimulation sim, Unit unit) { return DecideWith(sim, unit, unit.Actions.Find(a => a != null && a.Id == unit.BasicAttackId)); }
+
+        /// <summary>The same, with 'strike' as its basic attack (null: it stands idle).</summary>
+        public UnitCommand DecideWith(BattleSimulation sim, Unit unit, ActionDefinition strike)
+        {
+            if (unit.Phase == UnitPhase.Charging) return UnitCommand.ReleaseCharge(unit.Id, null, unit.Position);
+            if (unit.Grapple != null) return UnitCommand.ReleaseGrapple(unit.Id);
+            var target = sim.NearestEnemy(unit);
+            if (target == null || strike == null) return UnitCommand.Idle(unit.Id, 0.5f);
+            string why;
+            if (sim.CanUse(unit, strike, target, out why)) return UnitCommand.UseAction(unit.Id, strike, target.Id);
+            if (!sim.CanAfford(unit, strike, out why)) return UnitCommand.Idle(unit.Id, 0.25f);
+            return UnitCommand.UseActionWhenInRange(unit.Id, strike, target.Id);   // walks in and strikes
+        }
+    }
+
+    /// <summary>
+    /// MADNESS (StatusFlags.Maddened), on any unit of any side: its basic attack, again and again, at the nearest enemy
+    /// (SeekStrikeAI's way: in reach it strikes, otherwise it walks in). A unit with no basic attack of its own uses the one
+    /// the status lends it while it lasts (the Madness ability's LinkedAction: Wild Swing), which never joins its loadout.
+    /// </summary>
+    public class MaddenedAI : IUnitAI
+    {
+        private readonly SeekStrikeAI strike = new SeekStrikeAI();
+
+        public UnitCommand Decide(BattleSimulation sim, Unit unit)
+        {
+            var basic = unit.Actions.Find(a => a != null && a.Id == unit.BasicAttackId);
+            if (basic == null)
+            {
+                var madness = unit.Statuses.Find(s => s.Has(StatusFlags.Maddened));
+                basic = madness != null ? madness.LinkedAction : null;
+            }
+            return strike.DecideWith(sim, unit, basic);
+        }
+    }
+
+    /// <summary>
+    /// Does nothing: stands where it is (a training dummy, AIProfile "idle"). Also what a scripted battle hands its enemies while
+    /// they are held back (TutorialRunner).
+    /// </summary>
+    public class IdleAI : IUnitAI
+    {
+        public const string Style = "idle";
+        public float Seconds = 0.5f;
+
+        public UnitCommand Decide(BattleSimulation sim, Unit unit)
+        {
+            if (unit.Phase == UnitPhase.Charging) return UnitCommand.ReleaseCharge(unit.Id, null, unit.Position);
+            if (unit.Grapple != null) return UnitCommand.ReleaseGrapple(unit.Id);
+            return UnitCommand.Idle(unit.Id, Seconds);
         }
     }
 }

@@ -17,7 +17,7 @@ MonoBehaviour:
   BehaviorId: lance
   Roles: 0
   Description: Charge up energy, increasing Strain overtime. Release to throw out
-    a lance that deals more damage and stun based on charge time.
+    a heavy lance that deals more damage and stun based on charge time.
   Targeting: 4
   Range: 16
   IsRanged: 1
@@ -30,10 +30,11 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
-  Impact: 0
+  Impact: 1
   Damage: 10
-  BaseAccuracy: 0.9
+  BaseAccuracy: 1
   StunDuration: 0.25
   StrainOnTarget: 8
   StrainOnSelf: 0
@@ -48,8 +49,21 @@ MonoBehaviour:
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonUnits: []
+  RandomStatusesOnHit: []
+  SummonCount: 0
+  SummonAIStyle: 
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
+  MissingHealthDamage: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5
@@ -59,18 +73,20 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  SelfStatusesOnHit: []
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
   TrapLifetime: 30
   LinkedAction: {fileID: 0}
   IsCharge: 1
-  MaxChargeSeconds: 2.5
-  ChargeStrainPerSecond: 18
+  MaxChargeSeconds: 2
+  ChargeStrainPerSecond: 20
   ChargeHealthPerSecond: 0
-  ChargeDamageMultiplier: 5
+  ChargeDamageMultiplier: 6
   ChargeStunMultiplier: 6
   ChargeHealMultiplier: 1
+  FollowUps: []
   IsFollowup: 0
   ChainFollowups: 0
   ChainCostMultiplier: 1

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Snipe
   m_EditorClassIdentifier: Core::TacticsGame.Core.ActionDefinition
   Id: snipe
-  DisplayName: Snipe
+  DisplayName: Precision Shot
   BehaviorId: snipe
   Roles: 0
   Description: Enter an aiming stance and snipe a target. Cancels if the target leaves
@@ -33,7 +33,7 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 1
   Damage: 45
-  BaseAccuracy: 0.95
+  BaseAccuracy: 1
   StunDuration: 1
   StrainOnTarget: 25
   StrainOnSelf: 0

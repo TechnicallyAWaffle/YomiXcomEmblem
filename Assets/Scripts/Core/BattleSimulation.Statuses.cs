@@ -20,6 +20,47 @@ namespace TacticsGame.Core
             EmitStatusTimer(target, status, source);
             HandleSpeedChange(target, oldAction, oldMove);
             if (status.Has(StatusFlags.Rooted) && target.Phase == UnitPhase.Moving) EndMove(target);
+            if (status.Has(StatusFlags.Maddened)) TakeOver(target);
+        }
+
+        /// <summary>
+        /// MADNESS takes a unit over: the orders it had are dropped (its queue, a chase, a queued shot) and a walk stops, so
+        /// MaddenedAI decides from its next moment on. A windup under way still lands.
+        /// </summary>
+        private void TakeOver(Unit u)
+        {
+            queues.Remove(u.Id);
+            ClearChase(u);
+            ClearQueued(u, null);
+            if (u.Phase == UnitPhase.Moving) { EndMove(u); }
+            else if (u.Phase == UnitPhase.Recovery && u.Waiting) EndRecoveryNow(u);   // standing waiting: it acts at once
+        }
+
+        /// <summary>
+        /// Can 'source' move 'u' against its will? Not an Unstoppable unit: no shove, pull, knockback, yank, lift, grab, slam
+        /// or teleport by anyone else moves it (moving itself, it goes where it likes).
+        /// </summary>
+        public bool CanDisplace(Unit u, Unit source) { return u != null && (source == u || !u.IsUnstoppable); }
+
+        /// <summary>Change a status's stat modifiers in place (Avidous March's fading burst): no new events but the speed
+        /// change's (a walk restarts at its new speed).</summary>
+        public void RetuneStatus(Unit u, StatusEffect status, List<Modifier> modifiers)
+        {
+            if (u == null || status == null) return;
+            float oldAction = u.EffectiveActionSpeed(), oldMove = u.EffectiveMoveSpeed();
+            status.Modifiers = modifiers;
+            HandleSpeedChange(u, oldAction, oldMove);
+        }
+
+        /// <summary>Bring every cooldown 'u' is waiting on 'seconds' closer (Lucid Dreams).</summary>
+        public void CutCooldowns(Unit u, float seconds)
+        {
+            if (u == null || seconds <= 0f || u.CooldownReadyAt.Count == 0) return;
+            foreach (var id in u.CooldownReadyAt.Keys.ToList())
+            {
+                float at = u.CooldownReadyAt[id];
+                if (at > Now) u.CooldownReadyAt[id] = Mathf.Max(Now, at - seconds);
+            }
         }
 
         /// <summary>Statuses lasting at least this long count as "until removed" and get no timer.</summary>

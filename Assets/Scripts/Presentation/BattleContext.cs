@@ -24,6 +24,8 @@ namespace TacticsGame.Presentation
             [System.NonSerialized] public List<ActionDefinition> Loadout;
             /// <summary>Share of max health it starts without (a squad member's wounds from earlier battles); 0 = unhurt.</summary>
             [System.NonSerialized] public float Wounds;
+            /// <summary>What it has grown into (a squad member's Etchings); null = nothing.</summary>
+            [System.NonSerialized] public UnitGrowth Growth;
         }
 
         public List<Placement> Placements = new List<Placement>();
@@ -38,7 +40,7 @@ namespace TacticsGame.Presentation
             {
                 var p = Placements[i];
                 string id = p.Definition.name + "_" + i;
-                var unit = Unit.FromDefinition(p.Definition, id, p.Team, p.View.transform.position, p.Loadout, p.Upgrades);
+                var unit = Unit.FromDefinition(p.Definition, id, p.Team, p.View.transform.position, p.Loadout, p.Upgrades, p.Growth);
                 Campaign.ApplyWounds(unit, p.Wounds);
                 state.Units.Add(unit);
                 p.View.UnitId = id;

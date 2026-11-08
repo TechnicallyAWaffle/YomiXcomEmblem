@@ -196,7 +196,7 @@ namespace TacticsGame.Presentation
                 Fill(new Rect(x1, y + 7f, Mathf.Max(0f, x2 - x1), 6f), new Color(PreviewColor.r, PreviewColor.g, PreviewColor.b, 0.3f));
                 Fill(new Rect(x0, y + 5f, Mathf.Max(2f, x1 - x0), 10f), PreviewColor);
                 Fill(new Rect(x1 - 1f, y, 3f, axisY - y), PreviewColor);
-                string text = string.Format("{0} lands +{1:0.0}s", def.DisplayName, landAt - now);
+                string text = string.Format("{0} lands +{1:0.00}s", def.DisplayName, landAt - now);
                 float tw = spanStyle.CalcSize(new GUIContent(text)).x;
                 GUI.Label(new Rect(Mathf.Min(x1 + 4f, bar.xMax - tw - 4f), y, tw + 4f, ChipHeight), text, spanStyle);
             }
@@ -208,7 +208,7 @@ namespace TacticsGame.Presentation
                 float x0 = XFor(bar, 0f), x1 = XFor(bar, free);
                 Fill(new Rect(x0, y + 5f, Mathf.Max(2f, x1 - x0), 10f), MoveColor);
                 Fill(new Rect(x1 - 1f, y, 3f, axisY - y), MoveColor);
-                string text = string.Format("Walk: free +{0:0.0}s{1}", moveReady - now, moveReady - now > WindowSeconds ? " »" : "");
+                string text = string.Format("Walk: free +{0:0.00}s{1}", moveReady - now, moveReady - now > WindowSeconds ? " »" : "");
                 float tw = spanStyle.CalcSize(new GUIContent(text)).x;
                 var old = spanStyle.normal.textColor;
                 spanStyle.normal.textColor = MoveColor;

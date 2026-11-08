@@ -38,6 +38,11 @@ namespace TacticsGame.Presentation
         /// <summary>True once the current (or last) right-button press moved far enough to count as a rotate drag,
         /// so UI can tell a right-click (go back) from a right-drag (rotate).</summary>
         public bool RightDragged { get; private set; }
+        /// <summary>How much the player has moved the view by hand so far (the tutorial watches these): metres panned, degrees
+        /// rotated, scroll notches zoomed. Gliding to a unit (FocusOn) does not count.</summary>
+        public float PannedByInput { get; private set; }
+        public float RotatedByInput { get; private set; }
+        public float ZoomedByInput { get; private set; }
 
         private const float ReferenceDistance = 20f;
         private const float ClickSlop = 6f;     // pixels a right-press may wander and still be a click
@@ -118,6 +123,7 @@ namespace TacticsGame.Presentation
             if (keys.sqrMagnitude > 1f) keys.Normalize();
             if (keys.sqrMagnitude > 0f) input = true;
             focus += (right * keys.x + forward * keys.y) * PanSpeed * zoomScale * dt;
+            PannedByInput += keys.magnitude * PanSpeed * zoomScale * dt;
 
             Vector3 mouse = Input.mousePosition;
             Vector3 delta = mouse - lastMouse;
@@ -125,6 +131,7 @@ namespace TacticsGame.Presentation
             {
                 float metersPerPixel = DragPanSensitivity * distance / Mathf.Max(1f, Screen.height);
                 focus -= (right * delta.x + forward * delta.y) * metersPerPixel;
+                PannedByInput += ((Vector2)delta).magnitude * metersPerPixel;
                 input = true;
             }
 
@@ -135,6 +142,7 @@ namespace TacticsGame.Presentation
                 if (RightDragged)
                 {
                     yaw += delta.x * DragRotateSensitivity;
+                    RotatedByInput += (Mathf.Abs(delta.x) + Mathf.Abs(delta.y)) * DragRotateSensitivity;
                     pitch = Mathf.Clamp(pitch - delta.y * DragRotateSensitivity, MinPitch, MaxPitch);
                     input = true;
                 }
@@ -142,10 +150,10 @@ namespace TacticsGame.Presentation
             lastMouse = mouse;
 
             float scroll = Input.mouseScrollDelta.y;
-            if (Mathf.Abs(scroll) > 0.01f) distance = Mathf.Clamp(distance * (1f - scroll * ZoomStep), MinDistance, MaxDistance);
+            if (Mathf.Abs(scroll) > 0.01f) { distance = Mathf.Clamp(distance * (1f - scroll * ZoomStep), MinDistance, MaxDistance); ZoomedByInput += Mathf.Abs(scroll); }
 
-            if (Input.GetKey(KeyCode.Q)) { yaw += RotateSpeed * dt; input = true; }
-            if (Input.GetKey(KeyCode.E)) { yaw -= RotateSpeed * dt; input = true; }
+            if (Input.GetKey(KeyCode.Q)) { yaw += RotateSpeed * dt; RotatedByInput += RotateSpeed * dt; input = true; }
+            if (Input.GetKey(KeyCode.E)) { yaw -= RotateSpeed * dt; RotatedByInput += RotateSpeed * dt; input = true; }
             if (input) gliding = false;   // the player took over
 
             focus.x = Mathf.Clamp(focus.x, BoundsMin.x, BoundsMax.x);

@@ -28,7 +28,7 @@ namespace TacticsGame.Core
             Vector3 d = a.TargetPos - actor.Position; d.y = 0f;
             float reach = a.Stat(ActionStat.Range);
             if (d.magnitude > reach) d = d.normalized * reach;
-            sim.TeleportUnit(actor, sim.WalkablePointNear(actor.Position + d), actor);
+            sim.TeleportUnit(actor, sim.WalkablePointNear(actor.Position + d, actor.Position), actor);
         }
     }
 

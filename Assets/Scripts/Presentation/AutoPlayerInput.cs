@@ -19,6 +19,7 @@ namespace TacticsGame.Presentation
                     var attacker = sim.GetUnit(r.AttackerId);
                     sim.SubmitDodgeDash(unit.Id, attacker != null ? sim.BestDashDirection(unit, attacker) : 0);
                 }
+                else if (r.Kind == DecisionKind.Redirect) sim.SubmitCommand(sim.AutoRedirect(unit));
                 else sim.SubmitCommand(ai.Decide(sim, unit));
             }
             onComplete();

@@ -37,6 +37,19 @@ namespace TacticsGame.Core
         public IVisibilityService Visibility;
         public IPathService Paths;
         public IUnitAI EnemyAI;
+        /// <summary>Plays the AI-controlled units on the player's side (Unit.AIControlled: Recollections of Self's Wraiths), by their
+        /// AIProfile, apart from EnemyAI (which a scripted battle may replace to hold the enemies still).</summary>
+        public IUnitAI AllyAI = new AIRouter();
+        /// <summary>Plays every Maddened unit (Madness), whichever side it is on: its basic attack on the nearest enemy, or the one MADNESS lends it.</summary>
+        public IUnitAI MaddenedAI = new MaddenedAI();
+        /// <summary>A player unit was given an order (SubmitCommand), or a walk was stopped (CancelMove): for watchers such as the tutorial.</summary>
+        public event System.Action<UnitCommand> CommandSubmitted;
+        public event System.Action<Unit> MoveCancelled;
+        /// <summary>
+        /// A scripted battle (the tutorial): defeating every enemy does not end it, so more can arrive (SpawnUnit); it ends
+        /// when the squad falls or FinishBattle is called.
+        /// </summary>
+        public bool HoldVictory;
 
         public BattleOutcome Outcome { get; private set; }
         public float Now { get { return tick * TickLength; } }
@@ -67,9 +80,13 @@ namespace TacticsGame.Core
         // Focus (the Wait order): FocusDelay seconds of unbroken focusing, and strain drains at FocusStrainPerSecond on top
         // of normal recovery (no recovery delay) until the unit does anything else. Taking damage restarts the count.
         public float FocusDelay = 1.5f;
+        /// <summary>The shortest a unit can take to reach Clear Mind, however much its Etchings cut FocusDelay (two Mantras of
+        /// Focus would otherwise make it instant).</summary>
+        public float MinFocusDelay = 0.1f;
         public float FocusStrainPerSecond = 35f;
-        /// <summary>Extra strain a Transcended Focus costs (it focuses until Focused in one order).</summary>
-        public float TranscendFocusStrain = 0f;
+        /// <summary>Focus drains strain in steps of this many ticks (0.1s), at FocusStrainPerSecond all the same.</summary>
+        public const int FocusDrainTicks = 4;
+
 
         // Transcend (UnitCommand.Transcend). The strain price is per ability (ActionDefinition.TranscendStrain).
         /// <summary>A Heavy hit that lands on a (plain) Block puts Block on cooldown this long.</summary>
@@ -111,24 +128,43 @@ namespace TacticsGame.Core
             Outcome = BattleOutcome.InProgress;
 
             // Reactions, stances and passives subscribe to Triggers once per battle.
-            var attached = new HashSet<ActionBehavior>();
-            foreach (var u in State.Units)
-                foreach (var def in u.Actions)
-                {
-                    AttachBehavior(def, attached);
-                    AttachBehavior(def.LinkedAction, attached);   // Take Aim's Snipe, Retaliate's shot
-                }
+            foreach (var u in State.Units) AttachBehaviors(u);
             Passives.Attach(this);
+            EtchingTraits.Attach(this);
+            DeliveranceParts.Attach(this);
             // Hit while focusing: the count toward FocusDelay starts over.
             Triggers.Subscribe(TriggerType.DamageTaken, ctx => { if (ctx.Subject.FocusSince >= 0f) BreakFocus(ctx.Subject, true); });
             AddBuiltInHitRules();
+            foreach (var u in State.Units) Arrive(u);
         }
 
-        private void AttachBehavior(ActionDefinition def, HashSet<ActionBehavior> attached)
+        private readonly HashSet<ActionBehavior> attached = new HashSet<ActionBehavior>();
+
+        /// <summary>The behaviors a unit's abilities use subscribe their reactions once per battle (a summon's too, on arrival).</summary>
+        private void AttachBehaviors(Unit u)
+        {
+            if (u.Passives.Contains(DeliveranceParts.LastAttachments) && !u.SpentOnce.Contains(DeliveranceParts.LastAttachments)) CheapenGuard(u);   // Wex: from the moment it is on the field
+            foreach (var def in u.Actions)
+            {
+                AttachBehavior(def);
+                if (def != null) AttachBehavior(def.LinkedAction);   // Take Aim's Snipe, Retaliate's shot
+            }
+        }
+
+        private void AttachBehavior(ActionDefinition def)
         {
             if (def == null) return;
             var b = ActionBehaviors.Get(def.BehaviorId);
             if (attached.Add(b)) b.Attach(this);
+        }
+
+        /// <summary>A unit takes the field (the start, or a summon arriving): abilities that start on cooldown go on it, and its
+        /// always-on domes go up.</summary>
+        private void Arrive(Unit u)
+        {
+            foreach (var def in u.Actions)
+                if (def != null && def.StartsOnCooldown && def.Cooldown > 0f) u.CooldownReadyAt[def.Id] = Now + u.ActionStat(def, ActionStat.Cooldown);
+            StartInnateAuras(u);
         }
 
         // ------------------------------------------------------------------ public API
@@ -142,9 +178,19 @@ namespace TacticsGame.Core
             Queue<UnitCommand> q;
             if (!queues.TryGetValue(cmd.UnitId, out q)) queues[cmd.UnitId] = q = new Queue<UnitCommand>();
             q.Enqueue(cmd);
+            var u = GetUnit(cmd.UnitId);
+            if (CommandSubmitted != null && u != null && u.Team == Team.Player && !u.AIControlled) CommandSubmitted(cmd);
         }
 
         public void ClearQueue(string unitId) { queues.Remove(unitId); }
+
+        /// <summary>End the battle now with 'outcome' (a scripted battle's end, HoldVictory). Nothing happens once it is over.</summary>
+        public void FinishBattle(BattleOutcome outcome)
+        {
+            if (Outcome != BattleOutcome.InProgress || outcome == BattleOutcome.InProgress) return;
+            Outcome = outcome;
+            Emit(EventType.BattleEnd, null, null);
+        }
 
         public int QueuedCount(string unitId)
         {
@@ -160,7 +206,7 @@ namespace TacticsGame.Core
         {
             strainCost = 0f; reason = null;
             var u = GetUnit(unitId);
-            if (u == null || !u.IsAlive || u.Team != Team.Player) { reason = "invalid unit"; return false; }
+            if (u == null || !u.IsAlive || u.Team != Team.Player || u.AIControlled) { reason = "invalid unit"; return false; }   // AI-played summons aren't the player's to stop
             if (u.Phase != UnitPhase.Moving || u.Move == null) { reason = "not moving"; return false; }
             if (u.IsJumping) { reason = "mid-jump"; return false; }
             if (!playerTurnOpen) { reason = "only on a friendly unit's turn"; return false; }
@@ -177,6 +223,7 @@ namespace TacticsGame.Core
             AddStrain(u, cost);
             if (clearQueue) queues.Remove(unitId);
             EndMove(u);
+            if (MoveCancelled != null) MoveCancelled(u);
             return true;
         }
 
@@ -223,10 +270,13 @@ namespace TacticsGame.Core
             if ((to - unit.Position).sqrMagnitude > 1e-4f) Relocate(unit, to, transcended ? TranscendDashSeconds : DashDuration, false);
         }
 
-        /// <summary>How far the unit's Dash reaches (Transcended or not).</summary>
+        /// <summary>How far the unit's Dash (and its dodge dashes) reach: its dash distance, with the Dash ability's Range
+        /// modifiers on it (Unit.RangeOf), further Transcended.</summary>
         public float DashReach(Unit unit, bool transcended = false)
         {
-            return unit.DashDistanceNow() * (transcended ? TranscendDashDistanceMult : 1f);
+            var dash = unit.DashAction();
+            float reach = dash != null ? unit.RangeOf(dash) : unit.DashDistanceNow();
+            return reach * (transcended ? TranscendDashDistanceMult : 1f);
         }
 
         /// <summary>Where a dash toward 'point' lands: capped at the unit's dash distance and clamped to walkable space.</summary>
@@ -238,6 +288,21 @@ namespace TacticsGame.Core
             return Paths.ClampDash(unit.Position, unit.Position + d);
         }
 
+        /// <summary>
+        /// The Enemy side would rather fight the squad than a third side (Deliverance's): a target that isn't the squad's
+        /// counts as SquadTargetPreference farther off, or worth that much less, wherever an AI picks one by distance or value
+        /// (TargetWeight), so they are about that much likelier to go for the squad.
+        /// </summary>
+        public float SquadTargetPreference = 0.2f;
+
+        /// <summary>How much less 'chooser' wants 'target' than its distance or worth says: 1, or 1 + SquadTargetPreference
+        /// for an enemy weighing a unit that isn't the squad's. Divide a target's value by it, multiply its distance.</summary>
+        public float TargetWeight(Unit chooser, Unit target)
+        {
+            return chooser != null && target != null && chooser.Team == Team.Enemy && target.Team != Team.Player ? 1f + SquadTargetPreference : 1f;
+        }
+
+        /// <summary>The nearest unit 'unit' can target (TargetWeight: an enemy counts a non-squad unit as farther).</summary>
         public Unit NearestEnemy(Unit unit)
         {
             Unit best = null;
@@ -245,7 +310,7 @@ namespace TacticsGame.Core
             foreach (var u in State.Units)
             {
                 if (!u.IsAlive || u.Team == unit.Team || !IsTargetableBy(u, unit)) continue;
-                float d = Vector3.Distance(unit.Position, u.Position);
+                float d = Vector3.Distance(unit.Position, u.Position) * TargetWeight(unit, u);
                 if (d < bestDist) { bestDist = d; best = u; }
             }
             return best;
@@ -302,11 +367,14 @@ namespace TacticsGame.Core
             if (def.HealthCost > 0f && actor.Health <= actor.ActionStat(def, ActionStat.HealthCost) + 1e-4f) { reason = "not enough health"; return false; }
             var required = def.RequiredStatuses();
             if (required.Length > 0 && !System.Array.Exists(required, actor.HasStatus)) { reason = "needs " + string.Join(" or ", required); return false; }
+            // Tied to a target (RequiredStatusOnTarget): only at the unit the opener hit. With no target given, the button shows it ready.
+            if (required.Length > 0 && def.RequiredStatusOnTarget && targetId != null && !actor.Statuses.Exists(s => System.Array.IndexOf(required, s.Id) >= 0 && s.TargetId == targetId)) { reason = "only at the unit it followed up on"; return false; }
             var forbidding = actor.StatusForbidding(def.Id);
             if (forbidding != null) { reason = "not during " + forbidding.Id.Replace('_', ' '); return false; }
+            if (def.InnatePassive) { reason = "always on"; return false; }
             if (EnergyCostOf(actor, def) > actor.Energy + 1e-4f) { reason = "not enough energy"; return false; }
             float strain = StrainCostOf(actor, def, targetId, transcend);
-            if (strain > 0f && actor.Strain + strain > actor.MaxStrain + 1e-4f && !behavior.AllowsStrainOverflow && !def.UnravelsOverMaxStrain) { reason = "too much strain"; return false; }
+            if (strain > 0f && actor.Strain + strain > actor.MaxStrain + 1e-4f && !behavior.AllowsStrainOverflow && !def.UnravelsOverMaxStrain && !EtchingTraits.SuffersPastMax(actor)) { reason = "too much strain"; return false; }
             return true;
         }
 
@@ -316,8 +384,23 @@ namespace TacticsGame.Core
         /// scaled by the actor's statuses (Wrath makes it free).</summary>
         public float StrainCostOf(Unit actor, ActionDefinition def, string targetId = null, bool transcend = false)
         {
-            float cost = ActionBehaviors.Get(def.BehaviorId).StrainCost(this, actor, def, targetId) + (transcend && def.CanTranscend ? def.TranscendStrain : 0f);
+            float cost = ActionBehaviors.Get(def.BehaviorId).StrainCost(this, actor, def, targetId) + (transcend && actor.CanTranscend(def) ? actor.TranscendStrainOf(def) : 0f);
             return cost > 0f ? cost * actor.StrainCostMult() : cost;
+        }
+
+        /// <summary>How long 'u' focuses before it enters Clear Mind (FocusDelay, with its FocusDelay modifiers: Mantra of Focus).</summary>
+        public float FocusDelayOf(Unit u) { return Mathf.Max(Mathf.Min(MinFocusDelay, FocusDelay), u.Stat(StatId.FocusDelay, FocusDelay)); }
+
+        /// <summary>Strain 'u' sheds per second while in Clear Mind (FocusStrainPerSecond, with its modifiers).</summary>
+        public float FocusStrainOf(Unit u) { return Mathf.Max(0f, u.Stat(StatId.FocusStrainRelief, FocusStrainPerSecond)); }
+
+        /// <summary>What an order's windup is scaled by for how close its target is (Senses of Closure; 1 = unchanged). The
+        /// target is its unit, else its point; aimed at the actor itself, it isn't targeted.</summary>
+        public float ClosingWindupScale(Unit actor, ActionDefinition def, UnitCommand cmd)
+        {
+            if (cmd.TargetUnitId == actor.Id) return 1f;
+            var t = GetUnit(cmd.TargetUnitId);
+            return EtchingTraits.WindupScale(actor, def, t != null ? t.Position : cmd.TargetPos);
         }
 
         /// <summary>Seconds 'def' would wind up for if 'actor' started it now: its behavior's windup (Flowing Death shortens with
@@ -374,24 +457,27 @@ namespace TacticsGame.Core
         public float LineReachUp = 0.75f;   // fraction of BodyHeight
 
         /// <summary>
-        /// Height of a ranged Line attack 'along' metres out: it ramps from the actor's feet to the aimed point's elevation, then
-        /// carries on level. So a line aimed onto a ledge climbs to it, and one aimed along the ground passes under it.
+        /// Height of a ranged Line attack 'along' metres out: a straight line from the actor's feet through the aimed point,
+        /// carried on at the same slope past it. So a line aimed onto a ledge tilts up toward it (and keeps climbing), one
+        /// aimed down from a ledge tilts down, and one aimed along the ground stays level.
         /// </summary>
         public static float LineHeightAt(Vector3 origin, Vector3 targetPos, float along)
         {
             float aimDist = FlatDistance(origin, targetPos);
             if (aimDist < 1e-3f) return targetPos.y;
-            return Mathf.Lerp(origin.y, targetPos.y, Mathf.Clamp01(along / aimDist));
+            return origin.y + (targetPos.y - origin.y) * (along / aimDist);
         }
 
         /// <summary>Enemies of the actor caught in the definition's area (see AreaAttackBehavior).</summary>
-        public List<Unit> UnitsInArea(Unit actor, ActionDefinition def, Vector3 targetPos)
+        /// circleAtTarget: a circle centred on targetPos whatever the targeting (Split Apart The Sky smites around a unit it
+        /// aims at); otherwise only ground-targeted circles are, and the rest are around the actor.
+        public List<Unit> UnitsInArea(Unit actor, ActionDefinition def, Vector3 targetPos, bool circleAtTarget = false)
         {
             var hits = new List<Unit>();
             Vector3 origin = actor.Position;
             Vector3 dir = targetPos - origin; dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
-            Vector3 center = def.Targeting == TargetType.Position ? targetPos : origin;
+            Vector3 center = circleAtTarget || def.Targeting == TargetType.Position ? targetPos : origin;
             foreach (var u in EnemiesOf(actor))
             {
                 Vector3 p = u.Position;
@@ -416,9 +502,10 @@ namespace TacticsGame.Core
 
         /// <summary>Grant an immediate reaction action (Retaliate's free shot, a Snipe from Take Aim...).
         /// It runs alongside the actor's normal state: it does not require or change the actor's phase.</summary>
-        public ActionInstance QueueFreeAction(Unit actor, ActionDefinition def, string targetId, float windupOverride = -1f, float damageMultiplier = 1f)
+        /// <param name="duringChannel">It is the channel's own reaction (Scry The Meek's Ripples): allowed while channeling.</param>
+        public ActionInstance QueueFreeAction(Unit actor, ActionDefinition def, string targetId, float windupOverride = -1f, float damageMultiplier = 1f, bool duringChannel = false)
         {
-            if (!actor.IsAlive || actor.Phase == UnitPhase.Channeling) return null;   // a channel allows nothing else, reactions included
+            if (!actor.IsAlive || (actor.Phase == UnitPhase.Channeling && !duringChannel)) return null;   // a channel allows nothing else, reactions included
             var behavior = ActionBehaviors.Get(def.BehaviorId);
             float windup = windupOverride >= 0f ? windupOverride : actor.ActionStat(def, ActionStat.Windup) / actor.EffectiveActionSpeed();
             var inst = new ActionInstance

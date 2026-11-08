@@ -25,6 +25,11 @@ namespace TacticsGame.Presentation
                 case StatId.IncomingAccuracy: return "Hit chance vs";
                 case StatId.DamageDealt: return "Damage dealt";
                 case StatId.StrainCost: return "Strain costs";
+                case StatId.GuardBlock: return "Guard block";
+                case StatId.FocusDelay: return "Time to focus";
+                case StatId.FocusStrainRelief: return "Clear Mind strain relief";
+                case StatId.StrainDealt: return "Strain dealt";
+                case StatId.StunTaken: return "Stuns taken";
             }
             return stat.ToString();
         }
@@ -41,6 +46,8 @@ namespace TacticsGame.Presentation
                 case ActionStat.DisplaceDistance: return "Push / lift";
                 case ActionStat.HealthCost: return "Health cost";
                 case ActionStat.EnergyCost: return "Energy cost";
+                case ActionStat.Duration: return "Duration";
+                case ActionStat.TranscendStrain: return "Transcend strain";
             }
             return stat.ToString();
         }
@@ -53,7 +60,7 @@ namespace TacticsGame.Presentation
         {
             switch (stat)
             {
-                case ActionStat.Windup: case ActionStat.Recovery: case ActionStat.Cooldown: case ActionStat.StunDuration: return "s";
+                case ActionStat.Windup: case ActionStat.Recovery: case ActionStat.Cooldown: case ActionStat.StunDuration: case ActionStat.Duration: return "s";
                 case ActionStat.Range: case ActionStat.AreaRadius: case ActionStat.DisplaceDistance: return "m";
             }
             return "";
@@ -98,6 +105,9 @@ namespace TacticsGame.Presentation
             if ((flags & StatusFlags.NegatesDamage) != 0) notes.Add("Hits deal no damage or strain (Unravel still lands).");
             if ((flags & StatusFlags.RedirectsHits) != 0) notes.Add("Projectiles and melee hits on them go to you instead.");
             if ((flags & StatusFlags.Unstoppable) != 0) notes.Add("No stun or interrupt stops it, except Unravel.");
+            if ((flags & StatusFlags.InvertsStrainGain) != 0) notes.Add("Strain it would gain, it loses instead.");
+            if ((flags & StatusFlags.BasicAttackOnly) != 0) notes.Add("Only the basic attack can be used.");
+            if ((flags & StatusFlags.UnravelsOnExpire) != 0) notes.Add("Unravels when it runs out, whatever the strain.");
         }
     }
 }

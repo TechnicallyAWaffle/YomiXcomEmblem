@@ -33,10 +33,11 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 1
   Damage: 1
-  BaseAccuracy: 0.9
+  BaseAccuracy: 1
   StunDuration: 0
   StrainOnTarget: 0
   StrainOnSelf: 20
+  GuardBreakSeconds: 2
   HealthCost: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0

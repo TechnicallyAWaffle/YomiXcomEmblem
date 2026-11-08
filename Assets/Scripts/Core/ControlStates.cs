@@ -48,6 +48,18 @@ namespace TacticsGame.Core
         public override void OnDeath(BattleSimulation sim) { sim.EndGrapple(Unit); }
     }
 
+    /// <summary>Chained to an anchor unit (You.; see BattleSimulation.TickTethers): pulled past Length for SnapDelay, it is yanked back.</summary>
+    public class TetherState : ControlState
+    {
+        public string AnchorId;
+        public ActionDefinition Definition;   // the anchor's ability: the hit a snap lands
+        public float Length, SnapDelay, EndsAt, YankTo;
+        public int SnapsLeft;
+        public float OverSince = -1f;         // when it last went past its length (-1: within it)
+
+        public override void OnDeath(BattleSimulation sim) { sim.EndTether(Unit); }
+    }
+
     /// <summary>Held by a grappler (Subjugate).</summary>
     public class HeldState : ControlState
     {
@@ -76,8 +88,11 @@ namespace TacticsGame.Core
     {
         public bool EndsAfterAction;
         public List<string> Statuses;
+        public float DescendSeconds;   // the glide down when it ends; 0 = BattleSimulation.HoverDescendSeconds
+        public bool Permanent;         // never ends of itself, nor after an ability (the Monarch's Ascension)
 
-        public override void OnStruck(BattleSimulation sim, HitContext hit) { if (hit.Dealt > 0f) sim.EndHover(Unit, true, hit.Source); }
+        // Damage knocks it down, unless the unit is Unstoppable (it can't be knocked out of the air).
+        public override void OnStruck(BattleSimulation sim, HitContext hit) { if (hit.Dealt > 0f && !Unit.IsUnstoppable) sim.EndHover(Unit, true, hit.Source); }
     }
 
     /// <summary>A channeled ability running (UnitPhase.Channeling; see BattleSimulation.StartChannel).</summary>
@@ -88,10 +103,10 @@ namespace TacticsGame.Core
 
         public override bool BlocksDodgeDash { get { return true; } }
         public override bool BlocksMesmerCounter { get { return true; } }
-        // Any damage breaks it, unless the unit is Unstoppable or the hit was negated.
+        // Any damage breaks it, unless the unit is Unstoppable, the hit was negated, or the channel shrugs off damage.
         public override void OnDamaged(BattleSimulation sim, HitContext hit)
         {
-            if (Unit.Phase == UnitPhase.Channeling && !hit.Negated && !Unit.IsUnstoppable) sim.EndChannel(Unit, "channel broken", !hit.WillStun);
+            if (Unit.Phase == UnitPhase.Channeling && !hit.Negated && !Unit.IsUnstoppable && !Action.Definition.ChannelIgnoresDamage) sim.EndChannel(Unit, "channel broken", !hit.WillStun);
         }
         public override void OnDeath(BattleSimulation sim) { sim.EndChannel(Unit, "death", false); }
     }
@@ -133,5 +148,6 @@ namespace TacticsGame.Core
         public ActionDefinition Strike;
 
         public override bool BlocksDodgeDash { get { return StrikesLeft > 0; } }   // Mesmerize blinked it to the attacker instead
+        public override void OnDeath(BattleSimulation sim) { Unit.RemoveState(this); }   // killed mid-counter (a flurry's strike can do it)
     }
 }

@@ -17,13 +17,14 @@ namespace TacticsGame.Core
         public float ArmsAt;
         public float ExpiresAt = float.MaxValue;
         public List<StatusSpec> Statuses = new List<StatusSpec>();
+        public float DurationScale = 1f;   // its statuses last this many times their Duration (the trap ability's, Unit.DurationScale)
 
         public Trap Clone()
         {
             return new Trap
             {
                 Id = Id, OwnerId = OwnerId, OwnerTeam = OwnerTeam, Position = Position, Radius = Radius,
-                ArmsAt = ArmsAt, ExpiresAt = ExpiresAt, Statuses = Statuses,
+                ArmsAt = ArmsAt, ExpiresAt = ExpiresAt, Statuses = Statuses, DurationScale = DurationScale,
             };
         }
     }

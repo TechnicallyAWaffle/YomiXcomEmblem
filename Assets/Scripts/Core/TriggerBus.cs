@@ -3,7 +3,8 @@ using System.Collections.Generic;
 
 namespace TacticsGame.Core
 {
-    public enum TriggerType { ActionStarted, ActionResolved, DamageTaken, Dodged, Killed, Stunned, UnitReady }
+    // StrainSpent: an ability's strain cost was paid (Amount). Unraveled: Subject Unraveled (Other: whose hit did it; Amount: its stun).
+    public enum TriggerType { ActionStarted, ActionResolved, DamageTaken, Dodged, Killed, Stunned, UnitReady, StrainSpent, Unraveled }
 
     public class TriggerContext
     {

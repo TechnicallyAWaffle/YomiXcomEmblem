@@ -19,6 +19,7 @@ namespace TacticsGame.Presentation
             if (!NavMesh.CalculatePath(hitFrom.position, hitTo.position, NavMesh.AllAreas, scratch)) return false;
             if (scratch.status != NavMeshPathStatus.PathComplete && scratch.status != NavMeshPathStatus.PathPartial) return false;
             pathOut.AddRange(scratch.corners);
+            if (pathOut.Count == 1) pathOut.Add(pathOut[0]);   // from and to on the same spot (a teleport's landing check)
             return pathOut.Count >= 2;
         }
 

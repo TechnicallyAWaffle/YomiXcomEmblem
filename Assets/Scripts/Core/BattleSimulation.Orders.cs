@@ -38,12 +38,34 @@ namespace TacticsGame.Core
             return r;
         }
 
-        private List<DecisionRequest> ProcessReadyUnits()
+        /// <param name="creeping">Time creeping on while the player's orders are given (CreepWhileDeciding): the squad's units
+        /// waiting for orders keep waiting, and a dodge one of them makes is dashed for it. Nothing is asked.</param>
+        private List<DecisionRequest> ProcessReadyUnits(bool creeping = false)
         {
-            var decisions = new List<DecisionRequest>(pendingDashes);
-            foreach (var unit in State.Units)
+            if (creeping)
             {
+                foreach (var d in pendingDashes.ToArray())
+                {
+                    var du = GetUnit(d.UnitId);
+                    if (du != null && du.IsAlive) ExecuteDash(du, BestDashDirection(du, GetUnit(d.AttackerId)));
+                }
+                pendingDashes.Clear();
+            }
+            var decisions = new List<DecisionRequest>(pendingDashes);
+            foreach (var unit in State.Units.ToArray())
+            {
+                if (creeping && unit.PlayerOrdered) continue;   // waiting on the player
+                if (unit.IsGhost && unit.Phase == UnitPhase.Ready && !IsGliding(unit)) { Vanish(unit); continue; }   // Alio's ghost: its one cast is done
                 if (!unit.IsAlive || IsGliding(unit)) continue;   // nothing new mid-dash
+                // A redirectable channel (Soulseeker) waiting on its next target: the player picks it (a Redirect decision).
+                if (unit.Phase == UnitPhase.Channeling && unit.RedirectPending)
+                {
+                    Queue<UnitCommand> rq;
+                    var given = unit.Team == Team.Player && queues.TryGetValue(unit.Id, out rq) && rq.Count > 0 ? rq.Dequeue() : null;
+                    string why = null;
+                    if (given == null || !Redirect(unit, given, out why)) decisions.Add(new DecisionRequest { Kind = DecisionKind.Redirect, UnitId = unit.Id, Reason = why });
+                    continue;
+                }
                 // A charging unit comes up for a decision every ChargeDecisionAt: keep charging or release.
                 bool charging = unit.Phase == UnitPhase.Charging;
                 if (charging ? Now + 1e-4f < unit.ChargeDecisionAt : unit.Phase != UnitPhase.Ready) continue;
@@ -57,11 +79,16 @@ namespace TacticsGame.Core
                 }
 
                 UnitCommand cmd = null;
-                bool isPlayer = unit.Team == Team.Player;
+                bool isPlayer = unit.PlayerOrdered;   // an AI-played summon on the squad's side decides for itself, and so does a Maddened unit
                 if (isPlayer)
                 {
                     Queue<UnitCommand> q;
                     if (queues.TryGetValue(unit.Id, out q) && q.Count > 0) cmd = q.Dequeue();
+                }
+                else if (unit.IsMaddened)
+                {
+                    queues.Remove(unit.Id);   // orders given meanwhile are void: MADNESS decides
+                    cmd = MaddenedAI.Decide(this, unit) ?? (charging ? UnitCommand.ReleaseCharge(unit.Id, null, unit.Position) : UnitCommand.Idle(unit.Id, 0.25f));
                 }
                 else if (unit.MesmerStrikesLeft > 0 && !charging)
                 {
@@ -69,7 +96,7 @@ namespace TacticsGame.Core
                 }
                 else
                 {
-                    cmd = EnemyAI.Decide(this, unit) ?? (charging ? UnitCommand.ContinueCharge(unit.Id, 0.25f) : UnitCommand.Idle(unit.Id, 0.5f));
+                    cmd = (unit.AIControlled && unit.Team == Team.Player ? AllyAI : EnemyAI).Decide(this, unit) ?? (charging ? UnitCommand.ContinueCharge(unit.Id, 0.25f) : UnitCommand.Idle(unit.Id, 0.5f));
                 }
 
                 if (cmd == null)
@@ -91,6 +118,13 @@ namespace TacticsGame.Core
                 }
             }
             return decisions;
+        }
+
+        /// <summary>Gone without anyone killing it (a ghost whose cast is over): a death credited to itself.</summary>
+        private void Vanish(Unit u)
+        {
+            u.Health = 0f;
+            u.LastAttackerId = u.Id; u.LastHitAction = null; u.LastHitTag = "vanish";
         }
 
         private bool TryStartCommand(Unit unit, UnitCommand cmd, out string reason)
@@ -115,6 +149,8 @@ namespace TacticsGame.Core
             else if (cmd.Type == CommandType.HoldGrapple || cmd.Type == CommandType.ReleaseGrapple) { reason = "not grappling"; return false; }
             // Up in the air (Skyward Demise's hover, or lifted): no walking, dashing or other moves.
             if (unit.IsLifted && (cmd.Type == CommandType.Move || (cmd.Action != null && ActionBehaviors.Get(cmd.Action.BehaviorId).MovesUser))) { reason = "in the air"; return false; }
+            // CRIPPLED (NoDash): no dashes.
+            if (cmd.Action != null && unit.HasFlag(StatusFlags.NoDash) && ActionBehaviors.Get(cmd.Action.BehaviorId).Dashes) { reason = "crippled: can't dash"; return false; }
 
             switch (cmd.Type)
             {
@@ -125,18 +161,23 @@ namespace TacticsGame.Core
                 case CommandType.ReleaseCharge:
                     return ReleaseCharge(unit, cmd, out reason);
 
+                case CommandType.Redirect:
+                    reason = "nothing to redirect";
+                    return false;
+
                 case CommandType.Wait:
                     unit.LastActionId = null;   // a wait or a move breaks a follow-up chain
                     if (cmd.NoFocus) StartIdle(unit, cmd.WaitSeconds);
-                    else StartWait(unit, cmd.WaitSeconds, cmd.Transcend);
+                    else StartWait(unit, cmd.WaitSeconds);
                     return true;
 
                 case CommandType.Move:
                 {
                     if (unit.IsRooted) { reason = "immobilized"; return false; }
                     var path = new List<Vector3>();
-                    if (!PlanPath(unit, unit.Position, FreeSpotNear(unit, cmd.TargetPos, unit.Position, true), path)) { reason = "no path"; return false; }
+                    if (!PlanMove(unit, cmd, path)) { reason = "no path"; return false; }
                     unit.LastActionId = null;
+                    EtchingTraits.BeginMarch(this, unit);   // a new walk: Avidous March's burst (before it starts, so it walks at that speed)
                     StartMove(unit, path);
                     return true;
                 }
@@ -176,30 +217,40 @@ namespace TacticsGame.Core
             return false;
         }
 
+        /// <summary>A Move order's whole walk: through each of its waypoints, then to a free spot at its target, as one path.</summary>
+        private bool PlanMove(Unit unit, UnitCommand cmd, List<Vector3> path)
+        {
+            path.Clear();
+            Vector3 from = unit.Position;
+            var leg = new List<Vector3>();
+            if (cmd.Waypoints != null)
+                foreach (var w in cmd.Waypoints)
+                {
+                    if (!PlanPath(unit, from, w, leg)) return false;
+                    for (int i = path.Count == 0 ? 0 : 1; i < leg.Count; i++) path.Add(leg[i]);
+                    from = leg[leg.Count - 1];
+                }
+            if (!PlanPath(unit, from, FreeSpotNear(unit, cmd.TargetPos, from, true), leg)) return false;
+            for (int i = path.Count == 0 ? 0 : 1; i < leg.Count; i++) path.Add(leg[i]);
+            return path.Count >= 2;
+        }
+
         // ------------------------------------------------------------------ starting things
 
         /// <summary>A Wait order, shown to the player as Focus: back-to-back ones add up toward FocusDelay (see TickFocus).</summary>
-        /// Transcended, it lasts exactly until the unit is Focused (and stretches if a hit restarts the count), so the unit is
-        /// asked for orders the moment strain starts draining; already Focused, it is a plain wait.
-        private void StartWait(Unit unit, float seconds, bool transcend = false)
+        private void StartWait(Unit unit, float seconds)
         {
             if (unit.Grapple != null) { HoldGrapple(unit); return; }   // no focusing with someone in your grip
             if (unit.FocusSince < 0f)
             {
                 unit.FocusSince = Now;
-                ApplyStatus(unit, new StatusEffect { Id = StatusIds.Focusing, SourceId = unit.Id, ExpiresAt = Now + FocusDelay  }, unit);
-            }
-            unit.FocusTranscended = transcend && !unit.HasStatus(StatusIds.Focused);
-            if (unit.FocusTranscended)
-            {
-                seconds = unit.FocusSince + FocusDelay - Now + TickLength;   // a tick past, so Focused is on before it ends
-                if (TranscendFocusStrain > 0f) AddStrain(unit, TranscendFocusStrain);
+                ApplyStatus(unit, new StatusEffect { Id = StatusIds.Focusing, SourceId = unit.Id, ExpiresAt = Now + FocusDelayOf(unit) }, unit);
             }
             unit.Waiting = true;
             unit.Idling = false;
             unit.Phase = UnitPhase.Recovery;
             unit.PhaseEndsAt = Now + seconds;
-            Emit(EventType.ActionStarted, unit.Id, null, new ActionStartedInfo { ActionId = "wait", Windup = 0f, Recovery = seconds, Transcended = unit.FocusTranscended });
+            Emit(EventType.ActionStarted, unit.Id, null, new ActionStartedInfo { ActionId = "wait", Windup = 0f, Recovery = seconds });
         }
 
         /// <summary>

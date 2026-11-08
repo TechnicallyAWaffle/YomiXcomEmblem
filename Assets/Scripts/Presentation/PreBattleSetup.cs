@@ -60,6 +60,8 @@ namespace TacticsGame.Presentation
         private void Start()
         {
             if (Controller == null || Context == null || Launcher == null) return;
+            var campaign = GetComponent<CampaignScreens>();
+            if (campaign != null && campaign.enabled && campaign.Campaign != null) { enabled = false; return; }   // the campaign runs the battles
             open = true;
             if (Catalog == null) Catalog = Resources.Load<ContentCatalog>(ContentCatalog.ResourceName);
             if (Catalog == null) Catalog = SceneCatalog();
@@ -161,9 +163,9 @@ namespace TacticsGame.Presentation
                 if (resultText != null)
                 {
                     var style = new GUIStyle(head) { alignment = TextAnchor.UpperCenter, wordWrap = true };
-                    GUI.Label(new Rect(UiScale.Width / 2f - 300f, 186f, 600f, 60f), resultText, style);
+                    GUI.Label(new Rect(UiScale.Width / 2f - 300f, 82f, 410f, 40f), resultText, style);
                 }
-                if (GUI.Button(new Rect(UiScale.Width / 2f - 90f, 140f, 180f, 36f), "New Battle"))
+                if (GUI.Button(new Rect(UiScale.Width / 2f + 120f, 80f, 180f, 36f), "New Battle"))   // top, beside the result: the replay plays in the clear
                     SceneManager.LoadScene(SceneManager.GetActiveScene().name);
                 return;
             }

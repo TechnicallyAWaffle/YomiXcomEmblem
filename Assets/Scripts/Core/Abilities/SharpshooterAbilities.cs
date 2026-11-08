@@ -78,7 +78,7 @@ namespace TacticsGame.Core
                     OwnerId = a.Actor.Id, OwnerTeam = a.Actor.Team, Position = a.TargetPos,
                     Radius = def.AreaRadius > 0f ? a.Stat(ActionStat.AreaRadius) : 1f,
                     ArmsAt = sim.Now + def.TrapArmDelay, ExpiresAt = sim.Now + def.TrapLifetime,
-                    Statuses = new List<StatusSpec>(def.TargetStatusesOnHit),
+                    Statuses = new List<StatusSpec>(def.TargetStatusesOnHit), DurationScale = a.Actor.DurationScale(def),
                 },
             });
         }
@@ -113,11 +113,123 @@ namespace TacticsGame.Core
             Vector3 d = a.TargetPos - actor.Position; d.y = 0f;
             float reach = a.Stat(ActionStat.Range);
             if (d.magnitude > reach) d = d.normalized * reach;
-            Vector3 to = sim.WalkablePointNear(actor.Position + d) + Vector3.up * a.Stat(ActionStat.DisplaceDistance);
+            Vector3 to = sim.WalkablePointNear(actor.Position + d, actor.Position) + Vector3.up * a.Stat(ActionStat.DisplaceDistance);
             float lasts = 0f;
             var ids = new List<string>();
-            foreach (var s in def.SelfStatuses) { lasts = Mathf.Max(lasts, s.Duration); ids.Add(s.Id); }
+            foreach (var s in def.SelfStatuses) { lasts = Mathf.Max(lasts, s.Duration * actor.DurationScale(def)); ids.Add(s.Id); }
             sim.HoverUnit(actor, to, sim.Now + lasts, ids);
+        }
+    }
+
+    /// <summary>
+    /// Extricate (recoil_shot): a shot like any other, and its kick blasts the shooter 'recoil' metres (5) straight away
+    /// from the target, hit or miss (a shove: off a ledge it falls, a wall stops it short).
+    /// </summary>
+    public class RecoilShotBehavior : BasicAttackBehavior
+    {
+        public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Escape; }
+
+        public override IEnumerable<BehaviorParam> Parameters { get { yield return new BehaviorParam("recoil", 5f); } }
+
+        public override void Describe(AbilityTip tip)
+        {
+            base.Describe(tip);
+            tip.Add("Recoil", AbilityTip.Metres(Param(tip.Def, "recoil")) + " back");
+        }
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var target = sim.GetUnit(a.TargetUnitId);
+            if (target == null || !target.IsAlive) return;
+            base.OnResolve(sim, a, effects);
+            var actor = a.Actor;
+            Vector3 away = actor.Position - target.Position; away.y = 0f;
+            away = away.sqrMagnitude > 1e-6f ? away.normalized : Vector3.back;
+            Vector3 to = sim.Paths.ClampDash(actor.Position, actor.Position + away * Param(a.Definition, "recoil"));
+            sim.PushUnit(actor, to, BattleSimulation.DisplaceDuration, actor);
+        }
+    }
+
+    /// <summary>
+    /// Mark of the Unmaker (unmaker): a shot that puts a stack of Unmake on what it hits (lasting 'mark_seconds', 30;
+    /// each one refreshes it). A target already at 'stacks' (3) instead has its marks spent: Fated (its actions slowed to
+    /// 'fated_speed', 0.35) for 'fated_seconds' (1), then it Unravels, whatever its strain. Transcended: the shooter is
+    /// Hidden (untargetable; damage reveals it) while it winds up.
+    /// </summary>
+    public class UnmakerBehavior : BasicAttackBehavior
+    {
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get
+            {
+                yield return new BehaviorParam("stacks", 3f);
+                yield return new BehaviorParam("mark_seconds", 30f);
+                yield return new BehaviorParam("fated_seconds", 1f);
+                yield return new BehaviorParam("fated_speed", 0.35f);
+            }
+        }
+
+        public override void Describe(AbilityTip tip)
+        {
+            base.Describe(tip);
+            tip.Add("Unmake", string.Format("+1 stack; at {0:0}, Fated {1} then Unravel", Param(tip.Def, "stacks"), AbilityTip.Secs(Param(tip.Def, "fated_seconds"))));
+            tip.Add("Transcended", "hidden while winding up");
+        }
+
+        public override void OnWindupStart(BattleSimulation sim, ActionInstance a)
+        {
+            if (!a.Transcended) return;
+            sim.ApplyStatus(a.Actor, new StatusEffect
+            {
+                Id = StatusIds.Hidden, SourceId = a.Actor.Id, ExpiresAt = a.ResolveAt + BattleSimulation.TickLength,
+                Flags = StatusFlags.Untargetable | StatusFlags.BreaksOnDamage,
+            }, a.Actor);
+        }
+
+        public override void OnInterrupted(BattleSimulation sim, ActionInstance a) { EndHidden(sim, a); }
+
+        private static void EndHidden(BattleSimulation sim, ActionInstance a)
+        {
+            var hidden = a.Actor.GetStatus(StatusIds.Hidden);
+            if (a.Transcended && hidden != null && hidden.SourceId == a.Actor.Id && hidden.ExpiresAt <= a.ResolveAt + 2f * BattleSimulation.TickLength)
+                sim.RemoveStatus(a.Actor, StatusIds.Hidden);
+        }
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            EndHidden(sim, a);   // seen again as it fires
+            var target = sim.GetUnit(a.TargetUnitId);
+            if (target == null || !target.IsAlive) return;
+            var actor = a.Actor;
+            var def = a.Definition;
+            var mark = target.GetStatus(StatusIds.Unmake);
+            if (mark != null && mark.Stacks >= Mathf.RoundToInt(Param(def, "stacks")))
+                sim.EmitFx(actor, target, "unmade", def, target.Position, 1.5f);   // the unmaking shot: hit or miss, it looks the part
+            effects.Add(new AttackEffect
+            {
+                Source = actor, TargetId = target.Id, Definition = def, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag,
+                OnLanded = (s, t) => Mark(s, actor, t, def),
+            });
+        }
+
+        private void Mark(BattleSimulation sim, Unit actor, Unit target, ActionDefinition def)
+        {
+            var mark = target.GetStatus(StatusIds.Unmake);
+            int stacks = mark != null ? mark.Stacks : 0;
+            if (stacks >= Mathf.RoundToInt(Param(def, "stacks")))
+            {
+                sim.RemoveStatus(target, StatusIds.Unmake);
+                sim.ApplyStatus(target, new StatusEffect
+                {
+                    Id = StatusIds.Fated, SourceId = actor.Id, ExpiresAt = sim.Now + Param(def, "fated_seconds") * actor.DurationScale(def),
+                    Modifiers = new List<Modifier> { Modifier.Mult(StatId.ActionSpeed, Param(def, "fated_speed")) },
+                    Flags = StatusFlags.UnravelsOnExpire,
+                }, actor);
+                return;
+            }
+            var next = new StatusEffect { Id = StatusIds.Unmake, SourceId = actor.Id, ExpiresAt = sim.Now + Param(def, "mark_seconds") };
+            sim.ApplyStatus(target, next, actor);
+            sim.SetStacks(target, next, stacks + 1);
         }
     }
 }

@@ -19,6 +19,13 @@ namespace TacticsGame.Core
         public float Charge;    // 0..1: how fully a charge ability was charged before release
         public bool Transcended;   // ordered Transcended (and the definition allows it): the behavior's stronger version
         public bool UnravelsActor; // its strain cost took the actor past max (ActionDefinition.UnravelsOverMaxStrain): it Unravels once this lands
+        // Behavior bookkeeping for actions that keep going after they land (a channel's strikes, a pull): a count and a time.
+        public int Steps;
+        public float NextStepAt;
+        public bool OwnsHover;               // it lifted its user into the air itself (the hover ends with it)
+        public bool NoRecovery;              // Transcended through Uncloud The Mind: no recovery once it lands
+        public float RecoveryScale = 1f;     // its recovery is scaled by this (Quickness And Lethargy's Transcend: longer)
+        public List<Vector3> Points;         // points it has picked so far (Tear Apart Reality's explosions)
 
         /// <summary>One of this action's numbers for its actor, upgrades and statuses included (Unit.ActionStat).</summary>
         public float Stat(ActionStat stat) { return Actor.ActionStat(Definition, stat); }
@@ -43,7 +50,7 @@ namespace TacticsGame.Core
         public float V(ActionStat stat) { return Who != null ? Who.ActionStat(Def, stat) : Stats.Base(Def, stat); }
         public void Add(string label, string value) { Effect.Add(new KeyValuePair<string, string>(label, value)); }
 
-        public static string Secs(float s) { return s <= 0f ? "instant" : string.Format("{0:0.##}s", s); }
+        public static string Secs(float s) { return s <= 0f ? "instant" : string.Format("{0:0.###}s", s); }
         public static string Metres(float m) { return string.Format("{0:0.#}m", m); }
         public static string Mult(float m) { return "x" + m.ToString("0.##"); }
     }
@@ -64,6 +71,8 @@ namespace TacticsGame.Core
         public Vector3 PushTo;
         public bool IgnoreRange;    // area hits: the target only needs to be in the area, not in the action's range
         public bool IgnoreCover;    // area hits land regardless of the target's exposure
+        public bool Unerring;       // no hit roll and no dodge: it always connects (a chain snapping taut)
+        public bool Heavy;          // lands as a Heavy impact whatever the ability's own (Praa's Hatred deep in its chain)
         public string Tag;
         /// <summary>Runs once the hit has landed (damage, statuses and stun applied) on a target that is still alive:
         /// for rules that follow a hit (Subjugate's grab, Amblivate's lift).</summary>
@@ -107,6 +116,20 @@ namespace TacticsGame.Core
 
         /// <summary>True for abilities that move the user (dashes, blinks, leaps): they can't be used while airborne.</summary>
         public virtual bool MovesUser { get { return false; } }
+
+        /// <summary>True for dashes (the Dash, Phantom Strike's, Savior's): a CRIPPLED unit can't use them (StatusFlags.NoDash).</summary>
+        public virtual bool Dashes { get { return false; } }
+
+        /// <summary>Is its follow-up open for this unit right now, whatever it did last? Then ordering it needs no aiming: it goes
+        /// at FollowupPoint and its button is framed as a follow-up (Baneful Domain, while its zone is up).</summary>
+        public virtual bool FollowupOpen(BattleSimulation sim, Unit actor, ActionDefinition def) { return false; }
+
+        /// <summary>Where an open follow-up (FollowupOpen) of a point-aimed ability is aimed, cast from 'from'.</summary>
+        public virtual Vector3 FollowupPoint(BattleSimulation sim, Unit actor, ActionDefinition def, Vector3 from) { return actor.LastActionPos; }
+
+        /// <summary>Using it leaves a queued ranged order waiting (UseActionWhenInRange) in place, instead of replacing it:
+        /// a Dash to get into range for it.</summary>
+        public virtual bool KeepsQueuedOrder { get { return false; } }
 
         /// <summary>True for abilities that close the distance themselves (Phantom Strike's dash): ordered at a target out of
         /// reach, the unit walks only until the target is within the full Range, not BattleSimulation.ChaseStrikeFraction of it.</summary>
@@ -292,7 +315,7 @@ namespace TacticsGame.Core
         {
             var def = a.Definition;
             bool channeled = def.ChannelSeconds > 0f;
-            sim.StartAura(a.Actor, def, channeled ? def.ChannelSeconds : def.AuraSeconds, channeled);
+            sim.StartAura(a.Actor, def, channeled ? def.ChannelSeconds : def.AuraSeconds * a.Actor.DurationScale(def), channeled, def.AuraAtTarget ? a.TargetPos : (Vector3?)null);
         }
     }
 
@@ -353,6 +376,42 @@ namespace TacticsGame.Core
             { "arrival", new ArrivalBehavior() },
             { "aura", new AuraBehavior() },
             { "aerial_slam", new AerialSlamBehavior() },
+            { "strain_burden", new StrainBurdenBehavior() },
+            { "telekinetic_pull", new TelekineticPullBehavior() },
+            { "flurry", new FlurryBehavior() },
+            { "hunt", new HuntBehavior() },
+            { "channeled_status", new ChanneledStatusBehavior() },
+            { "recoil_shot", new RecoilShotBehavior() },
+            { "unmaker", new UnmakerBehavior() },
+            // Wraith, Monarch, Zola, Primavaeran
+            { "summon", new SummonBehavior() },
+            { "beam", new BeamBehavior() },
+            { "area_lift", new AreaLiftBehavior() },
+            { "distortion", new DistortionBehavior() },
+            { "reality_tear", new RealityTearBehavior() },
+            { "retreat_strike", new RetreatStrikeBehavior() },
+            { "sky_smite", new SkySmiteBehavior() },
+            { "soulseeker", new SoulseekerBehavior() },
+            { "sky_shot", new SkyShotBehavior() },
+            { "chain_tether", new ChainTetherBehavior() },
+            // Deliverance
+            { "perplexity_step", new PerplexityStepBehavior() },
+            { "praas_hatred", new PraasHatredBehavior() },
+            { "joyous_dance", new JoyousDanceBehavior() },
+            { "close_the_loop", new CloseTheLoopBehavior() },
+            { "stitch", new StitchBehavior() },
+            { "split_the_minds", new SplitTheMindsBehavior() },
+            { "scry", new ScryBehavior() },
+            { "imprint", new ImprintBehavior() },
+            { "equipose", new EquiposeBehavior() },
+            { "savior", new SaviorBehavior() },
+            // Paradigm User and Sharpshooter, round AF (Madness and Dreadful Fixation are status_spell)
+            { "withering_end", new WitheringEndBehavior() },
+            { "splinter", new SplinterBehavior() },
+            { "baneful_domain", new BanefulDomainBehavior() },
+            { "mindshatter", new MindshatterBehavior() },
+            { "crippling_pursuit", new CripplingPursuitBehavior() },
+            { "mental_weapon", new MentalWeaponBehavior() },
         };
 
         public static void Register(string id, ActionBehavior behavior) { map[id] = behavior; }

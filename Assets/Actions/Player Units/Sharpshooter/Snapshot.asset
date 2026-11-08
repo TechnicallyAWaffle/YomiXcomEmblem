@@ -16,7 +16,8 @@ MonoBehaviour:
   DisplayName: Snapshot
   BehaviorId: basic_attack
   Roles: 0
-  Description: Quickly enter a sniping stance and fire a shot.
+  Description: Quickly enter a sniping stance and fire a heavy shot that interrupts
+    enemies.
   Targeting: 2
   Range: 18
   IsRanged: 1
@@ -32,7 +33,7 @@ MonoBehaviour:
   ConsumeOnResolve: 0
   Impact: 1
   Damage: 20
-  BaseAccuracy: 0.6
+  BaseAccuracy: 1
   StunDuration: 0.25
   StrainOnTarget: 8
   StrainOnSelf: 0

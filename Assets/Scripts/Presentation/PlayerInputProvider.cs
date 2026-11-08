@@ -13,5 +13,8 @@ namespace TacticsGame.Presentation
     public abstract class PlayerInputProvider : MonoBehaviour
     {
         public abstract void RequestDecisions(BattleSimulation sim, IReadOnlyList<DecisionRequest> requests, System.Action onComplete);
+
+        /// <summary>The battle ended while orders were being given (the dev menu's win or lose): drop them without calling back.</summary>
+        public virtual void CancelDecisions() { }
     }
 }
