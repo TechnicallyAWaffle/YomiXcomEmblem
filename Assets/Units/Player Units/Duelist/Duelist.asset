@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
+  m_Name: Duelist
+  m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
+  DisplayName: Duelist
+  MaxHealth: 75
+  BaseDodge: 0.3
+  BaseBlock: 0
+  MaxStrain: 75
+  StrainRecoveryPerSecond: 6
+  StrainRecoveryDelay: 0.5
+  MaxEnergy: 0
+  StartingEnergy: 0
+  ActionSpeed: 1
+  MoveSpeed: 8
+  DashDistance: 3
+  EyeHeight: 1.6
+  BodyHeight: 1.8
+  BodyRadius: 0.4
+  BasicAttack: {fileID: 11400000, guid: 12cf8e446e89e2e4a99ad8cfb3f3a974, type: 2}
+  Makina: 0
+  StrainPerSecond: 0
+  Description: 
+  Universal: {fileID: 11400000, guid: 789b922f559e46a4cbc6c2bd16c844df, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
+  Actions:
+  - {fileID: 11400000, guid: cfd2dc0701e7555489514b264caab8ff, type: 2}
+  - {fileID: 11400000, guid: 286d782ecb37208418211d7ac48e2974, type: 2}
+  - {fileID: 11400000, guid: 93b5b1652bcb5a14f9b22fbe7479534a, type: 2}
+  - {fileID: 11400000, guid: c591dfab2c79dd04dbc454547295289a, type: 2}
+  - {fileID: 11400000, guid: 17374347c9a31194fb97d86d135088d3, type: 2}
+  - {fileID: 11400000, guid: f46db74b56d4d70459e400df17589ead, type: 2}
+  - {fileID: 11400000, guid: 7b6e58f8e4670e04691a98be9d25c297, type: 2}
+  - {fileID: 11400000, guid: 6dca0900e9001bd44b13a3d660511ddd, type: 2}
+  - {fileID: 11400000, guid: 674b9629372a50843ad1532b0ff37f02, type: 2}
+  - {fileID: 11400000, guid: cfdfb3c2d43ce6146bec2a32dc3a2c82, type: 2}
+  - {fileID: 11400000, guid: f0502229add7462f8ecccf64b65ab607, type: 2}
+  - {fileID: 11400000, guid: 5631706492ab4edca6cef54c9cc66a2b, type: 2}
+  Passives:
+  - karranos_sigil
+  AIProfile: 
+  AI: {fileID: 0}
+  Boss: 0
+  ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Model: {fileID: 919132149155446097, guid: 1a95ce2171cb3334fbd39cc3d6bac84f, type: 3}
+  ModelAnimations: {fileID: 9100000, guid: 15a5a090872c07249bee8304a11490df, type: 2}
+  ModelEtchings: {fileID: 0}
+  Icon: {fileID: 0}
+  GrantedActions:
+  - monostep
+  - impending_demise
+  - a_duet
+  - clear_and_steady
+  - opening_theorem
+  - vindication
+  - quell_the_uproar
+  DataVersion: 15

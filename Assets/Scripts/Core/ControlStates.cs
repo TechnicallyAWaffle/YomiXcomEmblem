@@ -64,6 +64,9 @@ namespace TacticsGame.Core
     public class HeldState : ControlState
     {
         public string HolderId;
+        public bool Locked;   // an ally held by Grasp and Impel: it can't act until it is thrown or let go (it isn't stunned)
+
+        public override bool BlocksDodgeDash { get { return Locked; } }   // it dodges where it stands: a dash would break the grip
 
         public override void OnDeath(BattleSimulation sim) { sim.ReleaseHeld(Unit); }
         public override void OnShoved(BattleSimulation sim) { sim.ReleaseHeld(Unit); }   // shoved out of the grip

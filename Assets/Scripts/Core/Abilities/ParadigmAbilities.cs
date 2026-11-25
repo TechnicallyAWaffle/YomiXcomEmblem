@@ -34,6 +34,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class StatusSpellBehavior : ActionBehavior
     {
+        public override bool WeakpointsOnHit(ActionDefinition def) { return false; }
+
         public override void Describe(AbilityTip tip)
         {
             base.Describe(tip);
@@ -65,6 +67,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class TeleportBehavior : ActionBehavior
     {
+        public override bool WeakpointsOnHit(ActionDefinition def) { return false; }
+
         public override void Describe(AbilityTip tip) { base.Describe(tip); tip.Add("Teleport", "to a point"); }
 
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
@@ -139,6 +143,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class ChanneledStatusBehavior : ActionBehavior
     {
+        public override bool WeakpointsOnHit(ActionDefinition def) { return false; }
+
         public override bool RollsToHit(ActionDefinition def) { return false; }
 
         public override void Describe(AbilityTip tip)

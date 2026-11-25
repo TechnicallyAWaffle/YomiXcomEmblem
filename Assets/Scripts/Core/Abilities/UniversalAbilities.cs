@@ -16,6 +16,7 @@ namespace TacticsGame.Core
     public class BlockBehavior : SelfBuffBehavior
     {
         public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Guard; }
+        public override bool TakesBlockSlot { get { return true; } }
 
         public override bool AllowsStrainOverflow { get { return true; } }
 
@@ -47,10 +48,11 @@ namespace TacticsGame.Core
             guard.Stacks = 1;
             if (a.Transcended)
             {
-                // Block raised to 100% (clamped there, so block pierce still gets through), stun immune, not worn down.
+                // Block raised to 100% (clamped there, so block pierce still gets through), stun immune, not worn down, and
+                // not knocked back, by its hits or anyone's shove.
                 if (guard.Modifiers == null) guard.Modifiers = new List<Modifier>();
                 guard.Modifiers.Add(Modifier.Add(StatId.Block, 1f));
-                guard.Flags |= StatusFlags.StunImmune | StatusFlags.KeepsBlock;
+                guard.Flags |= StatusFlags.StunImmune | StatusFlags.KeepsBlock | StatusFlags.ResistsKnockback;
                 guard.Stacks = TranscendedGuard;
                 EtchingTraits.PrimeRevenge(sim, a.Actor);
             }

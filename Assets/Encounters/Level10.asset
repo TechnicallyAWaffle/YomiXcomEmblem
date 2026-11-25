@@ -47,7 +47,7 @@ MonoBehaviour:
       MaxUp: 6
     Rewards:
       Experience: 50
-      AbilityPoints: 2
+      AbilityPoints: 1
       Currency: 0
       Upgrades: []
     CarryOverWounds: 0

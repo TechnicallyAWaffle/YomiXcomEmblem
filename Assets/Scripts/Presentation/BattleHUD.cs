@@ -29,6 +29,7 @@ namespace TacticsGame.Presentation
             public float Health, MaxHealth, Strain, MaxStrain, Energy, MaxEnergy;
             public readonly List<string> Statuses = new List<string>();
             public List<string> Passives = new List<string>();   // passive ids (PassiveDisplay: their names and what they do)
+            public List<ActionDefinition> AlwaysOn = new List<ActionDefinition>();   // its always-on abilities (a Makina's passives: InnatePassive), shown on hover
             public readonly Dictionary<string, int> Stacks = new Dictionary<string, int>();   // stack counts above 1 (Flowing Death's chain)
             // Timed statuses (Trance, Focus under way, a slow on it...): when each runs out, and how long it ran from (for its bar).
             public readonly Dictionary<string, StatusTimerInfo> Timers = new Dictionary<string, StatusTimerInfo>();
@@ -82,7 +83,7 @@ namespace TacticsGame.Presentation
                 {
                     Name = u.DisplayName, Team = u.Team,
                     Health = u.Health, MaxHealth = u.MaxHealth, Strain = u.Strain, MaxStrain = u.MaxStrain,
-                    Energy = u.Energy, MaxEnergy = u.MaxEnergy, Passives = u.Passives != null ? new List<string>(u.Passives) : new List<string>(),
+                    Energy = u.Energy, MaxEnergy = u.MaxEnergy, Passives = u.Passives != null ? new List<string>(u.Passives) : new List<string>(), AlwaysOn = AlwaysOnOf(u),
                 };
                 foreach (var a in u.Actions)
                     for (var d = a; d != null && !defs.ContainsKey(d.Id); d = d.LinkedAction) defs[d.Id] = d;
@@ -152,7 +153,7 @@ namespace TacticsGame.Presentation
                         actor.WindupFull = resumed ? actor.WindupFull : a.Windup;
                         actor.WindupEnd = evt.SimTime + a.Windup;
                         actor.WindupId = a.ActionId;
-                        actor.WindupName = def.DisplayName;
+                        actor.WindupName = def.WindupLabel;   // its WindupName if it has one (Grasp and Impel: Grasp)
                         actor.WindupHeavy = def.Impact == ImpactType.Heavy;
                         actor.WindupAttack = KindOf(def);
                     }
@@ -306,7 +307,7 @@ namespace TacticsGame.Presentation
                     var s = (SpawnInfo)evt.Payload;
                     var u = s.Unit;
                     if (u == null) break;
-                    units[u.Id] = new UnitReadout { Name = u.DisplayName, Team = u.Team, Health = u.Health, MaxHealth = u.MaxHealth, Strain = u.Strain, MaxStrain = u.MaxStrain, Energy = u.Energy, MaxEnergy = u.MaxEnergy, Passives = u.Passives != null ? new List<string>(u.Passives) : new List<string>() };
+                    units[u.Id] = new UnitReadout { Name = u.DisplayName, Team = u.Team, Health = u.Health, MaxHealth = u.MaxHealth, Strain = u.Strain, MaxStrain = u.MaxStrain, Energy = u.Energy, MaxEnergy = u.MaxEnergy, Passives = u.Passives != null ? new List<string>(u.Passives) : new List<string>(), AlwaysOn = AlwaysOnOf(u) };
                     foreach (var a in u.Actions)
                         for (var d = a; d != null && !defs.ContainsKey(d.Id); d = d.LinkedAction) defs[d.Id] = d;
                     break;
@@ -343,6 +344,13 @@ namespace TacticsGame.Presentation
 
             if (cam != null && Controller != null && Controller.Context != null && Controller.Context.Registry != null)
             {
+                // The tactical view numbers every unit by when it is next free to act, from now (BattleSimulation.ActOrder).
+                actRank.Clear();
+                if (TacticalView.On && Controller.Sim != null)
+                {
+                    var order = Controller.Sim.ActOrder();
+                    for (int i = 0; i < order.Count; i++) actRank[order[i].Id] = i + 1;
+                }
                 foreach (var pair in Controller.Context.Registry)
                 {
                     var r = Get(pair.Key);
@@ -350,6 +358,8 @@ namespace TacticsGame.Presentation
                     Vector2 at;
                     if (!UiScale.WorldToGui(cam, pair.Value.transform.position + Vector3.up * BarHeightAboveUnit, out at)) continue;
                     DrawUnit(r, at);
+                    int rank;
+                    if (!r.Dead && actRank.TryGetValue(pair.Key, out rank)) DrawActRank(r, at, rank);
                 }
             }
             if (UiDeclutter.On) { UiDeclutter.DrawHint(); return; }   // Alt: just the bars, and how to bring the rest back
@@ -396,6 +406,19 @@ namespace TacticsGame.Presentation
         }
 
         private GUIStyle logStyle;
+
+        private readonly Dictionary<string, int> actRank = new Dictionary<string, int>();
+        private GUIStyle rankStyle;
+
+        /// <summary>The tactical view: the order this unit will next act in from now (1 = first), above its bars (and its windup
+        /// bar, if it is winding up), in its team's colour.</summary>
+        private void DrawActRank(UnitReadout r, Vector2 at, int rank)
+        {
+            if (rankStyle == null) rankStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.LowerCenter, fontSize = 18, fontStyle = FontStyle.Bold };
+            bool winding = r.WindupName != null;
+            Color c = r.Team == Team.Player ? new Color(0.6f, 0.82f, 1f) : r.Team == Team.Enemy ? new Color(1f, 0.6f, 0.55f) : new Color(0.85f, 0.6f, 1f);
+            CombatVfx.OutlinedLabel(new Rect(at.x - 30f, at.y - (winding ? 76f : 34f), 60f, 26f), rank.ToString(), rankStyle, c, 1.5f);
+        }
 
         private void DrawUnit(UnitReadout r, Vector2 at)
         {
@@ -493,9 +516,17 @@ namespace TacticsGame.Presentation
             if (r.Team != Team.Player)
                 foreach (var id in r.Passives)
                 {
+                    if (PassiveDisplay.IsHidden(id)) continue;   // a rule of its AI, not something to read off it
                     rows.Add(new KeyValuePair<string, string>("Passive: " + PassiveDisplay.NameOf(id), PassiveDisplay.DescriptionOf(id)));
                     colors.Add(PassiveColor);
                 }
+
+            // Its always-on abilities (a Makina's passives), whatever side it is on: they have no button.
+            foreach (var a in r.AlwaysOn)
+            {
+                rows.Add(new KeyValuePair<string, string>("Passive: " + a.DisplayName, string.IsNullOrEmpty(a.Description) ? null : a.Description));
+                colors.Add(PassiveColor);
+            }
 
             string title = string.Format("{0}   health {1:0}/{2:0}   strain {3:0}/{4:0}", r.Name, r.Health, r.MaxHealth, r.Strain, r.MaxStrain);
             float h = PanelPad + panelTitle.CalcHeight(new GUIContent(title), inner);
@@ -529,6 +560,14 @@ namespace TacticsGame.Presentation
                 if (rows[i].Value != null) cy += Line(x, cy, inner, rows[i].Value, panelSmall);
                 cy += 2f;
             }
+        }
+
+        /// <summary>A unit's always-on abilities (ActionDefinition.InnatePassive), for its hover panel.</summary>
+        private static List<ActionDefinition> AlwaysOnOf(Unit u)
+        {
+            var list = new List<ActionDefinition>();
+            if (u != null && u.Actions != null) foreach (var a in u.Actions) if (a != null && a.InnatePassive) list.Add(a);
+            return list;
         }
 
         private static float Line(float x, float y, float width, string text, GUIStyle style)

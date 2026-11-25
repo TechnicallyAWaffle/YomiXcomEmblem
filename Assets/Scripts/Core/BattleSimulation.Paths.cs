@@ -198,10 +198,42 @@ namespace TacticsGame.Core
         /// Elevation: a forced move (shove, pull) that carries the unit off a ledge becomes a fall (StartFall); one that
         /// catches it mid-jump knocks it out of the jump instead; a unit already falling just keeps falling.
         /// </summary>
-        private void Relocate(Unit unit, Vector3 to, float duration, bool forced, Unit source = null, Vector3? phaseFrom = null)
+        /// <summary>Would shoving 'unit' to 'to' knock it back (away from 'source'), and does it resist that (ResistsKnockback)?
+        /// A pull toward the source, or a move it makes itself, still goes.</summary>
+        private static bool Withstands(Unit unit, Vector3 to, Unit source)
+        {
+            if (source == null || source == unit || !unit.HasFlag(StatusFlags.ResistsKnockback)) return false;
+            Vector3 push = to - unit.Position, away = unit.Position - source.Position;
+            push.y = 0f; away.y = 0f;
+            return Vector3.Dot(push, away) > 0f;
+        }
+
+        /// <summary>
+        /// Where a dash that phases through walls and cover (Phantom Strike's, the Duelist's) lands, going from 'from' toward
+        /// 'desired': the farthest point along the way, up to 'desired', that is open ground (one a dash could leave from).
+        /// Nothing in between matters. Pass the result as SlideUnitTo's phaseFrom too, so the landing is searched from there.
+        /// </summary>
+        public Vector3 PhaseLanding(Vector3 from, Vector3 desired)
+        {
+            Vector3 d = desired - from; d.y = 0f;
+            float len = d.magnitude;
+            if (len < 1e-3f) return from;
+            Vector3 dir = d / len;
+            for (float t = len; t > 0.25f; t -= 0.25f)
+            {
+                Vector3 p = from + dir * t;
+                Vector3 back = Paths.ClampDash(p, from);   // open ground lets a dash leave it; inside a wall, it stops at once
+                float gx = back.x - p.x, gz = back.z - p.z;
+                if (gx * gx + gz * gz > 0.01f) return Terrain.OnGround(p);
+            }
+            return Paths.ClampDash(from, desired);
+        }
+
+        private void Relocate(Unit unit, Vector3 to, float duration, bool forced, Unit source = null, Vector3? phaseFrom = null, bool step = false, float arc = 0f)
         {
             if (unit.FallLandAt >= 0f || unit.IsLifted) return;   // falling or held up in the air: nothing moves it
             if (forced && !CanDisplace(unit, source)) return;     // Unstoppable: shoves, pulls and knockbacks don't move it
+            if (forced && Withstands(unit, to, source)) return;    // Transcended Block: nothing knocks it back
             foreach (var s in unit.States.ToArray()) s.OnShoved(this);   // shoved out of a grip (HeldState)
             if (unit.IsJumping)
             {
@@ -209,6 +241,7 @@ namespace TacticsGame.Core
                 HaltWalk(unit);
             }
             Vector3 from = unit.Position;
+            unit.GlideFollowId = null;   // a new move: any dash it was following a unit with is over
             to = Paths.ClampDash(phaseFrom ?? from, to);   // a slide or shove stops at the map's edge, whoever picked the spot
             to = Terrain.OnGround(FreeSpotNear(unit, to, phaseFrom ?? from, false));
             if (unit.Phase == UnitPhase.Moving) EndMove(unit, false);   // assumption: being relocated ends a walk in progress
@@ -222,7 +255,7 @@ namespace TacticsGame.Core
             unit.GlideTo = to;
             unit.GlideStart = Now;
             unit.GlideEnd = Now + Mathf.Max(TickLength, duration);
-            Emit(EventType.Dash, unit.Id, null, new DashInfo { From = from, To = to, Duration = duration, Forced = forced });
+            Emit(EventType.Dash, unit.Id, null, new DashInfo { From = from, To = to, Duration = duration, Forced = forced, Step = step, Arc = arc });
         }
     }
 }

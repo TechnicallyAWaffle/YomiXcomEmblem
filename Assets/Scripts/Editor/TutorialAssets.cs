@@ -48,14 +48,14 @@ public static class TutorialAssets
 
         var dummy = Unit("TrainingDummy", u =>
         {
-            u.Id = "training_dummy"; u.DisplayName = "Training Dummy"; u.MaxHealth = 400f; u.BaseDodge = 0f; u.MoveSpeed = 3f;
+            u.Id = "training_dummy"; u.DisplayName = "Training Dummy"; u.MaxHealth = 400f; u.BaseDodge = 0f; u.MoveSpeed = 4.5f;
             u.AIProfile = IdleAI.Style;   // stands still, even when the step lets the enemies fight
             u.Actions = new List<ActionDefinition>();
             u.ViewPrefab = viewPrefab;
         });
         var raider = Unit("Raider", u =>
         {
-            u.Id = "tutorial_raider"; u.DisplayName = "Raider"; u.MaxHealth = 70f; u.BaseDodge = 0f; u.MoveSpeed = 3.5f;
+            u.Id = "tutorial_raider"; u.DisplayName = "Raider"; u.MaxHealth = 70f; u.BaseDodge = 0f; u.MoveSpeed = 5.5f;
             u.AIProfile = "";   // the basic AI: walk up and hit the nearest
             u.BasicAttack = strike;
             u.Actions = new List<ActionDefinition>();
@@ -63,7 +63,7 @@ public static class TutorialAssets
         });
         var marksman = Unit("Marksman", u =>
         {
-            u.Id = "tutorial_marksman"; u.DisplayName = "Marksman"; u.MaxHealth = 55f; u.BaseDodge = 0f; u.MoveSpeed = 3.5f;
+            u.Id = "tutorial_marksman"; u.DisplayName = "Marksman"; u.MaxHealth = 55f; u.BaseDodge = 0f; u.MoveSpeed = 5.5f;
             u.AIProfile = "";
             u.BasicAttack = shot;
             u.Actions = new List<ActionDefinition>();

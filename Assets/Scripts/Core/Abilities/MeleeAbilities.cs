@@ -51,7 +51,7 @@ namespace TacticsGame.Core
             var chain = actor.GetStatus(id);
             if (chain == null || chain.TargetId != a.TargetUnitId)
             {
-                if (Followups(def) > 0) sim.ApplyStatus(actor, new StatusEffect { Id = id, SourceId = actor.Id, TargetId = a.TargetUnitId, ExpiresAt = windowEnds  }, actor);
+                if (Followups(def) > 0) sim.ApplyStatus(actor, new StatusEffect { Id = id, SourceId = actor.Id, TargetId = a.TargetUnitId, ExpiresAt = windowEnds, Flags = StatusFlags.FollowupWindow }, actor);
                 return;
             }
             chain.Stacks++;
@@ -191,6 +191,7 @@ namespace TacticsGame.Core
             Vector3 beside = target.Position - from * (actor.BodyRadius + target.BodyRadius + 0.3f);
             Vector3 landed = sim.Paths.ClampDash(target.Position, beside);   // from the target out: walls between don't matter
             sim.SlideUnitTo(actor, landed, BattleSimulation.DashDuration, target.Position);
+            sim.FollowDuringGlide(actor, target);   // a target on the move is still caught
             if (Vector3.Distance(landed, target.Position) > Param(a.Definition, "strike_reach")) return;
             effects.Add(new AttackEffect { Source = actor, TargetId = target.Id, Definition = a.Definition, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag, IgnoreRange = true });
         }
@@ -229,7 +230,8 @@ namespace TacticsGame.Core
 
         public override void Attach(BattleSimulation sim)
         {
-            sim.Triggers.Subscribe(TriggerType.Dodged, ctx =>
+            // Its stance counters (StatusFlags.Counters): the first attack on it is met by the counter, never left to a dodge.
+            sim.Triggers.Subscribe(TriggerType.Countered, ctx =>
             {
                 var stance = ctx.Subject.GetStatus(StatusIds.Mesmerized);
                 if (stance == null || stance.LinkedAction == null || ctx.Other == null || !ctx.Other.IsAlive) return;
@@ -277,6 +279,7 @@ namespace TacticsGame.Core
             Vector3 beside = target.Position - from * (actor.BodyRadius + target.BodyRadius + 0.3f);
             Vector3 landed = sim.Paths.ClampDash(target.Position, beside);
             sim.SlideUnitTo(actor, landed, BattleSimulation.DashDuration, target.Position);
+            sim.FollowDuringGlide(actor, target);   // a target on the move is still caught
             if (Vector3.Distance(landed, target.Position) > Param(a.Definition, "strike_reach")) return;
             a.Steps = 0;
             a.NextStepAt = sim.Now + BattleSimulation.DashDuration;   // the first cut as it arrives
@@ -318,6 +321,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class HuntBehavior : ActionBehavior
     {
+        public override bool WeakpointsOnHit(ActionDefinition def) { return false; }
+
         public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Gapcloser; }
 
         public override bool MovesUser { get { return true; } }

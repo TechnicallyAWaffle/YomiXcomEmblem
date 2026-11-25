@@ -42,6 +42,21 @@ MonoBehaviour:
     - {fileID: 11400000, guid: c93b494478ef8914a85508738f3b1f15, type: 2}
     - {fileID: 11400000, guid: 69ee16896e24f8d4e99f6a9870d832d8, type: 2}
     RandomCount: 4
+  - Class: {fileID: 11400000, guid: e7d5721468e5d03478311869c8dab586, type: 2}
+    DefaultAbilities:
+    - {fileID: 11400000, guid: 3673932d60832cb4bba7a81f2761c797, type: 2}
+    - {fileID: 11400000, guid: a27cfc69b4a99db43a2ce9990faec829, type: 2}
+    - {fileID: 11400000, guid: dbfed8674d1c766428833be60fac4f14, type: 2}
+    - {fileID: 11400000, guid: 5e02e71cf8ebdd649a4d33a1fd316ac0, type: 2}
+    - {fileID: 11400000, guid: 26d3507ec8c5da54b9b774cb3eaac774, type: 2}
+    RandomCount: 4
+  - Class: {fileID: 11400000, guid: 23645dff9ef6fea48a7b5f77ee08fe5d, type: 2}
+    DefaultAbilities:
+    - {fileID: 11400000, guid: cfd2dc0701e7555489514b264caab8ff, type: 2}
+    - {fileID: 11400000, guid: 286d782ecb37208418211d7ac48e2974, type: 2}
+    - {fileID: 11400000, guid: f0502229add7462f8ecccf64b65ab607, type: 2}
+    - {fileID: 11400000, guid: 93b5b1652bcb5a14f9b22fbe7479534a, type: 2}
+    RandomCount: 4
   DefaultAbilityCost: 2
   AbilityCosts:
   - Ability: {fileID: 11400000, guid: ed447ec3502aa394ea725969066ad9ac, type: 2}
@@ -184,7 +199,65 @@ MonoBehaviour:
     Cost: 2
   - Ability: {fileID: 11400000, guid: 6ccc81c39058bb042b090858c17b2688, type: 2}
     Cost: 3
-  AbilitiesOffered: 6
+  - Ability: {fileID: 11400000, guid: 3673932d60832cb4bba7a81f2761c797, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: a27cfc69b4a99db43a2ce9990faec829, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: dbfed8674d1c766428833be60fac4f14, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 6531b482ee4ef474ca83bfccbbd0f18a, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 901ba825873633249bef04fc68f6bec9, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: cfd2dc0701e7555489514b264caab8ff, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 286d782ecb37208418211d7ac48e2974, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 789b922f559e46a4cbc6c2bd16c844df, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 93b5b1652bcb5a14f9b22fbe7479534a, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: c591dfab2c79dd04dbc454547295289a, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 17374347c9a31194fb97d86d135088d3, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 26d3507ec8c5da54b9b774cb3eaac774, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: ea14498474f19304cbe4e0afc19cfccd, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: f46db74b56d4d70459e400df17589ead, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 7b6e58f8e4670e04691a98be9d25c297, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 6dca0900e9001bd44b13a3d660511ddd, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 674b9629372a50843ad1532b0ff37f02, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 546e7edb723ed434694456987a67bcaf, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: cfdfb3c2d43ce6146bec2a32dc3a2c82, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: d6807f8089af46d45bc8ae95a7b4adaf, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 692e0b3768277ed4f9c2b9138d9920e5, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: 3594b28f95c58604b8d65d5cb95d4363, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: ef9b06f4a571c4942943e83511a95a3c, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: ea5718a007f2d9d4bbc4c5175878acca, type: 2}
+    Cost: 3
+  - Ability: {fileID: 11400000, guid: b31e08c7580375f4ebc2c364c4dbbe81, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: f0502229add7462f8ecccf64b65ab607, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 5631706492ab4edca6cef54c9cc66a2b, type: 2}
+    Cost: 2
+  - Ability: {fileID: 11400000, guid: 3bfd2e5447764e0bbae757a5ddf01ca6, type: 2}
+    Cost: 1
+  - Ability: {fileID: 11400000, guid: 1775eb73f1884729adbab1feb319d5ce, type: 2}
+    Cost: 2
+  AbilitiesOffered: 5
   Etchings:
   - Id: minds_reach
     Name: The Mind's Reach Grows
@@ -206,6 +279,8 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: senses_of_closure
@@ -223,6 +298,8 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: senses_of_space
@@ -243,6 +320,8 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: living_carapace
@@ -263,6 +342,8 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: mantra_of_focus
@@ -284,6 +365,8 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: persistent_algorithms
@@ -307,11 +390,13 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: etching_of_efficiency
     Name: Etching of Efficiency
-    Description: 'Etch onto an ability: 40% reduced cooldown (stacks multiplicatively).'
+    Description: Etch onto an ability to reduce its cooldown by 40%.
     Weight: 1
     Scope: 1
     UnitModifiers: []
@@ -325,11 +410,13 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: etching_of_summation
     Name: Etching of Summation
-    Description: 'Etch onto an ability: 30% increased damage (stacks multiplicatively).'
+    Description: Etch onto an ability to grant it 30% increased damage.
     Weight: 1
     Scope: 1
     UnitModifiers: []
@@ -343,12 +430,14 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: etching_of_complexity
     Name: Etching of Complexity
-    Description: 'Etch onto an ability: 50% increased range, radius and knockback
-      (stacks multiplicatively).'
+    Description: Etch onto an ability to grant it 50% increased range on all its
+      effects.
     Weight: 1
     Scope: 1
     UnitModifiers: []
@@ -370,12 +459,14 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: etching_of_recurrence
     Name: Etching of Recurrence
-    Description: 'Etch onto an ability: 40% increased duration of its stuns, buffs
-      and debuffs (stacks multiplicatively).'
+    Description: Etch onto an ability to grant it 50% increased duration on all its
+      effects.
     Weight: 1
     Scope: 1
     UnitModifiers: []
@@ -383,16 +474,18 @@ MonoBehaviour:
     - ActionId: 
       Stat: 5
       Op: 1
-      Value: 1.4
+      Value: 1.5
     - ActionId: 
       Stat: 15
       Op: 1
-      Value: 1.4
+      Value: 1.5
     Trait: 
     Params: []
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: symbols_of_memory
@@ -407,11 +500,13 @@ MonoBehaviour:
     AbilityPoints: 2
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: burst_of_cognition
     Name: Burst of Cognition
-    Description: 'Etch onto an ability: 30% shorter windup (stacks multiplicatively).'
+    Description: Etch onto an ability to reduce its windup by 40%.
     Weight: 1
     Scope: 1
     UnitModifiers: []
@@ -419,17 +514,19 @@ MonoBehaviour:
     - ActionId: 
       Stat: 1
       Op: 1
-      Value: 0.7
+      Value: 0.6
     Trait: 
     Params: []
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: processing_proxies
     Name: Processing Proxies
-    Description: 'Etch onto an ability: 30% shorter recovery (stacks multiplicatively).'
+    Description: Etch onto an ability to reduce its recovery by 50%.
     Weight: 1
     Scope: 1
     UnitModifiers: []
@@ -437,21 +534,26 @@ MonoBehaviour:
     - ActionId: 
       Stat: 2
       Op: 1
-      Value: 0.7
+      Value: 0.5
     Trait: 
     Params: []
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: revenge_maxim
     Name: Revenge Maxim
-    Description: 'After a Transcended Block, gain REVENGE for 1 second: your next
-      ability in that time spends it and winds up 75% faster.'
+    Description: Gain 30 maximum Strain. After a Transcended Block, your next ability
+      in a short time winds up 75% faster.
     Weight: 1
     Scope: 0
-    UnitModifiers: []
+    UnitModifiers:
+    - Stat: 1
+      Op: 0
+      Value: 30
     ActionModifiers: []
     Trait: revenge_maxim
     Params:
@@ -462,13 +564,14 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: suffer_beyond_your_limits
     Name: Suffer Beyond Your Limits
-    Description: You can spend strain at or past maximum strain. A strain cost that
-      goes past your maximum also costs health equal to 60% of it (20% less for each
-      extra copy).
+    Description: You can spend strain past your maximum limit. Doing so pays health
+      equal to 60% of the original strain cost.
     Weight: 1
     Scope: 0
     UnitModifiers: []
@@ -482,6 +585,8 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: perception_for_violence
@@ -498,11 +603,13 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: cannibalize_cognition
     Name: Cannibalize Cognition
-    Description: Dealing the killing blow to an enemy reduces your strain by 40.
+    Description: Dealing the killing blow to an enemy reduces your strain by 50.
     Weight: 1
     Scope: 0
     UnitModifiers: []
@@ -510,10 +617,12 @@ MonoBehaviour:
     Trait: cannibalize_cognition
     Params:
     - Key: relief
-      Value: 40
+      Value: 50
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: despair_and_panic
@@ -531,32 +640,33 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: imperceptible_steps
     Name: Imperceptible Steps
-    Description: Gain 20% dodge. Dodging has a 50% chance to break every ranged attack
-      winding up at you.
+    Description: Dodging has a 75% chance to break every ranged attack winding up
+      at you.
     Weight: 1
     Scope: 0
-    UnitModifiers:
-    - Stat: 4
-      Op: 0
-      Value: 0.2
+    UnitModifiers: []
     ActionModifiers: []
     Trait: imperceptible_steps
     Params:
     - Key: chance
-      Value: 0.5
+      Value: 0.75
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: body_on_strings
     Name: Body On Strings
     Description: Etch onto an ability, gaining the option to Transcend it for +10
-      strain and granting you Unstoppable while it winds up.
+      strain and granting you Unstoppable during its windup.
     Weight: 1
     Scope: 1
     UnitModifiers: []
@@ -566,6 +676,8 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 1
     GrantStrain: 10
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: uncloud_the_mind
@@ -581,6 +693,8 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 2
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: repetition_is_strength
@@ -604,12 +718,14 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: imprinted_memory
     Name: Imprinted Memory
     Description: Etch onto an ability to lower its strain cost by 40%. An ability
-      with no strain cost instead sheds 7 strain when used.
+      with no strain cost instead sheds 10 strain when used.
     Weight: 1
     Scope: 1
     UnitModifiers: []
@@ -623,45 +739,51 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers:
     - ActionId: 
       Stat: 7
       Op: 0
-      Value: -7
+      Value: -10
     RemovesBehaviors: []
   - Id: witless
     Name: Witless
-    Description: Gain 40% maximum health. You can no longer Block.
+    Description: Gain 60% maximum health. You can no longer Block.
     Weight: 1
     Scope: 0
     UnitModifiers:
     - Stat: 0
       Op: 1
-      Value: 1.4
+      Value: 1.6
     ActionModifiers: []
     Trait: 
     Params: []
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors:
     - block
   - Id: dance_between_their_rage
     Name: Dance Between Their Rage
-    Description: Gain 35% dodge. You can no longer Dash.
+    Description: Gain 40% dodge. You can no longer Dash.
     Weight: 1
     Scope: 0
     UnitModifiers:
     - Stat: 4
       Op: 0
-      Value: 0.35
+      Value: 0.4
     ActionModifiers: []
     Trait: 
     Params: []
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors:
     - dash
@@ -678,12 +800,14 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 3
     GrantStrain: 30
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: fractures_of_stress
     Name: Fractures Of Stress
     Description: Once per battle, when a hit takes you under 30% health, become UNSTOPPABLE
-      and heal 30% of your maximum health over 3 seconds.
+      and heal 30% of your maximum health over 1 seconds.
     Weight: 1
     Scope: 0
     UnitModifiers: []
@@ -695,18 +819,20 @@ MonoBehaviour:
     - Key: heal_share
       Value: 0.3
     - Key: seconds
-      Value: 3
+      Value: 1
     - Key: once_per_battle
       Value: 1
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: flow_state
     Name: Flow State
     Description: Etch onto an ability to grant you the option to Transcend it for
-      +15 Strain. When Transcended, you gain 75% Dodge for 2s when cast.
+      +10 Strain. When Transcended, you gain 75% Dodge for 2s when cast.
     Weight: 1
     Scope: 1
     UnitModifiers: []
@@ -719,19 +845,21 @@ MonoBehaviour:
       Value: 2
     AbilityPoints: 0
     Grant: 4
-    GrantStrain: 15
+    GrantStrain: 10
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: untethered_to_sanity
     Name: Untethered To Sanity
-    Description: Reduce your maximum Strain by 30%. Unravel's stun is 75% shorter
+    Description: Reduce your maximum Strain by 25%. Unravel's stun is 75% shorter
       for you.
     Weight: 1
     Scope: 0
     UnitModifiers:
     - Stat: 1
       Op: 1
-      Value: 0.7
+      Value: 0.75
     ActionModifiers: []
     Trait: untethered_to_sanity
     Params:
@@ -740,13 +868,14 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: quickness_and_lethargy
     Name: Quickness And Lethargy
     Description: Etch onto an ability to grant the option to Transcend it for +25
-      Strain. When Transcended, the ability's windup is reduced by 75%, but its recovery
-      is increased by 25%.
+      Strain, reducing the ability's windup by 75%, but increasing recovery by 25%.
     Weight: 1
     Scope: 1
     UnitModifiers: []
@@ -760,35 +889,39 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 5
     GrantStrain: 25
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: stepweaver
     Name: Stepweaver
-    Description: Reduce your maximum health and strain by 30%. Dash and Transcended
-      Dash cost 75% less Strain.
+    Description: Reduce your maximum health and strain by 20%. Dash and Transcended
+      Dash cost 50% less Strain.
     Weight: 1
     Scope: 0
     UnitModifiers:
     - Stat: 0
       Op: 1
-      Value: 0.7
+      Value: 0.8
     - Stat: 1
       Op: 1
-      Value: 0.7
+      Value: 0.8
     ActionModifiers:
     - ActionId: dash
       Stat: 7
       Op: 1
-      Value: 0.25
+      Value: 0.5
     - ActionId: dash
       Stat: 16
       Op: 1
-      Value: 0.25
+      Value: 0.5
     Trait: 
     Params: []
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: avidous_march
@@ -810,6 +943,8 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: desecrate_your_being
@@ -830,24 +965,28 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: instinct_overtakes_methods
     Name: Instinct Overtakes Methods
-    Description: Gain 50% Dodge. You now always automatically Dodge directly towards
+    Description: Gain 30% Dodge. You now always automatically Dodge directly towards
       your target.
     Weight: 1
     Scope: 0
     UnitModifiers:
     - Stat: 4
       Op: 0
-      Value: 0.5
+      Value: 0.3
     ActionModifiers: []
     Trait: instinct_overtakes_methods
     Params: []
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
   - Id: lucid_dreams
@@ -867,7 +1006,301 @@ MonoBehaviour:
     AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
-  EtchingsOffered: 3
+  - Id: eye_for_weakness
+    Name: Eye For Weakness
+    Description: Etch onto an ability to grant it a 25% chance to critically strike
+      for 75% more damage. It can be Transcended for +10 strain to raise the chance
+      to 50%.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers:
+    - ActionId: 
+      Stat: 17
+      Op: 0
+      Value: 0.25
+    - ActionId: 
+      Stat: 18
+      Op: 0
+      Value: 0.75
+    Trait: 
+    Params:
+    - Key: crit_chance
+      Value: 0.5
+    AbilityPoints: 0
+    Grant: 6
+    GrantStrain: 10
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: gaps_in_their_mind
+    Name: Gaps In Their Mind
+    Description: Etch onto an ability to cause it to expose 1 weakpoint on enemies
+      it hits.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers:
+    - ActionId: 
+      Stat: 19
+      Op: 0
+      Value: 1
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: brute_force
+    Name: Brute Force
+    Description: Etch onto an ability to gain the option to Transcend it for +10
+      strain. When Transcended, the ability breaks up to 2 weakpoints on enemies
+      hit.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params:
+    - Key: breaks
+      Value: 2
+    AbilityPoints: 0
+    Grant: 7
+    GrantStrain: 10
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: unwind_their_self
+    Name: Unwind Their Self
+    Description: Etch onto an ability to grant it the option to Transcend it for
+      +30 strain. When Transcended, it exposes 4 weakpoints on enemies hit for 3
+      seconds.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params:
+    - Key: count
+      Value: 4
+    - Key: seconds
+      Value: 3
+    AbilityPoints: 0
+    Grant: 8
+    GrantStrain: 30
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: sight_beyond_sight
+    Name: Sight Beyond Sight
+    Description: Every 1.5 seconds, the nearest enemy within 10m has a weakpoint
+      exposed.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: sight_beyond_sight
+    Params:
+    - Key: every
+      Value: 1.5
+    - Key: range
+      Value: 10
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: incessant
+    Name: Incessant
+    Description: Etch onto an ability without a follow-up to grant it the ability
+      to re-cast on the same target for +25 strain.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params:
+    - Key: window
+      Value: 1.5
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    GrantsFollowup: 1
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: related_concepts
+    Name: Related Concepts
+    Description: Etch into two abilities to link them. When one lands, the other
+      becomes a linked ability: used straight after it (walking and dashing aside),
+      it has 50% shorter windup and recovery.
+    Weight: 1
+    Scope: 2
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params:
+    - Key: speed
+      Value: 0.5
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    GrantsFollowup: 2
+    FollowupStrain: 0
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: dissipation
+    Name: Dissipation
+    Description: Blocking costs +10 strain. Damage your Block stops reduces your
+      strain by as much.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers:
+    - ActionId: block
+      Stat: 7
+      Op: 0
+      Value: 10
+    Trait: dissipation
+    Params:
+    - Key: share
+      Value: 1
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: acceleration_bypass
+    Name: Acceleration Bypass
+    Description: Your Dash is 50% faster. Transcended Dash becomes an instant blink.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: acceleration_bypass
+    Params:
+    - Key: speed
+      Value: 0.5
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: steady_center
+    Name: Steady Center
+    Description: Passively recover 5 strain per second.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: steady_center
+    Params:
+    - Key: per_second
+      Value: 5
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: clarity_from_aggravation
+    Name: Clarity From Aggravation
+    Description: Taking damage makes you recover 2 strain every 0.1 seconds for 1
+      second.
+    Weight: 1
+    Scope: 0
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: clarity_from_aggravation
+    Params:
+    - Key: strain
+      Value: 2
+    - Key: every
+      Value: 0.1
+    - Key: seconds
+      Value: 1
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: hone_the_body
+    Name: Hone The Body
+    Description: Increase your maximum health by 50.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 0
+      Op: 0
+      Value: 50
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: hone_the_mind
+    Name: Hone The Mind
+    Description: Increase your maximum strain by 50.
+    Weight: 1
+    Scope: 0
+    UnitModifiers:
+    - Stat: 1
+      Op: 0
+      Value: 50
+    ActionModifiers: []
+    Trait: 
+    Params: []
+    AbilityPoints: 0
+    Grant: 0
+    GrantStrain: 15
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  - Id: guarded_approach
+    Name: Guarded Approach
+    Description: Etch onto an ability to give it the option to Transcend for +10
+      strain, giving you a 40 health shield for 1.5 seconds.
+    Weight: 1
+    Scope: 1
+    UnitModifiers: []
+    ActionModifiers: []
+    Trait: 
+    Params:
+    - Key: shield
+      Value: 40
+    - Key: seconds
+      Value: 1.5
+    AbilityPoints: 0
+    Grant: 9
+    GrantStrain: 10
+    GrantsFollowup: 0
+    FollowupStrain: 25
+    FallbackActionModifiers: []
+    RemovesBehaviors: []
+  EtchingsOffered: 4
   EtchingsTaken: 1

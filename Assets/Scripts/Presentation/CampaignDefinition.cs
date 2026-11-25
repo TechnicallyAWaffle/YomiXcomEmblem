@@ -16,6 +16,10 @@ namespace TacticsGame.Presentation
         public List<EncounterDefinition> Missions = new List<EncounterDefinition>();
         [Tooltip("The squad a new campaign starts with, in order.")]
         public List<UnitDefinition> Squad = new List<UnitDefinition>();
+        [Tooltip("Every class a new campaign can be started with. With more of them than Squad Size, the player picks the squad on a class selection screen; otherwise Squad is used as it is.")]
+        public List<UnitDefinition> Classes = new List<UnitDefinition>();
+        [Tooltip("How many classes the player picks for a squad.")]
+        [Min(1)] public int SquadSize = 4;
         public ProgressionConfig Progression;
         [Tooltip("How many of their offered Etchings each member takes in the upgrade phase before the first mission. 0 skips that phase.")]
         [Min(0)] public int EtchingsBeforeFirstMission = 1;

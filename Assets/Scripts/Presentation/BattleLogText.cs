@@ -76,9 +76,9 @@ namespace TacticsGame.Presentation
                     string by = Who(evt.ActorId, d.ActionId == "dev" ? "damage from the dev menu (kill, set health)" : evt.ActorId == null ? "damage with no source (a zone or effect with no owner)" : "damage from a unit the log doesn't know");
                     string on = Who(evt.TargetId, "damage on an unknown unit");
                     // A hit that does no damage by design (Subjugate's grab, Amblivate, Torrent of Strife): it still landed.
-                    if (d.Amount < 0.5f && d.BlockedAmount < 0.5f) return Impact(string.Format("{0} catches {1} with {2}", by, on, ActionName(d.ActionId)), d.Impact);
-                    return Impact(string.Format("{0} hits {1} with {2} for {3:0}{4}", by, on, ActionName(d.ActionId), d.Amount,
-                        d.BlockedAmount > 0.5f ? string.Format(" ({0:0} blocked)", d.BlockedAmount) : ""), d.Impact);
+                    if (d.Amount < 0.5f && d.BlockedAmount < 0.5f && d.ShieldedAmount < 0.5f) return Impact(string.Format("{0} catches {1} with {2}", by, on, ActionName(d.ActionId)), d.Impact);
+                    return Impact(string.Format("{0} {5} {1} with {2} for {3:0}{4}", by, on, ActionName(d.ActionId), d.Amount,
+                        (d.BlockedAmount > 0.5f ? string.Format(" ({0:0} blocked)", d.BlockedAmount) : "") + (d.ShieldedAmount > 0.5f ? string.Format(" ({0:0} shielded)", d.ShieldedAmount) : ""), d.Critical ? "critically hits" : "hits"), d.Impact);
                 }
                 case EventType.Miss:
                 {

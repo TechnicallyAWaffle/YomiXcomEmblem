@@ -26,7 +26,7 @@ MonoBehaviour:
     - Unit: {fileID: 11400000, guid: 0d44a1eeb31fbf044a97835909eade0d, type: 2}
       Count: 1
       Upgrades: []
-      ArriveAfter: 0
+      ArriveAfter: 15
       Side: 1
     - Unit: {fileID: 11400000, guid: 013132de130d91440a47ad4d7459b743, type: 2}
       Count: 1
@@ -36,15 +36,15 @@ MonoBehaviour:
     - Unit: {fileID: 11400000, guid: 34772a92fcd716444a8e59c7aca4a735, type: 2}
       Count: 1
       Upgrades: []
-      ArriveAfter: 5
+      ArriveAfter: 15
       Side: 1
     - Unit: {fileID: 11400000, guid: ac52d1cc6a76fa3419af737d6105f6c1, type: 2}
       Count: 1
       Upgrades: []
-      ArriveAfter: 0
+      ArriveAfter: 5
       Side: 1
     - Unit: {fileID: 11400000, guid: 0f1833ed2b2883c469a1093e9f4303e8, type: 2}
-      Count: 2
+      Count: 1
       Upgrades: []
       ArriveAfter: 0
       Side: 1
@@ -56,12 +56,7 @@ MonoBehaviour:
     - Unit: {fileID: 11400000, guid: ae325096baf019346b947d358fe96619, type: 2}
       Count: 2
       Upgrades: []
-      ArriveAfter: 10
-      Side: 1
-    - Unit: {fileID: 11400000, guid: ac52d1cc6a76fa3419af737d6105f6c1, type: 2}
-      Count: 1
-      Upgrades: []
-      ArriveAfter: 10
+      ArriveAfter: 15
       Side: 1
     Objective: 0
     Waves:
@@ -72,7 +67,7 @@ MonoBehaviour:
       MaxUp: 6
     Rewards:
       Experience: 60
-      AbilityPoints: 2
+      AbilityPoints: 1
       Currency: 0
       Upgrades: []
     CarryOverWounds: 0

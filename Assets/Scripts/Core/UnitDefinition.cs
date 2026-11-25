@@ -27,6 +27,16 @@ namespace TacticsGame.Core
         public float BodyRadius = 0.4f;    // units block line of sight; bigger units block more
         [Tooltip("Always-available fallback attack (no cooldown or cost). Added after Actions.")]
         public ActionDefinition BasicAttack;
+        [Tooltip("A Makina: a construct the player orders, but which can't move, Block or Dash, only Waits (no Clear Mind), gains Strain Per Second, and breaks at max strain (BattleSimulation, Makina.cs).")]
+        public bool Makina;
+        [Tooltip("It has no Block (no guard in its kit, whatever Universal holds), so it never guards (the Howler).")]
+        public bool CannotBlock;
+        [Tooltip("It can't Focus: a Wait is only a pause, never Clear Mind (the Howler).")]
+        public bool CannotFocus;
+        [Tooltip("Strain it gains every second, always (a Makina's decay). 0: none.")]
+        [Min(0f)] public float StrainPerSecond = 0f;
+        [Tooltip("What this class is good at, shown when the player inspects it on the class selection screen.")]
+        [TextArea(3, 8)] public string Description = "";
         [Tooltip("The universal Block (shared asset). Added after BasicAttack.")]
         [UnityEngine.Serialization.FormerlySerializedAs("Block")]
         public ActionDefinition Universal;
@@ -42,6 +52,12 @@ namespace TacticsGame.Core
         [Tooltip("A boss: while any boss is in the battle, defeating every boss wins it, whatever else is left on the field (endless reinforcements).")]
         public bool Boss;
         public GameObject ViewPrefab;
+        [Tooltip("Its 3D model (an imported FBX), shown in place of the placeholder capsule and props. Empty: the placeholder. Filled in on import for models under Assets/Models/<DisplayName>/ (UnitModelImport).")]
+        public GameObject Model;
+        [Tooltip("The model's Animator Controller: its clips played on battle events (UnitView's triggers). Made and kept up to date on import (UnitModelImport).")]
+        public RuntimeAnimatorController ModelAnimations;
+        [Tooltip("The pattern on the model's \"Etched\" material slot (dark lines on white), laid over the team's colour. Set on import from Assets/Models/<DisplayName>/<DisplayName>Etchings.png (UnitModelImport).")]
+        public Texture2D ModelEtchings;
         [Tooltip("Portrait in the battle's unit panel (lower left). Empty: the unit's initials on a coloured tile.")]
         public Texture2D Icon;
         [HideInInspector] public List<string> GrantedActions = new List<string>();   // new abilities SquadAssets already handed this unit once (SquadAssets.Grant)

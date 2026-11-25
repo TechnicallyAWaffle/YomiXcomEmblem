@@ -13,6 +13,8 @@ namespace TacticsGame.Core
     ///   split_the_minds    - the blow that would kill it instead leaves it at 1 health, Unkillable and Unstoppable, winding up
     ///                        its Split The Minds ability (behavior split_the_minds): its next phase.
     ///   unbound_time       - while one lives, time no longer stops for orders: it creeps (BattleSimulation.DecisionCreepRate).
+    ///   hunts_the_squad    - hidden: its AI counts a squad unit as SquadHuntBias (1.25) times nearer when picking a foe
+    ///                        (DeliveranceAI.PickTarget), so it goes for the squad unless a reinforcement is clearly closer.
     /// </summary>
     public static class DeliverancePassives
     {
@@ -20,6 +22,7 @@ namespace TacticsGame.Core
         public const string FreedomsEmbrace = "freedoms_embrace";
         public const string SplitTheMinds = "split_the_minds";
         public const string UnboundTime = "unbound_time";
+        public const string HuntsTheSquad = "hunts_the_squad";
 
         /// <summary>Unravel's stun on a unit with UnravelResistance is scaled by this.</summary>
         public static float UnravelResistanceScale = 0.5f;
@@ -51,9 +54,11 @@ namespace TacticsGame.Core
         public float FreedomsEmbraceSeconds = 20f;
         /// <summary>Freedom's Embrace: how long it stuns the squad, and how long its user is Unstoppable.</summary>
         public float FreedomsEmbraceStun = 1.5f, FreedomsEmbraceUnstoppable = 1f;
-        /// <summary>Phase two (UnboundTime): while orders are given, time runs at DecisionCreepStart of normal speed, rising to
-        /// DecisionCreepEnd over DecisionCreepRamp real-time seconds.</summary>
-        public float DecisionCreepStart = 0.005f, DecisionCreepEnd = 0.05f, DecisionCreepRamp = 20f;
+        /// <summary>Phase two (UnboundTime): while orders are given, time runs at this share of normal speed (0.01: 1%), however
+        /// long the orders take.</summary>
+        public float DecisionCreepRate = 0.01f;
+        /// <summary>HuntsTheSquad: a squad unit counts as this many times nearer when its holder picks a foe.</summary>
+        public float SquadHuntBias = 1.25f;
         /// <summary>Freedom's Embrace: orders that are only plain moves and run for less than this (sim seconds, from them to the
         /// next call for orders) don't reset its clock, so a string of tiny moves can't hold it off; any other order does. The presentation keeps the clock (BattleController).</summary>
         public float FreedomsEmbraceResetAfter = 0.5f;
@@ -263,11 +268,6 @@ namespace TacticsGame.Core
         /// <summary>Does time keep moving while the player gives orders (a living UnboundTime unit)?</summary>
         public bool DecisionCreepActive { get { return State.Units.Any(u => u.IsAlive && u.Passives.Contains(DeliverancePassives.UnboundTime)); } }
 
-        /// <summary>The share of normal speed time runs at, 'heldSeconds' (real time) into giving orders.</summary>
-        public float DecisionCreepRate(float heldSeconds)
-        {
-            return Mathf.Lerp(DecisionCreepStart, DecisionCreepEnd, Mathf.Clamp01(heldSeconds / Mathf.Max(0.01f, DecisionCreepRamp)));
-        }
 
         private float creepCarry;
 
@@ -319,16 +319,16 @@ namespace TacticsGame.Core
 
         /// <summary>
         /// Stitch landed on 'target' and lifted it: 'u' melds into it for 'seconds' (untargetable, taking no damage, healing
-        /// 'healPerSecond'), then dashes 'exitDash' out of it.
+        /// 'healPerSecond' and shedding 'strainReliefPerSecond' of strain), then dashes 'exitDash' out of it.
         /// </summary>
-        public void BeginMeld(Unit u, Unit target, ActionDefinition def, float seconds, float healPerSecond, float exitDash)
+        public void BeginMeld(Unit u, Unit target, ActionDefinition def, float seconds, float healPerSecond, float exitDash, float strainReliefPerSecond = 0f)
         {
             if (u == null || target == null || !u.IsAlive || !target.IsAlive || !target.IsLifted || u.GetState<MeldState>() != null) return;
             float ends = Now + Mathf.Max(TickLength, seconds);
             u.AddState(new MeldState { TargetId = target.Id, Definition = def, EndsAt = ends, ExitDash = exitDash });
             ApplyStatus(u, new StatusEffect
             {
-                Id = StatusIds.Melded, SourceId = u.Id, ExpiresAt = float.MaxValue, HealPerSecond = healPerSecond,
+                Id = StatusIds.Melded, SourceId = u.Id, ExpiresAt = float.MaxValue, HealPerSecond = healPerSecond, StrainPerSecond = -Mathf.Max(0f, strainReliefPerSecond),
                 Flags = StatusFlags.Untargetable | StatusFlags.NegatesDamage | StatusFlags.StunImmune | StatusFlags.Unstoppable,
             }, u);
             if (u.Phase == UnitPhase.Moving) HaltWalk(u);

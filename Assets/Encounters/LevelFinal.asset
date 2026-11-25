@@ -36,6 +36,7 @@ MonoBehaviour:
       - {fileID: 11400000, guid: 0f1833ed2b2883c469a1093e9f4303e8, type: 2}
       - {fileID: 11400000, guid: 34772a92fcd716444a8e59c7aca4a735, type: 2}
       - {fileID: 11400000, guid: ac52d1cc6a76fa3419af737d6105f6c1, type: 2}
+      - {fileID: 11400000, guid: ae325096baf019346b947d358fe96619, type: 2}
       FirstAfter: 0.5
       Every: 10
       PerWave: 6

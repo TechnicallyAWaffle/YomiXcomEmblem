@@ -14,6 +14,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class WitheringEndBehavior : ChanneledStatusBehavior
     {
+        public override bool WeakpointsOnHit(ActionDefinition def) { return true; }   // its final burst is a hit: that opens them
+
         public override IEnumerable<BehaviorParam> Parameters
         {
             get

@@ -18,6 +18,8 @@ MonoBehaviour:
   Roles: 0
   Description: After a long channel, deal heavy damage in a huge area and stun. Any
     damage breaks the channel.
+  Details: 
+  WindupName: 
   Targeting: 4
   Range: 16
   IsRanged: 1
@@ -44,16 +46,19 @@ MonoBehaviour:
   BlockPierce: 0
   StunnedDamageMultiplier: 1
   Shape: 1
-  AreaRadius: 8.5
-  LineWidth: 1
+  AreaRadius: 7.5
+  LineWidth: 0
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
   AuraAtTarget: 0
   AuraDamagePerSecond: 0
   AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
   InnatePassive: 0
   SummonUnit: {fileID: 0}
+  SummonUnits: []
+  RandomStatusesOnHit: []
   SummonCount: 0
   SummonAIStyle: 
   GuardBreakSeconds: 0
@@ -84,8 +89,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 4
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1

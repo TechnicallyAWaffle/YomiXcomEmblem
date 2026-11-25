@@ -16,9 +16,9 @@ MonoBehaviour:
   DisplayName: Splinters
   BehaviorId: splinter
   Roles: 0
-  Description: 'Lodge a splinter in reality in an enemy: a stack of SPLINTER. When
-    they become UNRAVELED, each SPLINTER deals 15 extra damage and stuns them 0.2
-    seconds longer.'
+  Description: Lodge a splinter in reality in an enemy. If they become UNRAVELED,
+    each splinter shatters, damaging and stunning the target for each splinter consumed.
+  Details: 
   Targeting: 2
   Range: 16
   IsRanged: 1
@@ -88,8 +88,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1

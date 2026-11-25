@@ -38,9 +38,9 @@ namespace TacticsGame.Core
         {
             reason = null;
             if (unit.IsRooted) { reason = "immobilized"; return false; }
+            if (unit.IsMakina) { reason = "out of range"; return false; }   // it can't walk in: the target must be in reach
             if (unit.IsLifted) { reason = "in the air"; return false; }
             ClearQueued(unit, null);   // committing to an ability overrides a queued ranged one
-            unit.LastActionId = null;
             EtchingTraits.BeginMarch(this, unit);   // a chase is a new walk too (its re-paths aren't)
             if (!RepathChase(unit, target, cmd.Action)) { reason = "no path"; return false; }
             unit.Chase = cmd;

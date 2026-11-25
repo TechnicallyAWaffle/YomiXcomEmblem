@@ -11,6 +11,7 @@ namespace TacticsGame.Core
         {
             var a = u.ActiveAction;
             if (a == null) return;
+            u.RecastPending = null;   // an interrupted ability opens no recast
             a.Behavior.OnInterrupted(this, a);
             ClearWindupStatuses(a);
             if (u.HoverEndsAfterAction && a.Actor == u) EndHover(u, false, null);

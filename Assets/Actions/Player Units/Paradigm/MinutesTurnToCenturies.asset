@@ -18,6 +18,7 @@ MonoBehaviour:
   Roles: 0
   Description: Target an ally or yourself, slowing their actions during the windup
     before reducing their strain.
+  Details: 
   Targeting: 3
   Range: 15
   IsRanged: 1
@@ -30,12 +31,13 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 0
   Damage: 0
   BaseAccuracy: 1
   StunDuration: 0
-  StrainOnTarget: -50
+  StrainOnTarget: -75
   StrainOnSelf: 0
   HealthCost: 0
   UnravelsOverMaxStrain: 0
@@ -51,12 +53,17 @@ MonoBehaviour:
   AuraAtTarget: 0
   AuraDamagePerSecond: 0
   AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
   InnatePassive: 0
   SummonUnit: {fileID: 0}
+  SummonUnits: []
+  RandomStatusesOnHit: []
   SummonCount: 0
+  SummonAIStyle: 
   GuardBreakSeconds: 0
   StartsOnCooldown: 0
   ChannelSeconds: 0
+  MissingHealthDamage: 0
   ChannelNeedsSight: 0
   ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
@@ -68,6 +75,7 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  SelfStatusesOnHit: []
   TargetStatusesDuringWindup:
   - Id: time_slowed
     Duration: 0.9
@@ -87,7 +95,11 @@ MonoBehaviour:
       Hidden: 0
       Important: 0
     HealPerSecond: 0
+    StrainPerSecond: 0
+    StrainOnWeakpointBreak: 0
     BreakStun: 0
+    HealOnExpire: 0
+    HealMissingOnExpire: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -114,7 +126,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
+  FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1

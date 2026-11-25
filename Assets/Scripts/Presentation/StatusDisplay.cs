@@ -75,6 +75,25 @@ namespace TacticsGame.Presentation
             { StatusIds.Festival, new Look(new Color(1f, 0.6f, 0.9f), "FESTIVAL OF COLORS", "festival") { Important = true } },
             { StatusIds.Reduction, new Look(new Color(0.55f, 0.75f, 0.3f), "REDUCTION", "reduction") { Important = true } },
             { StatusIds.Melded, new Look(new Color(0.3f, 1f, 0.9f), "MELDED", "melded") { Important = true } },
+            { StatusIds.Voided, new Look(new Color(0.6f, 0.45f, 1f), "VOIDED", "voided") { Important = true } },
+            { StatusIds.Hastened, new Look(new Color(1f, 0.85f, 0.4f), "HASTENED", "hastened") },
+            { StatusIds.Monostep, new Look(new Color(0.9f, 0.95f, 1f), "MONOSTEP", "swift") },
+            { StatusIds.ClearAndSteady, new Look(new Color(0.6f, 0.9f, 1f), "CLEAR AND STEADY", "steady") { Important = true } },
+            { StatusIds.Counterpoise, new Look(new Color(0.55f, 0.85f, 1f), "COUNTERPOISE", "full block") },
+            { StatusIds.Linked, new Look(new Color(0.35f, 0.9f, 1f), "LINKED", "linked") },
+            { StatusIds.Shielded, new Look(new Color(0.7f, 0.9f, 1f), "SHIELDED", "shielded") { Important = true } },
+            { StatusIds.Clarity, new Look(new Color(0.7f, 1f, 0.95f), "CLARITY", "shedding strain") },
+            { StatusIds.Ruptured, new Look(new Color(1f, 0.45f, 0.35f), "RUPTURED", "ruptured") { Important = true } },
+            { StatusIds.Grasped, new Look(new Color(0.9f, 0.85f, 0.6f), "GRASPED", "held") },
+            { StatusIds.Beckoned, new Look(new Color(0.75f, 0.85f, 1f), "BECKONED", "beckoned") { Important = true } },
+            { StatusIds.Incessant, new Look(new Color(1f, 0.75f, 0.35f), "INCESSANT", "can re-cast") },
+            { StatusIds.Dereliction, new Look(new Color(0.85f, 0.5f, 0.95f), "DERELICTION", "slowed") },
+            { StatusIds.ScepterStage, new Look(new Color(0.6f, 0.45f, 1f), "SCEPTER READY", "scepter") },
+            { StatusIds.BeyondThresholds, new Look(new Color(0.6f, 0.8f, 1f), "BEYOND THRESHOLDS", "beyond") { Important = true } },
+            { StatusIds.Parrying, new Look(new Color(0.9f, 0.95f, 1f), "PARRY", "parrying") { Important = true } },
+            { StatusIds.Rebuttal, new Look(new Color(0.9f, 0.95f, 1f), "REBUTTAL", "rebuttal") },
+            { StatusIds.Nemesis, new Look(new Color(0.95f, 0.25f, 0.2f), "NEMESIS", "nemesis") { Important = true } },
+            { StatusIds.Quelled, new Look(new Color(0.45f, 0.55f, 0.9f), "QUELLED", "quelled") },
             { StatusIds.Unkillable, new Look(new Color(1f, 0.9f, 0.5f), "UNKILLABLE", "unkillable") { Important = true } },
             { StatusIds.SaviorsGuard, new Look(new Color(0.95f, 0.85f, 0.55f), "GUARDED", "guarded") },
             { StatusIds.Chained, new Look(new Color(0.75f, 0.75f, 0.8f), "CHAINED", "chained") { Important = true } },
@@ -90,7 +109,7 @@ namespace TacticsGame.Presentation
 
         /// <summary>Statuses that are bookkeeping, or AI state, not something the player needs to see (a last stand is the AI's
         /// secret). Follow-up chain windows ("..._chain", see ChainAttackBehavior) are hidden too.</summary>
-        private static readonly HashSet<string> Hidden = new HashSet<string> { DeliverancePassives.SplittingStatus, StatusIds.RapidChain, StatusIds.LastStand, StatusIds.RevengePrimed, EtchingTraits.MomentumStatus, EtchingTraits.MarchStatus };   // Avidous March: a sub-second burst, seen in the walk itself
+        private static readonly HashSet<string> Hidden = new HashSet<string> { DeliverancePassives.SplittingStatus, StatusIds.RapidChain, StatusIds.LastStand, StatusIds.RevengePrimed, EtchingTraits.MomentumStatus, EtchingTraits.MarchStatus, StatusIds.Apotheosis };   // Avidous March: a sub-second burst, seen in the walk itself
 
         // Looks set on the loaded battle's statuses (Register), over the built-in ones.
         private static readonly Dictionary<string, Look> FromData = new Dictionary<string, Look>();

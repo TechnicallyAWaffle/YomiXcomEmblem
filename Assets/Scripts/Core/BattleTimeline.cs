@@ -52,6 +52,9 @@ namespace TacticsGame.Core
         BlastDetonated,        // that explosion went off; payload BlastInfo (its hits are Damage events)
         AbilityFx,             // a look an ability asks for that no other event carries (a rift, an unmaking shot); payload FxInfo
         DropStarted,           // target (a reinforcement) drops in from the sky; payload DropInfo. A Dash with Fall if it is knocked out of it
+        Weakpoints,            // actor's weakpoints changed; payload WeakpointsInfo (all it has now, and what a hit just broke)
+        ProjectileLaunched,    // actor fired a projectile (BattleSimulation.Projectiles.cs); payload its ProjectilePath, which fills in as it flies
+        ProjectileEnded,       // that projectile hit target (none: it struck the ground or ran out); payload the same ProjectilePath
     }
 
     /// <summary>
@@ -100,21 +103,27 @@ namespace TacticsGame.Core
     }
 
     // ---- Event payloads ----
-    public struct ActionStartedInfo { public string ActionId; public float Windup; public float Recovery; public Vector3 TargetPos; public bool Free; public bool Transcended; }   // Free: a reaction alongside the unit's own action
+    // Free: a reaction alongside the unit's own action. Range, Radius: the ability's as this unit has them now (Etchings,
+    // passives, statuses in), for the view's telegraphs: never the definition's own numbers. 0 for waits.
+    public struct ActionStartedInfo { public string ActionId; public float Windup; public float Recovery; public Vector3 TargetPos; public bool Free; public bool Transcended; public float Range, Radius; }
     public struct ActionResolvedInfo { public string ActionId; public float Recovery; }
     public struct InterruptInfo { public string Reason; }
     public struct MoveInfo { public List<Vector3> Path; public float Speed; }
     public struct DamageInfo
     {
-        public string ActionId; public float Amount; public float BlockedAmount;
+        public string ActionId; public float Amount; public float BlockedAmount; public float ShieldedAmount;   // what Block stopped; what a shield soaked up
         public ImpactType Impact; public float RemainingHealth; public bool CausedUnravel;
+        public bool Critical;   // a critical strike (Eye For Weakness)
+        public int WeakpointsBroken;   // weakpoints the hit broke (each made it land harder)
     }
     // Reason: "cover" (would have hit in the open), "miss", "out_of_range", "hidden". HitCover: the shot struck the cover that
     // saved the target, at CoverPoint (a point where a sight line to the target first meets that cover).
     public struct MissInfo { public string Reason; public string ActionId; public bool HitCover; public Vector3 CoverPoint; }
     // A timed status (re)started or was extended: it now runs out at ExpiresAt, Duration seconds after this event.
     public struct StatusTimerInfo { public string Id; public float ExpiresAt; public float Duration; }
-    public struct DashInfo { public Vector3 From; public Vector3 To; public float Duration; public bool Forced; public bool Settle; public bool Fall; public bool Teleport; public bool Blink; }  // Forced: shoved or pulled, not a dodge. Settle: a small shuffle out of another unit's body. Fall: drops to lower ground on the way. Teleport: gone from From, there at To
+    // Forced: shoved or pulled, not a dodge. Settle: a small shuffle out of another unit's body. Fall: drops to lower ground on
+    // the way. Teleport: gone from From, there at To. Step: closing in on its target while a melee ability winds up (not a dodge).
+    public struct DashInfo { public Vector3 From; public Vector3 To; public float Duration; public bool Forced; public bool Settle; public bool Fall; public bool Teleport; public bool Blink; public bool Step; public float Arc; }   // Arc: a bound through the air, peaking this high halfway (Opening Theorem)
     // Carrying: the target is held at Offset (metres in front of the carrier, along its facing) until a Carry with Carrying false,
     // which leaves it at Position.
     public struct CarryInfo { public bool Carrying; public float Offset; public Vector3 Position; }
@@ -125,6 +134,7 @@ namespace TacticsGame.Core
     public struct FallInfo { public float Height; public float Duration; public bool FromJump; }   // Duration: until it lands (the stun lasts a little longer)
     public struct StunInfo { public float Duration; }
     public struct MoveEndedInfo { public Vector3 Position; }
+    public struct DeathInfo { public Team Team; }   // the side the fallen unit was on (an enemy's body crumbles away: UnitView)
     public struct StrainInfo { public float Amount; public float Total; }
     public struct SpeedInfo { public float ActionSpeed; public float MoveSpeed; }
     public struct DeployableInfo { public string Id; public Vector3 Position; public float Radius; public float Height; public float ExpiresAt; }

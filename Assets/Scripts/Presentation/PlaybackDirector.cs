@@ -60,6 +60,8 @@ namespace TacticsGame.Presentation
         public void Load(BattleTimeline timeline, Dictionary<string, UnitView> registry)
         {
             Timeline = timeline;
+            if (IsReplay) UiDeclutter.Set(false);   // out of a replay: the UI it hid comes back
+            IsReplay = false;
             unitRegistry = registry;
             // Status looks set on this battle's abilities (StatusSpec.Look) replace the built-in ones.
             var actions = new List<ActionDefinition>();
@@ -94,11 +96,16 @@ namespace TacticsGame.Presentation
             }
         }
 
+        /// <summary>Playing the finished battle back (PlayReplay, and scrubbing it), rather than playing it out live between orders.</summary>
+        public bool IsReplay { get; private set; }
+
         /// <summary>Reset the scene to the opening state and play the whole battle back at real-time speed.</summary>
         public void PlayReplay(float speed = 1f)
         {
             playbackSpeed = speed;
             ResetPlayback();
+            IsReplay = true;
+            UiDeclutter.Set(true);   // a replay is for watching: the UI starts hidden (Alt brings it back)
             PlayUntil(Timeline.Duration);
         }
 
@@ -179,6 +186,9 @@ namespace TacticsGame.Presentation
             }
         }
 
+        /// <summary>Every unit view in this battle (null before Load).</summary>
+        public IEnumerable<UnitView> Views { get { return unitRegistry != null ? unitRegistry.Values : null; } }
+
         public UnitView FindView(string unitId)
         {
             UnitView v;
@@ -206,10 +216,14 @@ namespace TacticsGame.Presentation
                     if (actor != null)
                     {
                         var d = (DashInfo)evt.Payload;
+                        // A dash of its own picks its forward / back / side clip from where the unit faces; back and side
+                        // ones keep it facing that way.
+                        bool ownDash = !d.Forced && !d.Step && !d.Teleport && !d.Fall;
+                        bool keepFacing = ownDash && actor.PlayDash(d.From, d.To);
                         if (d.Teleport) actor.EndMotion(d.To);   // gone, and there
                         else if (d.Fall) actor.BeginFall(d.From, d.To, d.Duration, evt.SimTime);
-                        else actor.BeginGlide(d.From, d.To, d.Duration, evt.SimTime);
-                        if (!d.Forced) actor.PlayDodge();
+                        else actor.BeginGlide(d.From, d.To, d.Duration, evt.SimTime, d.Arc, keepFacing);
+                        if (!ownDash && !d.Forced && !d.Step) actor.PlayDodge();
                     }
                     break;
                 case TacticsGame.Core.EventType.Jump:
@@ -258,7 +272,7 @@ namespace TacticsGame.Presentation
                     if (target != null) target.PlayUnravel();
                     break;
                 case TacticsGame.Core.EventType.Death:
-                    if (target != null) target.PlayDeath();
+                    if (target != null) target.PlayDeath(evt.Payload is DeathInfo && ((DeathInfo)evt.Payload).Team != Team.Player);
                     break;
             }
 

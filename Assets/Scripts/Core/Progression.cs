@@ -80,11 +80,20 @@ namespace TacticsGame.Core
         /// <summary>The member's abilities a One Ability Etching can go on (Stats.Has); empty for a unit one.</summary>
         public static List<ActionDefinition> Etchable(RosterMember m, UnitDefinition def, EtchingDefinition e)
         {
-            if (e.Scope != EtchingScope.OneAbility) return new List<ActionDefinition>();
+            if (e.Scope == EtchingScope.Unit) return new List<ActionDefinition>();
             var list = Abilities(m, def).FindAll(e.CanEtch);
             // A granted Transcend only for an ability no other Etching has given one.
             if (e.Grant != TranscendGrant.None) list.RemoveAll(a => m.Etchings.Exists(p => p.ActionId == a.Id && p.GrantsTranscend));
+            // A granted follow-up only for an ability no other Etching has given one (it has one now).
+            if (e.GrantsFollowup != FollowupGrant.None) list.RemoveAll(a => m.Etchings.Exists(p => (p.ActionId == a.Id || p.SecondActionId == a.Id) && p.GrantsFollowup));
             return list;
+        }
+
+        /// <summary>Has 'm' what 'e' needs to go on: nothing for a unit one, an ability for a One Ability one, two for a pair.</summary>
+        public static bool CanBeEtched(RosterMember m, UnitDefinition def, EtchingDefinition e)
+        {
+            if (e.Scope == EtchingScope.Unit) return true;
+            return Etchable(m, def, e).Count >= (e.Scope == EtchingScope.TwoAbilities ? 2 : 1);
         }
 
         private static ActionDefinition AbilityById(UnitDefinition def, string id)
@@ -103,6 +112,7 @@ namespace TacticsGame.Core
         public static void BeginUpgrades(SquadRoster roster, ProgressionConfig config, ContentCatalog catalog, int picks = -1)
         {
             if (config == null) return;
+            roster.RerollUsed = false;
             for (int i = 0; i < roster.Members.Count; i++)
             {
                 var m = roster.Members[i];
@@ -110,20 +120,51 @@ namespace TacticsGame.Core
                 m.Offer.Clear(); m.PicksLeft = 0; m.AbilityOffer.Clear();
                 if (!m.Progressing || def == null) continue;
                 DrawAbilityOffer(m, def, config, new System.Random(roster.Seed * 7919 + roster.MissionIndex * 104729 + i * 31 + 17));
-                var rng = new System.Random(roster.Seed * 7919 + roster.MissionIndex * 104729 + i * 31);
-                var pool = config.Etchings.FindAll(e => e != null && e.Weight > 0f && (e.Scope == EtchingScope.Unit || Etchable(m, def, e).Count > 0));
-                while (m.Offer.Count < config.EtchingsOffered && pool.Count > 0)
-                {
-                    float total = 0f;
-                    foreach (var e in pool) total += e.Weight;
-                    float roll = (float)rng.NextDouble() * total;
-                    int k = 0;
-                    while (k < pool.Count - 1 && roll >= pool[k].Weight) { roll -= pool[k].Weight; k++; }
-                    m.Offer.Add(pool[k].Id);
-                    pool.RemoveAt(k);
-                }
+                DrawEtchingOffer(m, def, config, new System.Random(roster.Seed * 7919 + roster.MissionIndex * 104729 + i * 31), config.EtchingsOffered, null);
                 m.PicksLeft = Mathf.Min(picks >= 0 ? picks : config.EtchingsTaken, m.Offer.Count);
             }
+        }
+
+        /// <summary>Fill 'm''s Etching offer up to 'count', drawn by weight from the ones it can take, leaving out 'not' (the
+        /// ones a reroll is replacing) while there are enough others.</summary>
+        private static void DrawEtchingOffer(RosterMember m, UnitDefinition def, ProgressionConfig config, System.Random rng, int count, List<string> not)
+        {
+            var pool = config.Etchings.FindAll(e => e != null && e.Weight > 0f && !m.Offer.Contains(e.Id) && CanBeEtched(m, def, e));
+            if (not != null && pool.Count - pool.FindAll(e => not.Contains(e.Id)).Count >= count - m.Offer.Count) pool.RemoveAll(e => not.Contains(e.Id));
+            while (m.Offer.Count < count && pool.Count > 0)
+            {
+                float total = 0f;
+                foreach (var e in pool) total += e.Weight;
+                float roll = (float)rng.NextDouble() * total;
+                int k = 0;
+                while (k < pool.Count - 1 && roll >= pool[k].Weight) { roll -= pool[k].Weight; k++; }
+                m.Offer.Add(pool[k].Id);
+                pool.RemoveAt(k);
+            }
+        }
+
+        /// <summary>Can 'm''s Etching offer be rerolled now? Once per upgrade phase, for one member, while it still has a pick to make.</summary>
+        public static bool CanReroll(SquadRoster roster, RosterMember m)
+        {
+            return roster != null && m != null && !roster.RerollUsed && m.Progressing && m.PicksLeft > 0 && m.Offer.Count > 0;
+        }
+
+        /// <summary>
+        /// The phase's one reroll, spent on 'm': the Etchings it is offered are swapped for as many new ones (different ones,
+        /// where the pool allows). Its picks left, and what it has already taken, stay. False if it can't (CanReroll).
+        /// </summary>
+        public static bool RerollOffer(SquadRoster roster, RosterMember m, ProgressionConfig config, ContentCatalog catalog)
+        {
+            if (config == null || catalog == null || !CanReroll(roster, m)) return false;
+            var def = catalog.Unit(m.Class);
+            if (def == null) return false;
+            var old = new List<string>(m.Offer);
+            int i = roster.Members.IndexOf(m);
+            m.Offer.Clear();
+            DrawEtchingOffer(m, def, config, new System.Random(roster.Seed * 7919 + roster.MissionIndex * 104729 + i * 31 + 7001), old.Count, old);
+            m.PicksLeft = Mathf.Min(m.PicksLeft, m.Offer.Count);
+            roster.RerollUsed = true;
+            return true;
         }
 
         /// <summary>Which locked class abilities a member may unlock this phase: AbilitiesOffered of them at random (all if 0).</summary>
@@ -147,31 +188,34 @@ namespace TacticsGame.Core
             return roster.Members.FindIndex(m => m.PicksLeft > 0 && m.Offer.Count > 0);
         }
 
-        public static bool CanTake(RosterMember m, UnitDefinition def, EtchingDefinition e, string actionId, out string why)
+        /// <param name="secondId">Two Abilities: the other ability (not 'actionId').</param>
+        public static bool CanTake(RosterMember m, UnitDefinition def, EtchingDefinition e, string actionId, out string why, string secondId = null)
         {
             why = null;
             if (e == null || !m.Offer.Contains(e.Id)) { why = "not offered"; return false; }
             if (m.PicksLeft <= 0) { why = "no picks left"; return false; }
-            if (e.Scope == EtchingScope.OneAbility && !Etchable(m, def, e).Exists(a => a.Id == actionId)) { why = "pick an ability it can go on"; return false; }
+            if (e.Scope != EtchingScope.Unit && !Etchable(m, def, e).Exists(a => a.Id == actionId)) { why = "pick an ability it can go on"; return false; }
+            if (e.Scope == EtchingScope.TwoAbilities && (secondId == actionId || !Etchable(m, def, e).Exists(a => a.Id == secondId))) { why = "pick a second, different ability it can go on"; return false; }
             return true;
         }
 
-        /// <summary>Take an offered Etching (One Ability: onto 'actionId'). It leaves the offer, and pays its ability points.</summary>
-        public static bool Take(RosterMember m, UnitDefinition def, EtchingDefinition e, string actionId = null)
+        /// <summary>Take an offered Etching (One Ability: onto 'actionId'; Two Abilities: onto it and 'secondId'). It leaves the
+        /// offer, and pays its ability points.</summary>
+        public static bool Take(RosterMember m, UnitDefinition def, EtchingDefinition e, string actionId = null, string secondId = null)
         {
             string why;
-            if (!CanTake(m, def, e, actionId, out why)) return false;
-            GiveEtching(m, e, actionId);
+            if (!CanTake(m, def, e, actionId, out why, secondId)) return false;
+            GiveEtching(m, e, actionId, secondId);
             m.Offer.Remove(e.Id);
             m.PicksLeft--;
             return true;
         }
 
         /// <summary>'m' gains Etching 'e' (One Ability: on 'actionId'), and the ability points it pays.</summary>
-        private static void GiveEtching(RosterMember m, EtchingDefinition e, string actionId)
+        private static void GiveEtching(RosterMember m, EtchingDefinition e, string actionId, string secondId = null)
         {
-            bool one = e.Scope == EtchingScope.OneAbility;
-            m.Etchings.Add(new EtchingPick { Id = e.Id, ActionId = one ? actionId : "", GrantsTranscend = one && e.Grant != TranscendGrant.None });
+            bool one = e.Scope != EtchingScope.Unit;
+            m.Etchings.Add(new EtchingPick { Id = e.Id, ActionId = one ? actionId : "", SecondActionId = e.Scope == EtchingScope.TwoAbilities ? secondId : "", GrantsTranscend = one && e.Grant != TranscendGrant.None, GrantsFollowup = one && e.GrantsFollowup != FollowupGrant.None });
             m.AbilityPoints += e.AbilityPoints;
         }
 
@@ -191,7 +235,7 @@ namespace TacticsGame.Core
             learned += SpendAtRandom(m, def, config, rng);
             while (m.Etchings.Count < etchings)
             {
-                var pool = config.Etchings.FindAll(e => e != null && e.Weight > 0f && (e.Scope == EtchingScope.Unit || Etchable(m, def, e).Count > 0));
+                var pool = config.Etchings.FindAll(e => e != null && e.Weight > 0f && CanBeEtched(m, def, e));
                 if (pool.Count == 0) break;
                 float total = 0f;
                 foreach (var e in pool) total += e.Weight;
@@ -200,8 +244,14 @@ namespace TacticsGame.Core
                 while (k < pool.Count - 1 && roll >= pool[k].Weight) { roll -= pool[k].Weight; k++; }
                 var pick = pool[k];
                 string on = null;
-                if (pick.Scope == EtchingScope.OneAbility) { var options = Etchable(m, def, pick); on = options[rng.Next(options.Count)].Id; }
-                GiveEtching(m, pick, on);
+                string second = null;
+                if (pick.Scope != EtchingScope.Unit)
+                {
+                    var options = Etchable(m, def, pick);
+                    on = options[rng.Next(options.Count)].Id;
+                    if (pick.Scope == EtchingScope.TwoAbilities) { options.RemoveAll(a => a.Id == on); second = options[rng.Next(options.Count)].Id; }
+                }
+                GiveEtching(m, pick, on, second);
                 etched++;
                 learned += SpendAtRandom(m, def, config, rng);   // an Etching may have paid some points
             }
@@ -256,19 +306,34 @@ namespace TacticsGame.Core
             {
                 var e = config.Etching(p.Id);
                 if (e == null) continue;
-                bool one = e.Scope == EtchingScope.OneAbility;
+                bool one = e.Scope != EtchingScope.Unit;
                 if (one && string.IsNullOrEmpty(p.ActionId)) continue;
+                bool two = e.Scope == EtchingScope.TwoAbilities;
+                if (two && string.IsNullOrEmpty(p.SecondActionId)) continue;
                 g.UnitModifiers.AddRange(e.UnitModifiers);
-                var on = one && def != null ? AbilityById(def, p.ActionId) : null;
-                foreach (var am in one ? e.ModifiersFor(on) : e.ActionModifiers) g.ActionModifiers.Add(new ActionModifier(one ? p.ActionId : am.ActionId, am.Stat, am.Op, am.Value));
-                if (one && e.Grant != TranscendGrant.None) g.Transcends[p.ActionId] = e.GrantFor();
-                if (e.RemovesBehaviors != null) g.RemovedBehaviors.AddRange(e.RemovesBehaviors);
                 if (!string.IsNullOrEmpty(e.Trait)) g.Traits.Add(new UnitTrait { Id = e.Trait, Params = e.Params });
-                g.Notes.Add(new EtchingNote
+                if (e.RemovesBehaviors != null) g.RemovedBehaviors.AddRange(e.RemovesBehaviors);
+                if (!one)
                 {
-                    Name = e.Name, Description = e.Description, ActionId = one ? p.ActionId : "",
-                    ChangesAbilities = !one && (e.ActionModifiers.Exists(am => string.IsNullOrEmpty(am.ActionId)) || e.Trait == EtchingTraits.ClosingWindup),
-                });
+                    foreach (var am in e.ActionModifiers) g.ActionModifiers.Add(am);
+                    g.Notes.Add(new EtchingNote
+                    {
+                        Name = e.Name, Description = e.Description, ActionId = "",
+                        ChangesAbilities = e.ActionModifiers.Exists(am => string.IsNullOrEmpty(am.ActionId)) || e.Trait == EtchingTraits.ClosingWindup,
+                    });
+                    continue;
+                }
+                // On one ability, or on each of a pair (a Linked follow-up points each one at the other).
+                var ids = two ? new[] { p.ActionId, p.SecondActionId } : new[] { p.ActionId };
+                for (int i = 0; i < ids.Length; i++)
+                {
+                    string id = ids[i], partner = two ? ids[1 - i] : null;
+                    var on = def != null ? AbilityById(def, id) : null;
+                    foreach (var am in e.ModifiersFor(on)) g.ActionModifiers.Add(new ActionModifier(id, am.Stat, am.Op, am.Value));
+                    if (e.Grant != TranscendGrant.None) g.Transcends[id] = e.GrantFor();
+                    if (e.GrantsFollowup != FollowupGrant.None) g.Followups[id] = e.FollowupFor(partner);
+                    g.Notes.Add(new EtchingNote { Name = e.Name, Description = e.Description, ActionId = id });
+                }
             }
             return g;
         }

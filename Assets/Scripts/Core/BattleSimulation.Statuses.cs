@@ -107,6 +107,24 @@ namespace TacticsGame.Core
         }
 
         /// <summary>Shove a unit per def.Displace: away from its nearest enemy, knocked back from 'source', or pulled toward 'source' (stopping at arm's length).</summary>
+        /// <summary>
+        /// Take every debuff off 'u' (Mindmeld): each status an enemy of it put on it (its SourceId one of the other team).
+        /// A stun, a hold or a lift is not a status and stays; so does anything it or an ally gave it. Returns how many went.
+        /// </summary>
+        public int CleanseDebuffs(Unit u, Unit by)
+        {
+            if (u == null || !u.IsAlive) return 0;
+            int removed = 0;
+            foreach (var s in u.Statuses.ToArray())
+            {
+                var source = GetUnit(s.SourceId);
+                if (source == null || source.Team == u.Team) continue;
+                RemoveStatus(u, s.Id);
+                removed++;
+            }
+            return removed;
+        }
+
         public void DisplaceUnit(Unit target, Unit source, ActionDefinition def)
         {
             if (target == null || !target.IsAlive || def.DisplaceDistance <= 0f) return;

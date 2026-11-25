@@ -36,6 +36,8 @@ namespace TacticsGame.Core
             { AlioAI.Style, () => new AlioAI() },
             { RevlAI.Style, () => new RevlAI() },
             { WexAI.Style, () => new WexAI() },
+            { HowlerAI.Style, () => new HowlerAI() },
+            { MatriarchAI.Style, () => new MatriarchAI() },
         };
 
         private static readonly Dictionary<string, IUnitAI> shared = new Dictionary<string, IUnitAI>();
@@ -64,12 +66,14 @@ namespace TacticsGame.Core
         }
 
         /// <summary>
-        /// The style for a unit's kit (style "auto"), from its abilities' roles: a charged heal plays the healer; a snipe
+        /// The style for a unit's kit (style "auto"), from its abilities' roles: a leader's call (Signal) plays the pack (howler); projectile volleys or a reel the matriarch; a charged heal plays the healer; a snipe
         /// and a mark the sniper; a rush the brutebeast; a chain attack the skirmisher; an opener or a blink with a melee
         /// strike the assassin; a ranged unit with an area blast the caster; anything else the basic AI ("").
         /// </summary>
         public static string StyleFor(Unit unit)
         {
+            if (AbilityRoles.Any(unit, AbilityRole.Signal)) return HowlerAI.Style;   // a pack with a leader's call
+            if (AbilityRoles.Any(unit, AbilityRole.Volley) || AbilityRoles.Any(unit, AbilityRole.Reel)) return MatriarchAI.Style;
             if (AbilityRoles.Any(unit, AbilityRole.Heal, a => a.IsCharge)) return "healer";
             if (AbilityRoles.Any(unit, AbilityRole.Snipe) && AbilityRoles.Any(unit, AbilityRole.Mark)) return "sniper";
             if (AbilityRoles.Any(unit, AbilityRole.Rush)) return "brutebeast";
@@ -594,6 +598,7 @@ namespace TacticsGame.Core
 
         public UnitCommand Decide(BattleSimulation sim, Unit unit)
         {
+            if (unit.IsMakina) return DecideMakina(sim, unit);
             var basic = unit.Actions.Find(a => a != null && a.Id == unit.BasicAttackId);
             if (basic == null)
             {
@@ -601,6 +606,43 @@ namespace TacticsGame.Core
                 basic = madness != null ? madness.LinkedAction : null;
             }
             return strike.DecideWith(sim, unit, basic);
+        }
+
+        /// <summary>
+        /// A Maddened Makina: it has no basic attack and can't walk, so its main ability stands in for one (MainAbility):
+        /// used again and again at the nearest enemy when it can (a point-aimed one at that enemy, or as far toward it as its
+        /// range reaches), else it waits for it.
+        /// </summary>
+        private static UnitCommand DecideMakina(BattleSimulation sim, Unit unit)
+        {
+            var main = MainAbility(unit);
+            var target = sim.NearestEnemy(unit);
+            if (main == null || target == null) return UnitCommand.Idle(unit.Id, 0.5f);
+            string why;
+            if (!sim.CanAfford(unit, main, out why)) return UnitCommand.Idle(unit.Id, 0.25f);
+            if (main.Targeting == TargetType.Position)
+            {
+                Vector3 d = target.Position - unit.Position; d.y = 0f;
+                float range = unit.RangeOf(main);
+                Vector3 aim = main.Shape == AreaShape.Line || d.magnitude <= range ? target.Position : unit.Position + d.normalized * range;
+                return UnitCommand.UseActionAt(unit.Id, main, aim);
+            }
+            if (main.Targeting == TargetType.Self || main.Targeting == TargetType.None) return UnitCommand.UseAction(unit.Id, main, unit.Id);
+            return sim.CanUse(unit, main, target, out why) ? UnitCommand.UseAction(unit.Id, main, target.Id) : UnitCommand.Idle(unit.Id, 0.25f);
+        }
+
+        /// <summary>A Makina's main ability: the one of its abilities (always-on ones aside) that deals the most damage, or
+        /// its only one if none does.</summary>
+        public static ActionDefinition MainAbility(Unit unit)
+        {
+            ActionDefinition best = null, any = null;
+            foreach (var a in unit.Actions)
+            {
+                if (a == null || a.InnatePassive) continue;
+                if (any == null) any = a;
+                if (unit.ActionStat(a, ActionStat.Damage) > 0f && (best == null || unit.ActionStat(a, ActionStat.Damage) > unit.ActionStat(best, ActionStat.Damage))) best = a;
+            }
+            return best ?? any;
         }
     }
 

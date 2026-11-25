@@ -4,7 +4,9 @@ namespace TacticsGame.Presentation
 {
     /// <summary>
     /// Press Alt to see the battle itself (press it again to bring everything back): every panel, label and popup hides
-    /// except the windup bars and the health and strain bars. Each UI script checks On before drawing what should go.
+    /// except the windup bars and the health and strain bars. Each UI script checks On before drawing what should go. In a
+    /// live battle (not a replay) it is also the tactical view (TacticalView): terrain and models see-through with solid
+    /// edges, no effects, and arrows along every targeting line, weakpoints highlighted (CombatVfx.Tactical).
     /// </summary>
     public static class UiDeclutter
     {
@@ -24,6 +26,9 @@ namespace TacticsGame.Presentation
                 return on;
             }
         }
+
+        /// <summary>Hide (true) or bring back (false) the UI, as Alt does: a replay starts hidden.</summary>
+        public static void Set(bool hidden) { on = hidden; }
 
         private static GUIStyle hintStyle;
 

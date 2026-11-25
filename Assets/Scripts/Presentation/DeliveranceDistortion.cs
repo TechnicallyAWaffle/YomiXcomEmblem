@@ -6,7 +6,7 @@ namespace TacticsGame.Presentation
     /// Deliverance's hold on time, drawn over the screen: a violet vignette that breathes, its edges split into a red and a
     /// cyan ghost, and faint bands that drift and shear across the view. Freedom's Embrace: it grows from nothing as the
     /// order clock runs down (BattleController.EmbraceProgress), strongest at the end. Phase two (BattleController.TimeUnbound):
-    /// it stays, kept light (UnboundStrength), and grows a little as the creep ramps up. An overlay, not a screen warp: it
+    /// it stays, kept light (UnboundStrength), as steady as the creep. An overlay, not a screen warp: it
     /// never hides what the player needs to see.
     /// </summary>
     public class DeliveranceDistortion : MonoBehaviour
@@ -14,8 +14,8 @@ namespace TacticsGame.Presentation
         public BattleController Controller;
         [Tooltip("Strength when Freedom's Embrace's clock runs out (0..1).")]
         [Range(0f, 1f)] public float EmbraceStrength = 0.8f;
-        [Tooltip("Phase two's lasting strength, and what the creep ramping up adds to it.")]
-        [Range(0f, 1f)] public float UnboundStrength = 0.14f, UnboundRamp = 0.12f;
+        [Tooltip("Phase two's lasting strength.")]
+        [Range(0f, 1f)] public float UnboundStrength = 0.14f;
         public Color Tint = new Color(0.45f, 0.2f, 0.75f, 1f);
 
         private Texture2D vignette;
@@ -28,7 +28,7 @@ namespace TacticsGame.Presentation
             {
                 if (Controller == null || Controller.Sim == null) return 0f;
                 float s = Controller.EmbraceProgress > 0f ? EmbraceStrength * Controller.EmbraceProgress * Controller.EmbraceProgress : 0f;
-                if (Controller.TimeUnbound) s = Mathf.Max(s, UnboundStrength + UnboundRamp * Controller.CreepProgress);
+                if (Controller.TimeUnbound) s = Mathf.Max(s, UnboundStrength);
                 return s;
             }
         }

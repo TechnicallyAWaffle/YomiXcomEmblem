@@ -5,8 +5,8 @@ using UnityEngine;
 namespace TacticsGame.Core
 {
     // The Sharpshooter's later abilities that need rules beyond data. Refraction Cloak is data (self_buff: Hidden, broken by
-    // damage). Fate Encumbers Its Prey and Witness To The End are sky_shot follow-ups opened through SelfStatusesOnHit,
-    // RequiredStatusOnTarget and ActionDefinition.FollowUps; Witness's missing-health damage is MissingHealthDamage.
+    // damage). Fate Encumbers Its Prey and Witness To The End are sky_shot linked abilities (ActionDefinition.LinkedAbilities,
+    // RequiresLink): each usable straight after the one before it; Witness's missing-health damage is MissingHealthDamage.
 
     /// <summary>
     /// Soulseeker: a shot (rolled, cover and all) at the target, then a channel (ChannelSeconds at most) in which the bullet
@@ -102,9 +102,9 @@ namespace TacticsGame.Core
 
     /// <summary>
     /// A shot from the air (Destiny Closes In and its follow-ups): the user rises DisplaceDistance over the windup (or, already
-    /// up from the shot before it, stays there) and fires an ordinary ranged shot. An ability with FollowUps keeps the user up
-    /// through its recovery, and for 'window' seconds more once the shot lands (its follow-up opening: SelfStatusesOnHit), so
-    /// the next shot of the chain can be fired from the air; otherwise, and after the last one, it comes back down over the
+    /// up from the shot before it, stays there) and fires an ordinary ranged shot. An ability with LinkedAbilities keeps the user up
+    /// through its recovery, and for 'window' seconds more once the shot lands, so the next shot of the chain (its linked
+    /// ability, open with no time limit) can be fired from the air if it comes quickly; otherwise, and after the last one, it comes back down over the
     /// recovery. Struck while up there, it falls (a hover).
     /// </summary>
     public class SkyShotBehavior : FlyingBehavior
@@ -116,17 +116,17 @@ namespace TacticsGame.Core
             base.Describe(tip);
             if (tip.V(ActionStat.DisplaceDistance) > 0f) tip.Add("Flies", AbilityTip.Metres(tip.V(ActionStat.DisplaceDistance)) + " up");
             if (tip.Def.MissingHealthDamage > 0f) tip.Add("Missing health", "+" + (tip.Def.MissingHealthDamage * 100f).ToString("0") + "% as damage");
-            if (tip.Def.FollowUps != null && tip.Def.FollowUps.Count > 0)
-                tip.Add("Follow-up", string.Join(", ", tip.Def.FollowUps.Where(f => f != null).Select(f => f.DisplayName).ToArray()) + " (if it lands)");
+            if (tip.Def.LinkedAbilities != null && tip.Def.LinkedAbilities.Count > 0)
+                tip.Add("Linked", string.Join(", ", tip.Def.LinkedAbilities.Where(f => f != null).Select(f => f.DisplayName).ToArray()) + " (straight after it)");
         }
 
         public override void Attach(BattleSimulation sim)
         {
-            // The shot landed (blocked or not): the follow-up is open, so stay up for it.
+            // The shot landed (blocked or not): stay up a moment for the linked shot (after 'window' it comes down; the link stays).
             sim.Triggers.Subscribe(TriggerType.DamageTaken, ctx =>
             {
                 var def = ctx.Action; var shooter = ctx.Other;
-                if (def == null || def.BehaviorId != "sky_shot" || def.FollowUps == null || def.FollowUps.Count == 0 || shooter == null || !shooter.Hovering) return;
+                if (def == null || def.BehaviorId != "sky_shot" || def.LinkedAbilities == null || def.LinkedAbilities.Count == 0 || shooter == null || !shooter.Hovering) return;
                 float recovery = def.Recovery / Mathf.Max(0.1f, shooter.EffectiveActionSpeed());
                 shooter.Hover.DropAt = Mathf.Max(shooter.Hover.DropAt, sim.Now + recovery + Param(def, "window"));
             });
@@ -154,7 +154,7 @@ namespace TacticsGame.Core
             var target = sim.GetUnit(a.TargetUnitId);
             if (target != null && target.IsAlive)
                 effects.Add(new AttackEffect { Source = a.Actor, TargetId = target.Id, Definition = a.Definition, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag });
-            bool chain = a.Definition.FollowUps != null && a.Definition.FollowUps.Count > 0;
+            bool chain = a.Definition.LinkedAbilities != null && a.Definition.LinkedAbilities.Count > 0;
             if (chain && a.OwnsHover && a.Actor.Hovering)
             {
                 // Stay up through the recovery; a landed shot extends it for the follow-up (Attach). Then down by itself.

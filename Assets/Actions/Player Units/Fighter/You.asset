@@ -16,8 +16,9 @@ MonoBehaviour:
   DisplayName: You.
   BehaviorId: chain_tether
   Roles: 0
-  Description: Attach a chain to an enemy if it moves too far away by any means,
+  Description: Attach a chain to an enemy. If it moves too far away by any means,
     it is yanked back after a short delay.
+  Details: 
   Targeting: 2
   Range: 8
   IsRanged: 0
@@ -87,8 +88,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1

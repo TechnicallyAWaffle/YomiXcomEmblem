@@ -17,7 +17,9 @@ MonoBehaviour:
   BehaviorId: basic_attack
   Roles: 0
   Description: 'A powerful blow that strains you greatly. Transcend the strike to
-    remove its windup completely at an even greater cost. '
+    remove its windup completely at a great cost of strain and health. '
+  Details: 
+  WindupName: 
   Targeting: 2
   Range: 2
   IsRanged: 0
@@ -30,6 +32,7 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 1
   Damage: 35
@@ -37,7 +40,7 @@ MonoBehaviour:
   StunDuration: 0.9
   StrainOnTarget: 20
   StrainOnSelf: 30
-  HealthCost: 0
+  HealthCost: 20
   UnravelsOverMaxStrain: 1
   PiercesTerrain: 0
   BlockPierce: 0
@@ -48,8 +51,22 @@ MonoBehaviour:
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonUnits: []
+  RandomStatusesOnHit: []
+  SummonCount: 0
+  SummonAIStyle: 
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
+  MissingHealthDamage: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5
@@ -59,6 +76,7 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  SelfStatusesOnHit: []
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -71,13 +89,21 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
+  FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
   CanTranscend: 1
   TranscendStrain: 30
   TranscendWindupMultiplier: 0
+  TranscendCooldown: -1
   ExtraCinematic: 0
   Visuals:
     Kind: 3

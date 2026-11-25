@@ -11,14 +11,16 @@ namespace TacticsGame.Presentation
     /// Hidden/Internal-Colored shader:
     ///   x-ray: depth test Greater, so it only shows where something is in front of the unit: an outline through walls;
     ///   glow:  normal depth test, faint, so the unit is tinted where it is in the open.
-    /// Skinned meshes aren't covered (the placeholder units are plain MeshFilters).
+    /// A unit with a model (UnitDefinition.Model) gets its shell from the model's skinned meshes: a copy of each on the same
+    /// bones, so it follows every pose; it can't be scaled up, so its glow is pulled toward the camera (_ZBias) instead. A
+    /// placeholder unit's shell is a scaled copy of its plain meshes. Hidden meshes (a model's capsule) get none.
     /// </summary>
     public class UnitHighlighter : MonoBehaviour
     {
         public const float ShellScale = 1.08f;
         public const float XrayAlpha = 0.75f, GlowAlpha = 0.28f;
 
-        private class Shell { public List<MeshRenderer> Renderers = new List<MeshRenderer>(); public Material Xray, Glow; public bool On; }
+        private class Shell { public List<Renderer> Renderers = new List<Renderer>(); public Material Xray, Glow; public bool On; }
 
         private static UnitHighlighter instance;
         private readonly Dictionary<UnitView, Shell> shells = new Dictionary<UnitView, Shell>();
@@ -63,9 +65,36 @@ namespace TacticsGame.Presentation
             if (shader == null) shader = Shader.Find("Hidden/Internal-Colored");
             if (shader == null) return null;
             shell = new Shell { Xray = MakeMaterial(CompareFunction.Greater), Glow = MakeMaterial(CompareFunction.LessEqual) };
+            foreach (var skin in view.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                if (skin.sharedMesh == null || skin.forceRenderingOff || skin.gameObject.name == "HighlightShell") continue;
+                foreach (var pass in new[] { shell.Xray, shell.Glow })   // one copy per pass: every part of the model gets both
+                {
+                    var go = new GameObject("HighlightShell");
+                    go.layer = skin.gameObject.layer;
+                    go.transform.SetParent(skin.transform.parent, false);
+                    go.transform.localPosition = skin.transform.localPosition;
+                    go.transform.localRotation = skin.transform.localRotation;
+                    go.transform.localScale = skin.transform.localScale;
+                    var r = go.AddComponent<SkinnedMeshRenderer>();
+                    r.sharedMesh = skin.sharedMesh;
+                    r.bones = skin.bones;
+                    r.rootBone = skin.rootBone;
+                    r.localBounds = skin.localBounds;
+                    r.updateWhenOffscreen = true;
+                    var mats = new Material[Mathf.Max(1, skin.sharedMesh.subMeshCount)];
+                    for (int i = 0; i < mats.Length; i++) mats[i] = pass;
+                    r.sharedMaterials = mats;
+                    r.shadowCastingMode = ShadowCastingMode.Off;
+                    r.receiveShadows = false;
+                    r.enabled = false;
+                    shell.Renderers.Add(r);
+                }
+            }
             foreach (var mf in view.GetComponentsInChildren<MeshFilter>())
             {
                 if (mf.sharedMesh == null || mf.GetComponent<MeshRenderer>() == null) continue;
+                if (mf.GetComponent<MeshRenderer>().forceRenderingOff || mf.gameObject.name == "HighlightShell" || mf.gameObject.name == "TacticalEdges") continue;   // a model's hidden capsule
                 var go = new GameObject("HighlightShell");
                 go.transform.SetParent(mf.transform, false);
                 go.transform.localScale = Vector3.one * ShellScale;
@@ -90,6 +119,7 @@ namespace TacticsGame.Presentation
             m.SetInt("_ZWrite", 0);
             m.SetInt("_ZTest", (int)zTest);
             m.renderQueue = (int)RenderQueue.Overlay;
+            if (zTest != CompareFunction.Greater) m.SetFloat("_ZBias", -2f);   // a skinned shell can't be scaled up: its glow sits just in front instead
             return m;
         }
 

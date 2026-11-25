@@ -48,6 +48,14 @@ namespace TacticsGame.Core
         [Tooltip("Player-facing text shown when hovering the ability in the orders panel.")]
         [TextArea(2, 5)]
         public string Description = "";
+        [Tooltip("Extra information shown under the ability's stats when it is inspected (the battle popup and the campaign hover). Empty: nothing.")]
+        [TextArea(2, 8)]
+        public string Details = "";
+        [Tooltip("What its windup bar reads while it winds up (Grasp and Impel: Grasp). Empty: Display Name.")]
+        public string WindupName = "";
+
+        /// <summary>The name its windup bar shows: WindupName, else DisplayName.</summary>
+        public string WindupLabel { get { return string.IsNullOrEmpty(WindupName) ? DisplayName : WindupName; } }
 
         [Header("Targeting")]
         public TargetType Targeting = TargetType.Enemy;
@@ -186,15 +194,46 @@ namespace TacticsGame.Core
         [Tooltip("Heal multiplier at full charge (charged_heal: Deluge of Creation).")]
         public float ChargeHealMultiplier = 1f;
 
+        [Header("Weakpoints (BattleSimulation, Weakpoints.cs)")]
+        [Tooltip("Weakpoints it opens on the unit it hits (or is used on), the first on the side away from its user. They last Weakpoint Seconds.")]
+        [Range(0, 4)] public int WeakpointsOnTarget = 0;
+        [Tooltip("Weakpoints it opens on its user for as long as it winds up, the first behind it.")]
+        [Range(0, 4)] public int WeakpointsOnSelfDuringWindup = 0;
+        [Tooltip("Weakpoints it opens on its user as it starts, lasting Weakpoint Seconds whatever the windup does.")]
+        [Range(0, 4)] public int WeakpointsOnSelf = 0;
+        [Tooltip("How long the timed ones last. 0: the battle's default (1.5s).")]
+        [Min(0f)] public float WeakpointSeconds = 0f;
+        [Tooltip("Each hit of it breaks this many of the target's weakpoints at random, from any side (area abilities break none otherwise).")]
+        [Range(0, 4)] public int BreaksWeakpoints = 0;
+
         [Header("Follow-up")]
         [Tooltip("Abilities this one opens (its follow-up chain): they come with it in any loadout, so unlocking it unlocks them (Destiny Closes In).")]
         public List<ActionDefinition> FollowUps = new List<ActionDefinition>();
         [Tooltip("While this is the last ability the unit used, Space re-casts it (same target) and its button is highlighted.")]
         public bool IsFollowup = false;
+        [Tooltip("The name its button shows at each later stage of a staged follow-up, in order (Scepter Of Tyranny: of Neglect, of Insanity). Empty: always Display Name.")]
+        public List<string> StageNames = new List<string>();
         [Tooltip("Chain: right after it, it can be used this many more times in a row on the same target (each within ChainWindow seconds of the last one's recovery), ignoring its cooldown, for ChainCostMultiplier of its strain. 0 = no chain. Behavior chain_attack.")]
         public int ChainFollowups = 0;
         public float ChainCostMultiplier = 1f;
         public float ChainWindow = 1f;
+
+        [Header("Projectiles (abilities that fire them: ProjectileBehavior)")]
+        [Tooltip("Speed (m/s) a projectile leaves at.")]
+        [Min(0.1f)] public float ProjectileSpeed = 7f;
+        [Tooltip("Speed (m/s) it gains every second in flight, up to Projectile Max Speed (0: steady).")]
+        [Min(0f)] public float ProjectileAcceleration = 16f;
+        [Min(0.1f)] public float ProjectileMaxSpeed = 26f;
+        [Tooltip("Its size: the radius (m) within which it touches a body, and how big it is drawn.")]
+        [Min(0.01f)] public float ProjectileRadius = 0.3f;
+        [Tooltip("Seconds it flies before it falls apart unspent.")]
+        [Min(0.05f)] public float ProjectileLifetime = 4f;
+
+        [Header("Linked")]
+        [Tooltip("Abilities this one links to. Once it lands, each can be used straight after it, at any target, with no time limit, as long as the unit uses no other ability first (walking, dashing and waiting don't count). Unlike Follow Ups, no window and no same-target rule. They come with it in any loadout. It may link to itself (Sever: each use in a row is stronger).")]
+        public List<ActionDefinition> LinkedAbilities = new List<ActionDefinition>();
+        [Tooltip("Usable only as a linked ability: straight after one that links to it (Fate Encumbers Its Prey after Destiny Closes In).")]
+        public bool RequiresLink = false;
 
         [Header("Transcend")]
         [Tooltip("Hold the ability's button to Transcend it: a stronger version (its behavior decides how) for TranscendStrain extra strain.")]
@@ -202,6 +241,8 @@ namespace TacticsGame.Core
         public float TranscendStrain = 15f;
         [Tooltip("Windup multiplier when Transcended (Praa's Truth: 0 = instant). 1 = unchanged.")]
         public float TranscendWindupMultiplier = 1f;
+        [Tooltip("Its cooldown when Transcended, in seconds, in place of Cooldown (Unsigned Rebuttal: 4). -1 = unchanged.")]
+        public float TranscendCooldown = -1f;
 
         [Header("Presentation")]
         [Tooltip("Signature move: the cinematic camera always films it, in battle and in replays, and slows time around its impact.")]

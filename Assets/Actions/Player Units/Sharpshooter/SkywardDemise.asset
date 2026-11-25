@@ -18,18 +18,21 @@ MonoBehaviour:
   Roles: 0
   Description: Leap forward and high into the air, your next ability deals increased
     damage and returns you to the ground.
+  Details: 
+  WindupName: 
   Targeting: 4
   Range: 14
   IsRanged: 0
   CannotTargetSelf: 0
   DestinationRange: 0
   Windup: 0.7
-  Recovery: 0.3
-  Cooldown: 14
+  Recovery: 0.5
+  Cooldown: 11
   EnergyCost: 0
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 1
   Damage: 0
@@ -48,8 +51,22 @@ MonoBehaviour:
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonUnits: []
+  RandomStatusesOnHit: []
+  SummonCount: 0
+  SummonAIStyle: 
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
+  MissingHealthDamage: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5
@@ -62,7 +79,7 @@ MonoBehaviour:
     Modifiers:
     - Stat: 10
       Op: 1
-      Value: 1.5
+      Value: 1.75
     ActionModifiers: []
     Flags: 0
     ForbidsActions: []
@@ -73,6 +90,14 @@ MonoBehaviour:
       Color: {r: 0, g: 0, b: 0, a: 0}
       CountsUp: 0
       Hidden: 0
+      Important: 0
+    HealPerSecond: 0
+    StrainPerSecond: 0
+    StrainOnWeakpointBreak: 0
+    BreakStun: 0
+    HealOnExpire: 0
+    HealMissingOnExpire: 0
+    Shield: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -90,6 +115,7 @@ MonoBehaviour:
     RedirectsHits: 0
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  SelfStatusesOnHit: []
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -102,7 +128,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
+  FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1

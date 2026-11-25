@@ -164,11 +164,59 @@ namespace TacticsGame.Presentation
         private static readonly Dictionary<Color, Material> materials = new Dictionary<Color, Material>();
 
         /// <summary>Give 'view' the look for 'def' (replacing any earlier one). Safe to call again on the same view.</summary>
+        private const string ModelName = "UnitModel";
+
+        /// <summary>
+        /// A unit with a real model (UnitDefinition.Model): it stands in for the capsule (hidden, its collider kept for
+        /// picking) at the unit's feet, its "Body" material takes the team's colour (the capsule's), "Etched" that colour with the
+        /// etching pattern, "Dark" near black, "Glow" the team's colour glowing, "Gold" gold, and the others a plain grey, and its Animator gets the unit's controller (ModelAnimations) and becomes the view's:
+        /// the placeholder poses stop and the clips play on battle events. False: no model.
+        /// </summary>
+        private static bool ApplyModel(UnitView view, UnitDefinition def, Renderer capsule)
+        {
+            if (def.Model == null) return false;
+            var go = Object.Instantiate(def.Model, view.transform, false);
+            go.name = ModelName;
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localRotation = Quaternion.identity;
+            foreach (var t in go.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = view.gameObject.layer;
+            var team = capsule != null ? capsule.sharedMaterial : null;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    string slot = mats[i] != null ? mats[i].name : "";
+                    bool body = mats[i] == null || slot.StartsWith("Body") || i == 0;
+                    if (slot.StartsWith("Etched") && team != null) mats[i] = EtchedFor(team, def.ModelEtchings);
+                    else if (slot.StartsWith("Dark")) mats[i] = MaterialFor(new Color(0.08f, 0.07f, 0.09f), false, team);   // smoke, shadow
+                    else if (slot.StartsWith("Glow")) mats[i] = MaterialFor(Color.Lerp(TeamColor(team), Color.white, 0.35f), true, team);
+                    else if (slot.StartsWith("Gold")) mats[i] = MaterialFor(new Color(0.9f, 0.72f, 0.3f), false, team);
+                    else mats[i] = body && team != null ? team : MaterialFor(new Color(0.75f, 0.77f, 0.82f), false, team);
+                }
+                r.sharedMaterials = mats;
+            }
+            if (capsule != null) capsule.forceRenderingOff = true;
+            var animator = go.GetComponent<Animator>();
+            if (animator == null) animator = go.AddComponent<Animator>();
+            animator.applyRootMotion = false;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            animator.runtimeAnimatorController = def.ModelAnimations;
+            view.Animator = animator;
+            return true;
+        }
+
         public static void Apply(UnitView view, UnitDefinition def)
         {
             if (view == null || view.Model == null || def == null) return;
             var old = view.Model.Find(PropsName);
             if (old != null) { old.name = PropsName + "_old"; if (Application.isPlaying) Object.Destroy(old.gameObject); else Object.DestroyImmediate(old.gameObject); }
+            var capsule = view.Model.GetComponent<Renderer>();
+            if (capsule != null) capsule.forceRenderingOff = false;   // a Makina hides it: shown again for a unit reusing the view
+            var oldModel = view.transform.Find(ModelName);
+            if (oldModel != null) { oldModel.name = ModelName + "_old"; if (Application.isPlaying) Object.Destroy(oldModel.gameObject); else Object.DestroyImmediate(oldModel.gameObject); view.Animator = null; }
+            if (ApplyModel(view, def, capsule)) return;
+            if (MakinaLooks.Apply(view, def, (c, glow) => MaterialFor(c, glow, capsule != null ? capsule.sharedMaterial : null))) return;
             Look look;
             if (!Looks.TryGetValue(def.name.Replace("(Clone)", "").Trim(), out look)) return;
 
@@ -246,6 +294,28 @@ namespace TacticsGame.Presentation
             tex.Apply();
             particleMaterial.mainTexture = tex;
             return particleMaterial;
+        }
+
+        private static Color TeamColor(Material team)
+        {
+            if (team == null) return new Color(1f, 0.4f, 0.35f);
+            return team.HasProperty("_BaseColor") ? team.GetColor("_BaseColor") : team.HasProperty("_Color") ? team.GetColor("_Color") : Color.white;
+        }
+
+        private static readonly Dictionary<KeyValuePair<Material, Texture2D>, Material> etched = new Dictionary<KeyValuePair<Material, Texture2D>, Material>();
+
+        /// <summary>The team's material with a model's etching pattern laid over it (the pattern's dark lines on its colour).</summary>
+        private static Material EtchedFor(Material team, Texture2D pattern)
+        {
+            if (pattern == null) return team;
+            var k = new KeyValuePair<Material, Texture2D>(team, pattern);
+            Material m;
+            if (etched.TryGetValue(k, out m) && m != null) return m;
+            m = new Material(team) { name = "Etched" };
+            m.SetTexture("_BaseMap", pattern);
+            m.SetTexture("_MainTex", pattern);
+            etched[k] = m;
+            return m;
         }
 
         private static Material MaterialFor(Color color, bool glow, Material like)

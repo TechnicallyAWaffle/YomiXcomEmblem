@@ -107,6 +107,7 @@ namespace TacticsGame.Core
         public int MissionIndex;
         public CampaignStage Stage = CampaignStage.Preparation;
         public int Seed;   // the campaign's draws (Etching offers) come from it
+        public bool RerollUsed;   // this upgrade phase's one reroll of a member's Etching offer is spent (Progression.RerollOffer)
 
         public RosterMember Find(string memberId) { return Members.Find(m => m.Id == memberId); }
 

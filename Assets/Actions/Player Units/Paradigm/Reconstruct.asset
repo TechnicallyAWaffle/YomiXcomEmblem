@@ -17,13 +17,14 @@ MonoBehaviour:
   BehaviorId: heal_displace
   Roles: 0
   Description: Heal an ally and reduce their strain.
+  Details: 
   Targeting: 3
   Range: 10
   IsRanged: 0
   CannotTargetSelf: 0
   DestinationRange: 0
   Windup: 0.7
-  Recovery: 0.5
+  Recovery: 0.4
   Cooldown: 7
   EnergyCost: 0
   EnergyGain: 0
@@ -51,6 +52,7 @@ MonoBehaviour:
   AuraAtTarget: 0
   AuraDamagePerSecond: 0
   AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
   InnatePassive: 0
   SummonUnit: {fileID: 0}
   SummonUnits: []
@@ -66,9 +68,9 @@ MonoBehaviour:
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5
-  Heal: 40
+  Heal: 35
   Displace: 0
-  DisplaceDistance: 4
+  DisplaceDistance: 0
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
@@ -85,8 +87,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1

@@ -16,16 +16,34 @@ namespace TacticsGame.Core
             foreach (var u in State.Units)
             {
                 if (u.GlideEnd < 0f) continue;
+                if (u.GlideFollowId != null) FollowGlideTarget(u);
                 float k = u.GlideEnd > u.GlideStart ? Mathf.Clamp01((Now - u.GlideStart) / (u.GlideEnd - u.GlideStart)) : 1f;
                 Vector3 p = Vector3.Lerp(u.GlideFrom, u.GlideTo, k);
-                float ground = Terrain.HeightAt(p);
+                float ground = Terrain.HeightAt(TerrainMap.Level(p, u.Position.y));   // on the floor it is gliding along
                 // A fall keeps its height a while, then drops faster and faster (never below the ground it is over).
                 p.y = u.FallLandAt >= 0f ? Mathf.Max(ground, u.GlideFrom.y + (u.GlideTo.y - u.GlideFrom.y) * k * k) : ground;
                 u.Position = p;
                 if (k < 1f) continue;
                 u.GlideEnd = -1f;
+                u.GlideFollowId = null;
                 if (u.FallLandAt >= 0f) Land(u);
             }
+        }
+
+        /// <summary>A dash following a unit (FollowDuringGlide): if that unit has moved, aim the rest of it at where it is now,
+        /// arriving when it would have. The views hear it as a new dash from here.</summary>
+        private void FollowGlideTarget(Unit u)
+        {
+            var t = GetUnit(u.GlideFollowId);
+            if (t == null || !t.IsAlive || u.FallLandAt >= 0f || Now >= u.GlideEnd) { u.GlideFollowId = null; return; }
+            Vector3 want = Paths.ClampDash(t.Position, t.Position + u.GlideFollowOffset);
+            float dx = want.x - u.GlideTo.x, dz = want.z - u.GlideTo.z;
+            if (dx * dx + dz * dz < 0.05f * 0.05f) return;
+            want = Terrain.OnGround(FreeSpotNear(u, want, t.Position, false));
+            u.GlideFrom = u.Position;
+            u.GlideTo = want;
+            u.GlideStart = Now;
+            Emit(EventType.Dash, u.Id, null, new DashInfo { From = u.Position, To = want, Duration = u.GlideEnd - Now });
         }
 
         /// <summary>
@@ -105,40 +123,54 @@ namespace TacticsGame.Core
         /// <param name="charge">0..1 for a released charge ability (see ReleaseCharge).</param>
         private void StartAction(Unit unit, UnitCommand cmd, ActionBehavior behavior, float windupLeft = -1f, float charge = 0f)
         {
-            var def = cmd.Action;
-            float speed = unit.EffectiveActionSpeed();
             bool resuming = windupLeft >= 0f;
+            bool recast = !resuming && RecastOpenFor(unit, cmd.Action);   // Incessant: aimed where the first cast was
+            if (recast) cmd = AsRecast(unit, cmd);
+            var def = cmd.Action;
+            bool linkedUse = !resuming && LinkedOpenFor(unit, def);   // a linked ability, right after the one linking to it
+            float link = linkedUse ? LinkedScale(unit, def) : 1f;      // winds up and recovers faster
+            float speed = unit.EffectiveActionSpeed();
             bool transcend = cmd.Transcend && unit.CanTranscend(def);
             // Plight Upon Structure (Alio): an imprinted ability that costs strain, Transcended, is cast again by a ghost instead.
             bool ghost = !resuming && cmd.Transcend && unit.Passives.Contains(DeliveranceParts.PlightUponStructure) && unit.Imprinted.Contains(def.Id)
                          && StrainCostOf(unit, def, cmd.TargetUnitId) > 0f;
             if (ghost) transcend = false;
             var grant = transcend ? unit.GrantOf(def) : TranscendGrant.None;   // a Transcend an Etching gave it
-            float windup = resuming ? windupLeft : WindupOf(unit, def) * (transcend && def.CanTranscend ? def.TranscendWindupMultiplier : 1f) * EtchingWindupScale(unit, def, cmd)
-                * (grant == TranscendGrant.QuickWindup ? Mathf.Max(0f, unit.GrantParam(def, "windup_mult", 0.25f)) : 1f);   // Quickness And Lethargy
+            // Freely aimed, it has no target to read: only the Etchings that don't look at one (Revenge Maxim) change its windup.
+            float etched = cmd.FreeAim ? EtchingTraits.RevengeScale(unit) : EtchingWindupScale(unit, def, cmd);
+            float windup = resuming ? windupLeft : WindupOf(unit, def) * (transcend && def.CanTranscend ? def.TranscendWindupMultiplier : 1f) * etched
+                * (grant == TranscendGrant.QuickWindup ? Mathf.Max(0f, unit.GrantParam(def, "windup_mult", 0.25f)) : 1f)   // Quickness And Lethargy
+                * link;
             if (!resuming) EtchingTraits.SpendRevenge(this, unit);   // spent by the next ability, whatever it is
             unit.Waiting = false;
             if (!resuming && unit.Queued != cmd && !behavior.KeepsQueuedOrder) ClearQueued(unit, null);   // using another ability overrides a queued ranged one (a Dash doesn't)
             var inst = new ActionInstance
             {
                 Actor = unit, Definition = def, Behavior = behavior,
-                TargetUnitId = cmd.TargetUnitId, TargetPos = cmd.TargetPos,
-                StartedAt = Now, ResolveAt = Now + windup, Charge = charge,
+                TargetUnitId = cmd.TargetUnitId, TargetPos = cmd.TargetPos, SecondTargetId = cmd.SecondTargetId,
+                StartedAt = Now, ResolveAt = Now + windup, Charge = charge, FreeAimed = cmd.FreeAim,
                 Transcended = transcend,
                 NoRecovery = grant == TranscendGrant.NoRecovery,
-                RecoveryScale = grant == TranscendGrant.QuickWindup ? Mathf.Max(0f, unit.GrantParam(def, "recovery_mult", 1.25f)) : 1f,
+                RecoveryScale = (grant == TranscendGrant.QuickWindup ? Mathf.Max(0f, unit.GrantParam(def, "recovery_mult", 1.25f)) : 1f) * link,
             };
+            inst.LinkedUse = linkedUse;
+            inst.LinkDepth = linkedUse ? unit.LinkDepth + 1 : 0;
             unit.Phase = UnitPhase.Windup;
             unit.PhaseEndsAt = inst.ResolveAt;
             unit.ActiveAction = inst;
-            unit.LastActionId = def.Id;
-            unit.LastActionTargetId = cmd.TargetUnitId;
-            unit.LastActionPos = cmd.TargetPos;
+            if (!behavior.KeepsQueuedOrder)   // a Dash is a move: the ability before it can still be followed up
+            {
+                unit.LastActionId = def.Id;
+                unit.LastActionTargetId = cmd.TargetUnitId;
+                unit.LastActionPos = cmd.TargetPos;
+            }
             if (!resuming)
             {
 
                 inst.UnravelsActor = def.UnravelsOverMaxStrain && unit.Strain + StrainCostOf(unit, def, cmd.TargetUnitId, inst.Transcended) > unit.MaxStrain + 1e-4f;
                 PayCosts(unit, def, behavior, cmd.TargetUnitId, inst.Transcended);
+                NoteRecastStart(unit, cmd, recast);   // after the costs: they read the open recast
+                if (!behavior.KeepsQueuedOrder) BreakLinks(unit);   // after the costs (they read the run): any ability but a dash ends a linked run, and opens its own as it lands
                 if (unit.Hover != null && !unit.Hover.Permanent) unit.Hover.EndsAfterAction = true;   // one ability from the air, then it comes down
             }
             var mesmer = unit.Mesmer;
@@ -147,6 +179,9 @@ namespace TacticsGame.Core
             // Body On Strings: a Transcend that makes the windup Unstoppable.
             if (!resuming && grant == TranscendGrant.UnstoppableWindup)
                 ApplyStatus(unit, new StatusEffect { Id = StatusIds.Unstoppable, SourceId = unit.Id, ExpiresAt = inst.ResolveAt + TickLength, Flags = StatusFlags.Unstoppable }, unit);
+            // Guarded Approach: a Transcend that shields the user for a while from the cast.
+            if (!resuming && grant == TranscendGrant.ShieldOnCast)
+                ApplyStatus(unit, new StatusEffect { Id = StatusIds.Shielded, SourceId = unit.Id, ExpiresAt = Now + Mathf.Max(TickLength, unit.GrantParam(def, "seconds", 1.5f)), Shield = Mathf.Max(0f, unit.GrantParam(def, "shield", 40f)) }, unit);
             // Flow State: a Transcend that gives Dodge for a while from the cast.
             if (!resuming && grant == TranscendGrant.DodgeOnCast)
                 ApplyStatus(unit, new StatusEffect
@@ -155,8 +190,11 @@ namespace TacticsGame.Core
                     Modifiers = new List<Modifier> { Modifier.Add(StatId.Dodge, unit.GrantParam(def, "dodge", 0.75f)) },
                 }, unit);
             behavior.OnWindupStart(this, inst);
+            StepIntoMelee(inst);
+            if (!resuming) OpenOwnWeakpoints(inst);
             Emit(EventType.ActionStarted, unit.Id, cmd.TargetUnitId,
-                new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = inst.NoRecovery ? 0f : unit.ActionStat(def, ActionStat.Recovery) * inst.RecoveryScale / speed, TargetPos = inst.TargetPos, Transcended = inst.Transcended });   // inst.TargetPos: where OnWindupStart aimed it (the smite's circle)
+                new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = inst.NoRecovery ? 0f : unit.ActionStat(def, ActionStat.Recovery) * inst.RecoveryScale / speed, TargetPos = inst.TargetPos, Transcended = inst.Transcended,
+                    Range = unit.RangeOf(def), Radius = unit.ActionStat(def, ActionStat.AreaRadius) });   // inst.TargetPos: where OnWindupStart aimed it (the smite's circle)
             ApplyWindupStatuses(inst);
             Triggers.Fire(new TriggerContext { Type = TriggerType.ActionStarted, Sim = this, Subject = unit, Action = def });
             if (!resuming) AlertTarget(unit, cmd.TargetUnitId);
@@ -223,9 +261,10 @@ namespace TacticsGame.Core
         {
             float energyCost = behavior.EnergyCost(this, unit, def);   // before anything below changes the discount
             float strainCost = StrainCostOf(unit, def, targetId, transcended);
-            float cooldown = unit.ActionStat(def, ActionStat.Cooldown);
+            float cooldown = (transcended && def.TranscendCooldown >= 0f ? def.TranscendCooldown : unit.ActionStat(def, ActionStat.Cooldown))   // a Transcend's own cooldown (Unsigned Rebuttal)
+                             * MakinaCooldownScale(unit, GetUnit(targetId));   // Conscience Flows Into A Shell
             bool echo = transcended && unit.GrantOf(def) == TranscendGrant.NoCooldown;   // Echo: a Transcend with no cooldown
-            if (cooldown > 0f && !echo) unit.CooldownReadyAt[def.Id] = Now + cooldown;
+            if (cooldown > 0f && !echo && !RecastOpenFor(unit, def)) unit.CooldownReadyAt[def.Id] = Now + cooldown;   // a recast leaves the first cast's running
             EtchingTraits.SufferPastMax(this, unit, def, strainCost);   // before the strain lands: does it go past max?
             AddStrain(unit, strainCost);
             if (strainCost > 0f) Triggers.Fire(new TriggerContext { Type = TriggerType.StrainSpent, Sim = this, Subject = unit, Action = def, Amount = strainCost });
@@ -251,6 +290,7 @@ namespace TacticsGame.Core
         {
             var s = spec.Create(Now, unit.Id, def.LinkedAction, unit.DurationScale(def));
             s.FromAction = def;
+            MarkFollowupWindow(unit, s);
             return s;
         }
     }

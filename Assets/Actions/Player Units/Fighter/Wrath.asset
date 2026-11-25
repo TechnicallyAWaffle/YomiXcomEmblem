@@ -17,7 +17,10 @@ MonoBehaviour:
   BehaviorId: self_buff
   Roles: 0
   Description: Become consumed with Wrath, gaining massively reduced Strain costs
-    and increased damage but becoming unable to Block.
+    and increased damage but becoming unable to Block. Enables the use of some special
+    abilities.
+  Details: 
+  WindupName: 
   Targeting: 1
   Range: 15
   IsRanged: 0
@@ -52,6 +55,7 @@ MonoBehaviour:
   AuraAtTarget: 0
   AuraDamagePerSecond: 0
   AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
   InnatePassive: 0
   SummonUnit: {fileID: 0}
   SummonUnits: []
@@ -95,9 +99,11 @@ MonoBehaviour:
       Important: 0
     HealPerSecond: 0
     StrainPerSecond: 0
+    StrainOnWeakpointBreak: 0
     BreakStun: 0
     HealOnExpire: 0
     HealMissingOnExpire: 0
+    Shield: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -128,14 +134,21 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
   CanTranscend: 0
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
+  TranscendCooldown: -1
   ExtraCinematic: 0
   Visuals:
     Kind: 8

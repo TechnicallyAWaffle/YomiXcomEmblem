@@ -1,0 +1,76 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
+  m_Name: Tank
+  m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
+  DisplayName: Tank
+  MaxHealth: 180
+  BaseDodge: 0.05
+  BaseBlock: 0
+  MaxStrain: 130
+  StrainRecoveryPerSecond: 5
+  StrainRecoveryDelay: 0.5
+  MaxEnergy: 0
+  StartingEnergy: 0
+  ActionSpeed: 1
+  MoveSpeed: 7.5
+  DashDistance: 3
+  EyeHeight: 1.6
+  BodyHeight: 1.8
+  BodyRadius: 0.5
+  BasicAttack: {fileID: 11400000, guid: d8f654d5a3b83f44aad3670b1c064f53, type: 2}
+  Makina: 0
+  CannotBlock: 0
+  CannotFocus: 0
+  StrainPerSecond: 0
+  Description: 
+  Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
+  Actions:
+  - {fileID: 11400000, guid: f2ff342cf93c51f4fbb36989923d3d5b, type: 2}
+  - {fileID: 11400000, guid: d7ebf1ba5a75e72409928babfabda946, type: 2}
+  - {fileID: 11400000, guid: 024417c845c21fb42be7c79f4a2b2127, type: 2}
+  - {fileID: 11400000, guid: 89c425610acc93343802068419dad0d2, type: 2}
+  - {fileID: 11400000, guid: 5f766a43f40a66e4c95aab556b2e1338, type: 2}
+  - {fileID: 11400000, guid: 70b2a9303d8007d41bb3dbbb028c9be2, type: 2}
+  - {fileID: 11400000, guid: 5527f3bda48cdbe46b9023f9efc0e39e, type: 2}
+  - {fileID: 11400000, guid: 9f7e7ad6405913b49bea20ca49f60764, type: 2}
+  - {fileID: 11400000, guid: fc2e8dbe4b319b74f979ffcbe10844cc, type: 2}
+  - {fileID: 11400000, guid: c525e06230308c04e9197d70d385aab0, type: 2}
+  - {fileID: 11400000, guid: 34f4c2068097208499830a3cbcb7a5ed, type: 2}
+  - {fileID: 11400000, guid: e9efe18f06677ef41a088738ea4e41fd, type: 2}
+  - {fileID: 11400000, guid: fa680acf924e31144a146c6f3e408445, type: 2}
+  - {fileID: 11400000, guid: 0a2bcded824a85047943725a1b92634c, type: 2}
+  - {fileID: 11400000, guid: 3594b28f95c58604b8d65d5cb95d4363, type: 2}
+  - {fileID: 11400000, guid: ef9b06f4a571c4942943e83511a95a3c, type: 2}
+  - {fileID: 11400000, guid: ea5718a007f2d9d4bbc4c5175878acca, type: 2}
+  - {fileID: 11400000, guid: b31e08c7580375f4ebc2c364c4dbbe81, type: 2}
+  Passives: []
+  AIProfile: 
+  AI: {fileID: 0}
+  Boss: 0
+  ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Model: {fileID: 919132149155446097, guid: a51ec53989de6c34d816f26d440d376a, type: 3}
+  ModelAnimations: {fileID: 9100000, guid: a560f02c043dc7847b53e6ea3738374f, type: 2}
+  ModelEtchings: {fileID: 0}
+  Icon: {fileID: 0}
+  GrantedActions:
+  - cognitive_burden
+  - banishment
+  - death_sentence
+  - savior
+  - counterpoise
+  - grasp_and_impel
+  - fissure
+  - delayed_crush
+  DataVersion: 15

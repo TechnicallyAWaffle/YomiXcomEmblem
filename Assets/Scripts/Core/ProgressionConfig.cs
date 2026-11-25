@@ -135,6 +135,35 @@ namespace TacticsGame.Core
                     .Add(StatId.Dodge, 0.5f).WithTrait(EtchingTraits.InstinctOvertakesMethods),
                 new EtchingDefinition { Id = "lucid_dreams", Name = "Lucid Dreams", Description = "While you have Clear Mind, your ability cooldowns are also reduced by 0.1s every 0.25 seconds." }
                     .WithTrait(EtchingTraits.LucidDreams, new BehaviorParam("every", 0.25f), new BehaviorParam("cut", 0.1f)),
+                new EtchingDefinition { Id = "eye_for_weakness", Name = "Eye For Weakness", Scope = EtchingScope.OneAbility, Description = "Etch onto a damaging ability with no Transcend: it has a 25% chance to critically strike for 75% more damage. It can be Transcended for +10 strain, raising that chance to 50%." }
+                    .AddAbility(ActionStat.CritChance, 0.25f).AddAbility(ActionStat.CritDamage, 0.75f)
+                    .GrantsTranscend(TranscendGrant.CritChance, 10f, new BehaviorParam("crit_chance", 0.5f)),
+                new EtchingDefinition { Id = "gaps_in_their_mind", Name = "Gaps In Their Mind", Scope = EtchingScope.OneAbility, Description = "Etch onto a damaging ability: it exposes 1 weakpoint on enemies it hits (copies add up)." }
+                    .AddAbility(ActionStat.Weakpoints, 1f),
+                new EtchingDefinition { Id = "brute_force", Name = "Brute Force", Scope = EtchingScope.OneAbility, Description = "Etch onto a damaging ability with no Transcend: it can be Transcended for +15 strain, breaking up to 2 weakpoints on each enemy it hits, from any direction." }
+                    .GrantsTranscend(TranscendGrant.BreakWeakpoints, 15f, new BehaviorParam("breaks", 2f)),
+                new EtchingDefinition { Id = "unwind_their_self", Name = "Unwind Their Self", Scope = EtchingScope.OneAbility, Description = "Etch onto a damaging ability with no Transcend: it can be Transcended for +30 strain, exposing 4 weakpoints on enemies it hits for 3 seconds." }
+                    .GrantsTranscend(TranscendGrant.ExposeWeakpoints, 30f, new BehaviorParam("count", 4f), new BehaviorParam("seconds", 3f)),
+                new EtchingDefinition { Id = "sight_beyond_sight", Name = "Sight Beyond Sight", Description = "Every 1.5 seconds, the nearest enemy within 10m has a weakpoint exposed." }
+                    .WithTrait(EtchingTraits.SightBeyondSight, new BehaviorParam("every", 1.5f), new BehaviorParam("range", 10f)),
+                new EtchingDefinition { Id = "incessant", Name = "Incessant", Scope = EtchingScope.OneAbility, Description = "Etch onto an ability without a follow-up: for 1.5 seconds after it ends, you can re-cast it on the same target or location for +25 strain, ignoring its cooldown." }
+                    .GrantsFollowupOf(FollowupGrant.Recast, 25f, new BehaviorParam("window", 1.5f)),
+                new EtchingDefinition { Id = "related_concepts", Name = "Related Concepts", Scope = EtchingScope.TwoAbilities, Description = "Etch into two abilities to link them. When one lands, the other becomes a linked ability: used straight after it (walking and dashing aside), it has 50% shorter windup and recovery." }
+                    .GrantsFollowupOf(FollowupGrant.Linked, 0f, new BehaviorParam("speed", 0.5f)),
+                new EtchingDefinition { Id = "dissipation", Name = "Dissipation", Description = "Blocking costs +10 strain. Damage your Block stops reduces your strain by as much." }
+                    .AddAbility("block", ActionStat.StrainOnSelf, 10f).WithTrait(EtchingTraits.Dissipation, new BehaviorParam("share", 1f)),
+                new EtchingDefinition { Id = "acceleration_bypass", Name = "Acceleration Bypass", Description = "Your Dash is 50% faster. Transcended Dash becomes an instant blink." }
+                    .WithTrait(EtchingTraits.AccelerationBypass, new BehaviorParam("speed", 0.5f)),
+                new EtchingDefinition { Id = "steady_center", Name = "Steady Center", Description = "Passively recover 5 strain per second." }
+                    .WithTrait(EtchingTraits.SteadyCenter, new BehaviorParam("per_second", 5f)),
+                new EtchingDefinition { Id = "clarity_from_aggravation", Name = "Clarity From Aggravation", Description = "Taking damage makes you recover 2 strain every 0.1 seconds for 1 second." }
+                    .WithTrait(EtchingTraits.ClarityFromAggravation, new BehaviorParam("strain", 2f), new BehaviorParam("every", 0.1f), new BehaviorParam("seconds", 1f)),
+                new EtchingDefinition { Id = "hone_the_body", Name = "Hone The Body", Description = "Increase your maximum health by 50." }
+                    .Add(StatId.MaxHealth, 50f),
+                new EtchingDefinition { Id = "hone_the_mind", Name = "Hone The Mind", Description = "Increase your maximum strain by 50." }
+                    .Add(StatId.MaxStrain, 50f),
+                new EtchingDefinition { Id = "guarded_approach", Name = "Guarded Approach", Scope = EtchingScope.OneAbility, Description = "Etch onto an ability with no Transcend: it can be Transcended for +10 strain, giving you a 40 health shield for 1.5 seconds." }
+                    .GrantsTranscend(TranscendGrant.ShieldOnCast, 10f, new BehaviorParam("shield", 40f), new BehaviorParam("seconds", 1.5f)),
             };
         }
 

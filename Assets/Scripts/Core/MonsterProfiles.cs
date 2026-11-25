@@ -106,11 +106,18 @@ namespace TacticsGame.Core
     }
 
     /// <summary>
-    /// Zola: walks at the nearest enemy to get it inside its stomp, and unleashes its biggest blast (Mental Overload) as soon
-    /// as anyone is inside that and it is ready. Its strain aura (Wasteful Thought) needs no orders.
+    /// Zola: unleashes its biggest blast (Mental Overload) as soon as anyone is inside that and it is ready, and its stomp on
+    /// whoever is inside that. Otherwise it always wants its enemies inside its strain aura (Wasteful Thought, its always-on
+    /// dome): it walks to the spot that takes in the most of them (well inside the dome's edge, the nearest such spot), and
+    /// only closes in for a stomp when that loses none of them. Fleeing (Rest: getting away to recover) comes first.
     /// </summary>
     public class ZolaAI : KitAI
     {
+        /// <summary>How far inside the aura's edge it wants its enemies (a share of the radius), so a step doesn't lose them.</summary>
+        public float AuraMargin = 0.8f;
+        /// <summary>Metres: a better spot closer than this isn't worth walking to (no shuffling on the spot).</summary>
+        public float MinStep = 1f;
+
         public override UnitCommand Decide(BattleSimulation sim, Unit unit)
         {
             if (Basic(sim, unit)) return base.Decide(sim, unit);
@@ -122,8 +129,59 @@ namespace TacticsGame.Core
             if (Ready(sim, unit, overload) && EnemiesWithin(sim, unit, unit.Position, unit.ActionStat(overload, ActionStat.AreaRadius)) > 0) return UnitCommand.UseAction(unit.Id, overload, unit.Id);
             float stompRadius = stomp != null ? unit.ActionStat(stomp, ActionStat.AreaRadius) : 2f;
             if (Ready(sim, unit, stomp) && EnemiesWithin(sim, unit, unit.Position, stompRadius) > 0) return UnitCommand.UseAction(unit.Id, stomp, unit.Id);
-            if (Flat(unit.Position, target.Position) > stompRadius * 0.6f) return Approach(sim, unit, target, stompRadius * 0.5f);
-            return UnitCommand.Idle(unit.Id, 0.25f);   // in reach, stomp still on cooldown
+
+            // Keep them in the aura: the spot taking in the most of them, if that beats here.
+            float aura = AuraRadius(unit) * AuraMargin;
+            int here = aura > 0f ? EnemiesWithin(sim, unit, unit.Position, aura) : 0;
+            Vector3 spot = unit.Position;
+            int best = aura > 0f ? BestAuraSpot(sim, unit, aura, out spot) : 0;
+            if (best > here && Flat(spot, unit.Position) >= MinStep) return UnitCommand.MoveTo(unit.Id, spot);
+
+            // Everyone it can hold is held: close in for the stomp only if the aura keeps them all on the way there.
+            if (Flat(unit.Position, target.Position) > stompRadius * 0.6f)
+            {
+                Vector3 closer = sim.ApproachSpot(unit, target, stompRadius * 0.5f);
+                if (aura <= 0f || EnemiesWithin(sim, unit, closer, aura) >= here) return UnitCommand.MoveTo(unit.Id, closer);
+            }
+            return UnitCommand.Idle(unit.Id, 0.25f);   // holding them, stomp out of reach or on cooldown
+        }
+
+        /// <summary>Its always-on dome's radius (Wasteful Thought), or 0 without one.</summary>
+        private static float AuraRadius(Unit unit)
+        {
+            float r = 0f;
+            foreach (var a in unit.Actions) if (a != null && a.InnatePassive && a.AreaRadius > 0f) r = Mathf.Max(r, unit.ActionStat(a, ActionStat.AreaRadius));
+            return r;
+        }
+
+        /// <summary>
+        /// The walkable spot with the most enemies within 'radius' of it: tried at each enemy, between each pair, at their
+        /// middle and at points toward each from here. Ties go to the one nearest the unit. Returns how many it takes in.
+        /// </summary>
+        private static int BestAuraSpot(BattleSimulation sim, Unit unit, float radius, out Vector3 spot)
+        {
+            var enemies = new List<Unit>(sim.EnemiesOf(unit));
+            var candidates = new List<Vector3> { unit.Position };
+            Vector3 mid = Vector3.zero;
+            foreach (var e in enemies) mid += e.Position;
+            if (enemies.Count > 0) candidates.Add(mid / enemies.Count);
+            for (int i = 0; i < enemies.Count; i++)
+            {
+                candidates.Add(enemies[i].Position);
+                Vector3 toward = enemies[i].Position - unit.Position; toward.y = 0f;
+                if (toward.magnitude > radius) candidates.Add(enemies[i].Position - toward.normalized * radius * 0.7f);   // just near enough to hold it
+                for (int j = i + 1; j < enemies.Count; j++) candidates.Add((enemies[i].Position + enemies[j].Position) / 2f);
+            }
+            spot = unit.Position;
+            int best = -1; float bestDist = float.MaxValue;
+            foreach (var c in candidates)
+            {
+                Vector3 p = sim.WalkablePointNear(c, unit.Position);
+                int n = EnemiesWithin(sim, unit, p, radius);
+                float d = Flat(p, unit.Position);
+                if (n > best || (n == best && d < bestDist)) { best = n; bestDist = d; spot = p; }
+            }
+            return Mathf.Max(0, best);
         }
     }
 

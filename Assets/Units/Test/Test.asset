@@ -18,7 +18,7 @@ MonoBehaviour:
   BaseBlock: 0
   MaxStrain: 100
   ActionSpeed: 1
-  MoveSpeed: 4
+  MoveSpeed: 6
   DashDistance: 3
   EyeHeight: 1.6
   BodyHeight: 1.8

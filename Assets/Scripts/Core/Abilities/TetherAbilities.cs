@@ -97,7 +97,8 @@ namespace TacticsGame.Core
                 d = d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.back;
                 Vector3 spot = ally.Position + d * (actor.BodyRadius + ally.BodyRadius + BattleSimulation.StandingGap);
                 float seconds = Mathf.Max(BattleSimulation.TickLength, (a.ResolveAt - sim.Now) * 0.9f);
-                sim.SlideUnitTo(actor, spot, seconds);
+                sim.SlideUnitTo(actor, sim.Paths.ClampDash(ally.Position, spot), seconds, ally.Position);   // from the ally out: walls between don't matter
+                sim.FollowDuringGlide(actor, ally);   // to the ally where it is, as it moves
             }
             // The ally's guard (TargetStatusesOnHit: Savior's Guard, +50% Block), as the Tank sets off.
             var def = a.Definition;

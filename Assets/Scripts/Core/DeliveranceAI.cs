@@ -4,8 +4,10 @@ using UnityEngine;
 namespace TacticsGame.Core
 {
     /// <summary>
-    /// Deliverance, melded into one (phase one): goes for the nearest foe, the squad and the enemy's reinforcements alike.
-    /// Its strain pool is deep, so it guards and dashes freely, Transcended whenever the strain allows. Up close it opens
+    /// Deliverance, melded into one (phase one): goes for the nearest foe, the squad and the enemy's reinforcements alike,
+    /// and never backs off: no resting off strain, no dashing or Slipping away from an attack (Stitch sheds its strain
+    /// instead). Its ranged abilities it uses from where it stands. Its strain pool is deep, so it guards and dashes in
+    /// freely, Transcended whenever the strain allows. Up close it opens
     /// with Disassociate (PERPLEXITY), then rains Praa's Hatred on the same target until something stops it. A perplexed
     /// target is a door: it Slips behind one to get in reach, or out of trouble. Festival Of Colors when foes are near, and
     /// Joyous Dance while it lasts; Close The Loop at range; Stitch to heal when hurt; its corrupted line on a crowd.
@@ -28,10 +30,8 @@ namespace TacticsGame.Core
         {
             if (Basic(sim, unit)) return base.Decide(sim, unit);
             var slip = ByBehavior(unit, "perplexity_step");
-            var react = Guard(sim, unit, slip);
+            var react = Guard(sim, unit);
             if (react != null) return react;
-            var rest = StrainFraction(unit) >= HighStrain ? Rest(sim, unit) : null;
-            if (rest != null) return rest;
 
             var hatred = ByBehavior(unit, "praas_hatred");
             var disassociate = Find(unit, AbilityRole.Strike, a => !a.IsRanged && a.TargetStatusesOnHit.Exists(s => s != null && s.Id == StatusIds.Perplexity))
@@ -49,6 +49,10 @@ namespace TacticsGame.Core
             // Keep the chain going on the same target while it can.
             var chainer = hatred != null ? ActionBehaviors.Get(hatred.BehaviorId) as ChainAttackBehavior : null;
             if (chainer != null && chainer.InChain(unit, hatred, target.Id) && Reach(sim, unit, hatred, target)) return UnitCommand.UseAction(unit.Id, hatred, target.Id);
+
+            // Hurt or strained, with a reinforcement nearer than the squad: Stitch into it (the meld heals and sheds strain).
+            var food = StitchFood(sim, unit, stitch);
+            if (food != null) return Reach(sim, unit, stitch, food) ? UnitCommand.UseAction(unit.Id, stitch, food.Id) : UnitCommand.UseActionWhenInRange(unit.Id, stitch, food.Id);
 
             if (Ready(sim, unit, dance) && Reach(sim, unit, dance, target)) return UnitCommand.UseAction(unit.Id, dance, target.Id);
             if (Ready(sim, unit, festival) && d <= FestivalWithin) return UnitCommand.UseAction(unit.Id, festival, unit.Id);
@@ -79,7 +83,7 @@ namespace TacticsGame.Core
             return UnitCommand.Idle(unit.Id, 0.3f);
         }
 
-        /// <summary>The foe to fight: the one its Praa's Hatred chain is on, else the nearest (the squad and the reinforcements alike).</summary>
+        /// <summary>The foe to fight: the one its Praa's Hatred chain is on, else PickTarget's.</summary>
         private static Unit Target(BattleSimulation sim, Unit unit, ActionDefinition hatred)
         {
             if (hatred != null)
@@ -89,25 +93,50 @@ namespace TacticsGame.Core
                 var on = chain != null ? sim.GetUnit(chain.TargetId) : null;
                 if (on != null && on.IsAlive && sim.IsTargetableBy(on, unit)) return on;
             }
-            return sim.NearestEnemy(unit);
+            return PickTarget(sim, unit);
         }
 
         /// <summary>
-        /// The liberal guard: an attack winding up on it is met with a Slip away (behind a perplexed foe, if one is far from
-        /// the attacker), else a Block, Transcended whenever the strain stays under TranscendBelow, else a Dash out of
-        /// melee reach (Transcended likewise).
+        /// The nearest foe, the squad and the reinforcements alike; with HuntsTheSquad (hidden), a squad unit counts as
+        /// SquadHuntBias times nearer (1.25: one 12.5m off beats a reinforcement 10m off).
         /// </summary>
-        private UnitCommand Guard(BattleSimulation sim, Unit unit, ActionDefinition slip)
+        public static Unit PickTarget(BattleSimulation sim, Unit unit)
+        {
+            float bias = unit.Passives.Contains(DeliverancePassives.HuntsTheSquad) ? Mathf.Max(0.01f, sim.SquadHuntBias) : 1f;
+            Unit best = null; float bestScore = float.MaxValue;
+            foreach (var e in sim.EnemiesOf(unit))
+            {
+                float score = Flat(unit.Position, e.Position) / (e.Team == Team.Player ? bias : 1f);
+                if (score < bestScore) { bestScore = score; best = e; }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Stitch's prey when it isn't at full health with no strain: the nearest reinforcement (a foe that isn't the squad's),
+        /// if it is nearer than every squad unit. Null otherwise, or with Stitch not ready.
+        /// </summary>
+        private static Unit StitchFood(BattleSimulation sim, Unit unit, ActionDefinition stitch)
+        {
+            if (!Ready(sim, unit, stitch) || (unit.Health >= unit.MaxHealth - 1e-3f && unit.Strain <= 1e-3f)) return null;
+            Unit food = null; float foodD = float.MaxValue, squadD = float.MaxValue;
+            foreach (var e in sim.EnemiesOf(unit))
+            {
+                float d = Flat(unit.Position, e.Position);
+                if (e.Team == Team.Player) squadD = Mathf.Min(squadD, d);
+                else if (d < foodD) { foodD = d; food = e; }
+            }
+            return food != null && foodD < squadD ? food : null;
+        }
+
+        /// <summary>
+        /// The guard: an attack winding up on it is met with a Block, Transcended whenever the strain stays under
+        /// TranscendBelow. It never runs from one: without a Block to raise it fights on.
+        /// </summary>
+        private UnitCommand Guard(BattleSimulation sim, Unit unit)
         {
             var incoming = IncomingAttack(sim, unit);
             if (incoming == null) return null;
-            if (Ready(sim, unit, slip) && !unit.IsRooted)
-            {
-                Unit door = null;
-                foreach (var e in sim.EnemiesOf(unit))
-                    if (e.HasStatus(StatusIds.Perplexity) && e != incoming.Actor && Flat(e.Position, incoming.Actor.Position) > incoming.Stat(ActionStat.Range) + 2f && Reach(sim, unit, slip, e)) { door = e; break; }
-                if (door != null) return UnitCommand.UseAction(unit.Id, slip, door.Id);
-            }
             var block = Find(unit, AbilityRole.Guard);
             if (block != null && Affordable(sim, unit, block, false))
             {
@@ -116,14 +145,6 @@ namespace TacticsGame.Core
                 if (until > guard * 0.85f) return UnitCommand.Idle(unit.Id, Mathf.Max(BattleSimulation.TickLength, until - guard * 0.6f));
                 bool transcend = Affordable(sim, unit, block, true) && Room(sim, unit, block, true);
                 return UnitCommand.UseAction(unit.Id, block, unit.Id).Transcended(transcend);
-            }
-            var dash = Find(unit, AbilityRole.Dash);
-            if (dash != null && !incoming.Definition.IsRanged && !unit.IsRooted)
-            {
-                float reach = incoming.Stat(ActionStat.Range) * BattleSimulation.RangeTolerance;
-                Vector3 to;
-                if (Affordable(sim, unit, dash, true) && Room(sim, unit, dash, true) && EscapeDash(sim, unit, incoming.Actor, reach, true, out to)) return UnitCommand.UseActionAt(unit.Id, dash, to).Transcended();
-                if (Affordable(sim, unit, dash, false) && EscapeDash(sim, unit, incoming.Actor, reach, false, out to)) return UnitCommand.UseActionAt(unit.Id, dash, to);
             }
             return null;
         }

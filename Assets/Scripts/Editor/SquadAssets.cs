@@ -11,8 +11,8 @@ using TacticsGame.Core;
 /// </summary>
 public static class SquadAssets
 {
-    public struct Squad { public UnitDefinition Sharpshooter, Melee, Tank, Paradigm; }
-    public struct Enemies { public UnitDefinition Sniper, Assassin, Skirmisher, Healer, Caster, Brutebeast, Wraith, Monarch, Zola, Primavaeran, Exemplar, Deliverance, Syne, Alio, Revl, Wex; }
+    public struct Squad { public UnitDefinition Sharpshooter, Melee, Tank, Paradigm, Strategist, Duelist; }
+    public struct Enemies { public UnitDefinition Sniper, Assassin, Skirmisher, Healer, Caster, Brutebeast, Wraith, Monarch, Zola, Primavaeran, Exemplar, Deliverance, Syne, Alio, Revl, Wex, Howler, Matriarch; }
 
     /// <summary>
     /// FROZEN at 15: assets are now the source of truth, so changes go into the assets and no new versions are added. New
@@ -92,6 +92,8 @@ public static class SquadAssets
             Melee = CreateMelee(viewPrefab),
             Tank = CreateTank(viewPrefab),
             Paradigm = CreateParadigm(viewPrefab),
+            Strategist = CreateStrategist(viewPrefab),   // after the Paradigm User: it takes two of the abilities made there
+            Duelist = CreateDuelist(viewPrefab),
         };
     }
 
@@ -199,7 +201,7 @@ public static class SquadAssets
 
         var sharpshooter = Unit(c, u =>
         {
-            u.DisplayName = "Sharpshooter"; u.MaxHealth = 85f; u.BaseDodge = 0.15f; u.MoveSpeed = 4f;
+            u.DisplayName = "Sharpshooter"; u.MaxHealth = 85f; u.BaseDodge = 0.15f; u.MoveSpeed = 6f;
             u.BasicAttack = rifleShot;
             u.Actions = new List<ActionDefinition> { snipe, tracking, marking, snapshot, flicker, takeAim, retaliate, trap, skyward };
             u.ViewPrefab = viewPrefab;
@@ -215,21 +217,20 @@ public static class SquadAssets
         var cloak = Action(c, "RefractionCloak", a =>
             SelfBuff(a, "refraction_cloak", "Refraction Cloak", "self_buff", windup: 0.4f, recovery: 0.1f, cooldown: 16f,
                 new StatusSpec { Id = StatusIds.Hidden, Duration = 5f }.With(StatusFlags.Untargetable | StatusFlags.BreaksOnDamage)));
-        // Destiny Closes In -> Fate Encumbers Its Prey -> Witness To The End: shots from the air (SkyShotBehavior). Each one that
-        // lands on its target opens the next at that target (SelfStatusesOnHit + RequiredStatusOnTarget); FollowUps brings them along.
+        // Destiny Closes In -> Fate Encumbers Its Prey -> Witness To The End: shots from the air (SkyShotBehavior), linked: each one
+        // that lands opens the next (LinkedAbilities), usable straight after it at any target (RequiresLink).
         var witness = Action(c, "WitnessToTheEnd", a =>
         {
             Attack(a, "witness_to_the_end", "Witness To The End", "sky_shot", range: 16f, windup: 1f, recovery: 0.5f, damage: 30f, accuracy: 1f, stun: 1f, strain: 15f, heavy: true);
             a.MissingHealthDamage = 0.2f;
-            a.RequiredStatus = WitnessReady; a.ConsumesRequiredStatus = true; a.RequiredStatusOnTarget = true;
+            a.RequiresLink = true;
         });
         var fate = Action(c, "FateEncumbersItsPrey", a =>
         {
             Attack(a, "fate_encumbers_its_prey", "Fate Encumbers Its Prey", "sky_shot", range: 16f, windup: 0.4f, recovery: 0.4f, damage: 15f, accuracy: 1f, stun: 0.5f, strain: 7f);
             a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Fated, Duration = 1.5f }.Mult(StatId.ActionSpeed, 0.35f) };
-            a.SelfStatusesOnHit = new List<StatusSpec> { ChainOpen(WitnessReady, 0.4f) };
-            a.RequiredStatus = FateReady; a.ConsumesRequiredStatus = true; a.RequiredStatusOnTarget = true;
-            a.FollowUps = new List<ActionDefinition> { witness };
+            a.RequiresLink = true;
+            a.LinkedAbilities = new List<ActionDefinition> { witness };
         });
         var destiny = Action(c, "DestinyClosesIn", a =>
         {
@@ -237,8 +238,7 @@ public static class SquadAssets
             a.Cooldown = 14f;
             a.DisplaceDistance = 5f;   // flight height
             a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Marked, Duration = 2.5f }.Add(StatId.IncomingAccuracy, 0.25f).Add(StatId.Dodge, -0.25f) };
-            a.SelfStatusesOnHit = new List<StatusSpec> { ChainOpen(FateReady, 0.4f) };
-            a.FollowUps = new List<ActionDefinition> { fate };
+            a.LinkedAbilities = new List<ActionDefinition> { fate };
         });
         Grant(sharpshooter, null, flurry, pierce, extricate, unmaker, soulseeker, cloak, destiny);
 
@@ -335,7 +335,7 @@ public static class SquadAssets
         var mesmerize = Action(c, "Mesmerize", a =>
         {
             SelfBuff(a, "mesmerize", "Mesmerize", "mesmerize", windup: 0.1f, recovery: 0f, cooldown: 7f,
-                new StatusSpec { Id = StatusIds.Mesmerized, Duration = 1.5f }.Add(StatId.Dodge, 0.6f));
+                new StatusSpec { Id = StatusIds.Mesmerized, Duration = 1.5f }.Add(StatId.Dodge, 0.6f).With(StatusFlags.Counters));   // the counter comes before any dodge
             a.LinkedAction = mesmerStrike;   // the counter's rapid strikes
         });
         var finalCut = Action(c, "FinalCut", a =>
@@ -546,9 +546,65 @@ public static class SquadAssets
             a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.SaviorsGuard, Duration = 2f }.Add(StatId.Block, 0.5f) };
         });
 
+        var counterpoise = Action(c, "Counterpoise", a =>
+        {
+            // A zone on the ground for 1.5s: allies inside it (the Tank too) have +100% Block (aura, AuraAtTarget).
+            a.Id = "counterpoise"; a.DisplayName = "Counterpoise"; a.BehaviorId = "aura";
+            a.Targeting = TargetType.Position; a.Range = 12f; a.IsRanged = false; a.Shape = AreaShape.Circle; a.AreaRadius = 5f;
+            a.AuraAtTarget = true; a.AuraSeconds = 1.5f;
+            a.Windup = 0.3f; a.Recovery = 0.5f; a.Cooldown = 11f; a.StrainOnSelf = 15f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.AuraStatuses = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Counterpoise, Duration = 1.5f, AppliesTo = StatusTarget.Allies }.Add(StatId.Block, 1f) };
+        });
+        var impel = Action(c, "Impel", a =>
+        {
+            // Grasp and Impel's throw (ImpelBehavior): the held ally, shielded, flies out 10 m/s and strikes the first enemy in its way.
+            a.Id = "impel"; a.DisplayName = "Impel"; a.BehaviorId = "impel";
+            a.Targeting = TargetType.Self; a.Range = 18f; a.IsRanged = false;
+            a.Windup = 0.5f; a.Recovery = 0.4f; a.Cooldown = 0f;
+            a.Impact = ImpactType.Heavy; a.Damage = 20f; a.BaseAccuracy = 1f; a.StunDuration = 1.25f; a.StrainOnTarget = 10f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("speed", 10f), new BehaviorParam("shield", 30f), new BehaviorParam("shield_seconds", 1.5f) };
+        });
+        var grasp = Action(c, "GraspAndImpel", a =>
+        {
+            // Pull an ally in and hold it for up to 2s (GraspBehavior); the throw is Impel (its LinkedAction).
+            a.Id = "grasp_and_impel"; a.DisplayName = "Grasp and Impel"; a.WindupName = "Grasp"; a.BehaviorId = "grasp";
+            a.Targeting = TargetType.Ally; a.CannotTargetSelf = true; a.Range = 18f; a.IsRanged = true;
+            a.Windup = 0.5f; a.Recovery = 0f; a.Cooldown = 15f; a.StrainOnSelf = 15f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.LinkedAction = impel;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("pull_speed", 30f), new BehaviorParam("hold_seconds", 2f) };
+        });
+        var fissure = Action(c, "Fissure", a =>
+        {
+            // Stomp: a crack runs 16m along the line at 4 m/s, knocking every enemy it reaches 4m into the air (FissureBehavior).
+            a.Id = "fissure"; a.DisplayName = "Fissure"; a.BehaviorId = "fissure";
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 4f; a.Range = 16f; a.IsRanged = false;
+            a.Windup = 0.7f; a.Recovery = 0.4f; a.Cooldown = 14f; a.StrainOnSelf = 20f;
+            a.Impact = ImpactType.Heavy; a.Damage = 35f; a.BaseAccuracy = 1f; a.StunDuration = 1.5f; a.StrainOnTarget = 17f;
+            a.DisplaceDistance = 4f;   // how high it knocks them
+            a.Params = new List<BehaviorParam> { new BehaviorParam("speed", 4f) };
+        });
+        var rupture = Action(c, "Rupture", a =>
+        {
+            // Delayed Crush's blow, when RUPTURED runs out (StatusFlags.StrikesOnExpire).
+            a.Id = "rupture"; a.DisplayName = "Rupture"; a.BehaviorId = "basic_attack";
+            a.Targeting = TargetType.Enemy; a.Range = 2f; a.IsRanged = false;
+            a.Windup = 0f; a.Recovery = 0f; a.Cooldown = 0f;
+            a.Impact = ImpactType.Heavy; a.Damage = 25f; a.BaseAccuracy = 1f; a.StunDuration = 1.5f; a.StrainOnTarget = 12f;
+        });
+        var crush = Action(c, "DelayedCrush", a =>
+        {
+            // A strike that knocks the enemy 6m away and RUPTURES it: 1.5s later, Rupture lands on it.
+            Attack(a, "delayed_crush", "Delayed Crush", "basic_attack", range: 2f, windup: 0.5f, recovery: 0.2f, damage: 0f, accuracy: 1f, stun: 0f, strain: 0f, melee: true);
+            a.Cooldown = 9f; a.StrainOnSelf = 10f;
+            a.Displace = DisplaceMode.AwayFromSource; a.DisplaceDistance = 6f;
+            a.LinkedAction = rupture;
+            a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Ruptured, Duration = 1.5f, AppliesTo = StatusTarget.Enemies }.With(StatusFlags.StrikesOnExpire) };
+        });
         var tank = Unit(c, u =>
         {
-            u.DisplayName = "Tank"; u.MaxHealth = 180f; u.BaseDodge = 0.05f; u.MaxStrain = 140f; u.MoveSpeed = 3.5f;
+            u.DisplayName = "Tank"; u.MaxHealth = 180f; u.BaseDodge = 0.05f; u.MaxStrain = 140f; u.MoveSpeed = 5.5f;
             u.BodyRadius = 0.5f;
             u.BasicAttack = mace;
             u.Actions = new List<ActionDefinition> { slam, hook, shockwave, brace, sanctity, bash, subjugate, ascent, torrent, arrival };
@@ -559,7 +615,7 @@ public static class SquadAssets
             { 12, u => AddActions(u, null, arrival) },
             { 13, u => { AddActions(u, brace, sanctity); AddActions(u, subjugate, ascent); } },
         });
-        Grant(tank, null, burden, banishment, sentence, savior);
+        Grant(tank, null, burden, banishment, sentence, savior, counterpoise, grasp, fissure, crush);
         return tank;
     }
 
@@ -706,9 +762,9 @@ public static class SquadAssets
 
         var paradigm = Unit(c, u =>
         {
-            u.DisplayName = "Paradigm User"; u.MaxHealth = 75f; u.BaseDodge = 0.1f; u.MoveSpeed = 4f;
+            u.DisplayName = "Paradigm User"; u.MaxHealth = 75f; u.BaseDodge = 0.1f; u.MoveSpeed = 6f;
             u.BasicAttack = spark;
-            u.Actions = new List<ActionDefinition> { reconstruct, riftLine, cataclysm, stutter, lance, secondMind, chronosphere, wrinkles, amblivate };   // newer ones: Grant, below
+            u.Actions = new List<ActionDefinition> { reconstruct, riftLine, cataclysm, stutter, lance, chronosphere, amblivate };   // newer ones: Grant, below
             u.ViewPrefab = viewPrefab;
         }, new Dictionary<int, System.Action<UnitDefinition>>
         {
@@ -798,8 +854,425 @@ public static class SquadAssets
             a.CanTranscend = true; a.TranscendStrain = 40f;
             a.Params = new List<BehaviorParam> { new BehaviorParam("target_strain_bonus", 0.01f), new BehaviorParam("own_strain_bonus", 0.01f) };
         });
-        Grant(paradigm, null, withering, madness, splinters, domain, mindshatter);
+        Grant(paradigm, null, withering, splinters, domain, mindshatter);
+        sharedMadness = madness; sharedWrinkles = wrinkles; sharedSecondMind = secondMind;   // the Strategist's now (CreateStrategist)
         return paradigm;
+    }
+
+    // ------------------------------------------------------------------ Strategist: moves units about, folds them out of the world
+
+    /// <summary>Madness and Wrinkles Of Reality: made with the Paradigm User's abilities (their assets live there), handed to the Strategist.</summary>
+    private static ActionDefinition sharedMadness, sharedWrinkles, sharedSecondMind;
+
+    private static UnitDefinition CreateStrategist(GameObject viewPrefab)
+    {
+        const string c = "Strategist";
+        var scepter = Action(c, "ScepterOfTyranny", a =>
+        {
+            // A follow-up in three stages (ScepterBehavior): a blink to a picked point; then haste and weakpoints; then
+            // MADNESS (the Madness ability's own status and Wild Swing) and a short cooldown.
+            a.Id = "scepter_of_tyranny"; a.DisplayName = "Scepter of Tyranny"; a.BehaviorId = "scepter";
+            a.Targeting = TargetType.AnyUnit; a.CannotTargetSelf = true; a.Range = 11f; a.DestinationRange = 5f; a.IsRanged = true;
+            a.Windup = 0.3f; a.Recovery = 0.3f; a.Cooldown = 0f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.IsFollowup = true; a.ChainWindow = 1.5f;   // how long after its recovery the next stage waits
+            a.StageNames = new List<string> { "Scepter of Neglect", "Scepter of Insanity" };
+            a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Madness, Duration = 2f }.Mult(StatId.DamageDealt, 1.5f).Mult(StatId.ActionSpeed, 1.75f).Mult(StatId.MoveSpeed, 1.5f).With(StatusFlags.Maddened) };
+            a.LinkedAction = sharedMadness != null ? sharedMadness.LinkedAction : null;   // Wild Swing, for a target with no basic attack
+            a.Params = new List<BehaviorParam>
+            {
+                new BehaviorParam("haste", 1.5f), new BehaviorParam("haste_seconds", 1.5f), new BehaviorParam("haste_weakpoints", 2f), new BehaviorParam("final_cooldown", 2f),
+            };
+        });
+        var chrysalis = Action(c, "SpatialChrysalis", a =>
+        {
+            a.Id = "spatial_chrysalis"; a.DisplayName = "Spatial Chrysalis"; a.BehaviorId = "chrysalis";
+            a.Targeting = TargetType.AnyUnit; a.CannotTargetSelf = true; a.Range = 10f; a.IsRanged = true;
+            a.Windup = 0.2f; a.Recovery = 0.2f; a.Cooldown = 8f; a.ChannelSeconds = 3f;
+            a.Impact = ImpactType.Light; a.Damage = 0f; a.StunDuration = 0.5f;
+        });
+        var threshold = Action(c, "CrossBeyondThresholds", a =>
+        {
+            a.Id = "cross_beyond_thresholds"; a.DisplayName = "Cross Beyond Thresholds"; a.BehaviorId = "threshold";
+            a.Targeting = TargetType.Position; a.Range = 27f; a.IsRanged = false;
+            a.Windup = 0.3f; a.Recovery = 0.4f; a.Cooldown = 10f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.SelfStatuses = new List<StatusSpec> { new StatusSpec { Id = StatusIds.BeyondThresholds, Duration = 4f }.Mult(StatId.ActionSpeed, 1.5f) };
+        });
+        var stride = Action(c, "StrideInUnison", a =>
+        {
+            a.Id = "stride_in_unison"; a.DisplayName = "Stride In Unison"; a.BehaviorId = "stride";
+            a.Targeting = TargetType.Position; a.Range = 17f; a.IsRanged = false; a.AreaRadius = 5f;
+            a.Windup = 0.6f; a.Recovery = 0.2f; a.Cooldown = 12f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.CanTranscend = true; a.TranscendStrain = 15f;
+        });
+        var supersede = Action(c, "Supersede", a =>
+        {
+            // Two units, picked one after the other (SupersedeBehavior, UnitCommand.SecondTargetId).
+            a.Id = "supersede"; a.DisplayName = "Supersede"; a.BehaviorId = "supersede";
+            a.Targeting = TargetType.AnyUnit; a.Range = 15f; a.IsRanged = true;
+            a.Windup = 0.2f; a.Recovery = 0.2f; a.Cooldown = 5f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.WeakpointsOnTarget = 1;
+            a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Hastened, Duration = 1.5f, AppliesTo = StatusTarget.Allies }.Mult(StatId.ActionSpeed, 1.5f) };
+        });
+        var gift = Action(c, "GiftOfThought", a =>
+        {
+            // Channeled for up to 2.5s: the ally is HASTENED (+50% action speed) while it lasts (ChanneledStatusBehavior).
+            a.Id = "gift_of_thought"; a.DisplayName = "Gift of Thought"; a.BehaviorId = "channeled_status";
+            a.Targeting = TargetType.Ally; a.CannotTargetSelf = true; a.Range = 15f; a.IsRanged = true;
+            a.Windup = 0.3f; a.Recovery = 0f; a.Cooldown = 10f;
+            a.Damage = 0f; a.StunDuration = 0f; a.StrainOnSelf = 15f;
+            a.ChannelSeconds = 2.5f;
+            a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Hastened, Duration = 2.5f, AppliesTo = StatusTarget.Allies }.Mult(StatId.ActionSpeed, 1.5f) };
+        });
+        var pressure = Action(c, "PressurePoints", a =>
+        {
+            a.Id = "pressure_points"; a.DisplayName = "Pressure Points"; a.BehaviorId = "pressure_points";
+            a.Targeting = TargetType.Enemy; a.Range = 15f; a.IsRanged = true;
+            a.Windup = 0.3f; a.Recovery = 0.2f; a.Cooldown = 7f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.DisplaceDistance = 6f; a.BreaksWeakpoints = 2;
+        });
+        // Makina: constructs the Strategist brings in, which act at once (summon_makina: their LinkedAction, no windup).
+        ActionDefinition crashDown, massacre;
+        var monolith = CreateMonolith(viewPrefab, out crashDown);
+        var hedron = CreateHedron(viewPrefab, out massacre);
+        var monolithCall = Action(c, "TermoulsMonolith", a =>
+        {
+            a.Id = "termouls_monolith"; a.DisplayName = "Termoul's Monolith"; a.BehaviorId = "summon_makina";
+            a.Targeting = TargetType.Position; a.Range = 15f; a.IsRanged = false; a.Shape = AreaShape.Circle; a.AreaRadius = 5f;   // the crash's circle, for aiming
+            a.Windup = 0.75f; a.Recovery = 1f; a.Cooldown = 13f; a.StrainOnSelf = 30f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.SummonUnit = monolith; a.LinkedAction = crashDown;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("spawn_ahead", 0f) };
+        });
+        var hedronCall = Action(c, "KarraermsHedron", a =>
+        {
+            a.Id = "karraerms_hedron"; a.DisplayName = "Karraerm's Hedron"; a.BehaviorId = "summon_makina";
+            a.Targeting = TargetType.Position; a.Range = 8f; a.IsRanged = false; a.Shape = AreaShape.Line; a.LineWidth = 1.5f;   // Massacre's line, for aiming
+            a.Windup = 0.5f; a.Recovery = 1f; a.Cooldown = 15f; a.StrainOnSelf = 40f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.SummonUnit = hedron; a.LinkedAction = massacre;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("spawn_ahead", 1.5f) };
+        });
+        ActionDefinition outburst;
+        var stellation = CreateStellation(viewPrefab, out outburst);
+        var convextion = Action(c, "SchalysConvextion", a =>
+        {
+            a.Id = "schalys_convextion"; a.DisplayName = "Schaly's Convextion"; a.BehaviorId = "summon_makina";
+            a.Targeting = TargetType.Position; a.Range = 15f; a.IsRanged = false; a.Shape = AreaShape.Circle; a.AreaRadius = 6f;   // Outburst's burst, for aiming
+            a.Windup = 0.5f; a.Recovery = 1f; a.Cooldown = 16f; a.StrainOnSelf = 30f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.SummonUnit = stellation; a.LinkedAction = outburst;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("spawn_ahead", 0f) };
+        });
+        var infinite = CreateInfinite(viewPrefab);
+        var perfection = Action(c, "MongeAmperesPerfection", a =>
+        {
+            // The Infinite appears at the point (summon_makina, no ability of its own at once: its touch is always on).
+            a.Id = "monge_amperes_perfection"; a.DisplayName = "Monge-Ampère's Perfection"; a.BehaviorId = "summon_makina";
+            a.Targeting = TargetType.Position; a.Range = 15f; a.IsRanged = false;
+            a.Windup = 0.5f; a.Recovery = 1f; a.Cooldown = 16f; a.StrainOnSelf = 35f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.SummonUnit = infinite; a.LinkedAction = null;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("spawn_ahead", 0f) };
+        });
+        var mindmeld = Action(c, "Mindmeld", a =>
+        {
+            // An ally's debuffs (not a stun) are gone and its recovery is over (MindmeldBehavior).
+            a.Id = "mindmeld"; a.DisplayName = "Mindmeld"; a.BehaviorId = "mindmeld";
+            a.Targeting = TargetType.Ally; a.CannotTargetSelf = true; a.Range = 14f; a.IsRanged = true;
+            a.Windup = 0.1f; a.Recovery = 0.8f; a.Cooldown = 10f;
+            a.Damage = 0f; a.StunDuration = 0f;
+        });
+        var displacement = Action(c, "TheoryOfDisplacement", a =>
+        {
+            // Two units, picked one after the other, shoved toward each other; Transcended, apart (DisplacementBehavior).
+            a.Id = "theory_of_displacement"; a.DisplayName = "Theory Of Displacement"; a.BehaviorId = "displacement";
+            a.Targeting = TargetType.AnyUnit; a.Range = 15f; a.IsRanged = true;
+            a.Windup = 0.3f; a.Recovery = 0.4f; a.Cooldown = 8f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.DisplaceDistance = 6f;
+            a.CanTranscend = true; a.TranscendStrain = 5f;
+        });
+        var strategist = Unit(c, u =>
+        {
+            u.DisplayName = "Strategist"; u.MaxHealth = 90f; u.MaxStrain = 75f; u.BaseDodge = 0.1f; u.MoveSpeed = 4f;
+            u.MaxEnergy = 0f; u.StartingEnergy = 0f;
+            u.BasicAttack = scepter;
+            u.Actions = new List<ActionDefinition> { chrysalis, threshold, supersede, sharedWrinkles, stride, pressure, sharedMadness, sharedSecondMind, monolithCall, hedronCall, convextion, gift, perfection, mindmeld, displacement };
+            u.Actions.RemoveAll(x => x == null);
+            u.Passives = new List<string> { StrategistPassives.ConscienceFlows };
+            u.ViewPrefab = viewPrefab;
+        });
+        Grant(strategist, null, monolithCall, hedronCall, convextion, gift, perfection, mindmeld, displacement);   // an asset made before them gets them too
+        if (!strategist.Passives.Contains(StrategistPassives.ConscienceFlows)) { strategist.Passives.Add(StrategistPassives.ConscienceFlows); CombatTestSceneBuilder.MarkDirty(strategist); }
+        return strategist;
+    }
+
+    /// <summary>The Monolith: a Makina that only crashes down. Its strain climbs on its own; at 50 it breaks.</summary>
+    private static UnitDefinition CreateMonolith(GameObject viewPrefab, out ActionDefinition crash)
+    {
+        const string c = "Monolith";
+        var crashDown = Action(c, "CrashDown", a =>
+        {
+            // Up over the windup, then down hard at the point (CrashDownBehavior); its entrance drops it from the sky.
+            a.Id = "crash_down"; a.DisplayName = "Crash Down"; a.BehaviorId = "crash_down";
+            a.Targeting = TargetType.Position; a.Range = 10f; a.IsRanged = false; a.Shape = AreaShape.Circle; a.AreaRadius = 5f;
+            a.Windup = 0.75f; a.Recovery = 2f; a.Cooldown = 0f; a.StrainOnSelf = 10f;
+            a.Impact = ImpactType.Heavy; a.Damage = 20f; a.BaseAccuracy = 1f; a.StunDuration = 0.5f; a.StrainOnTarget = 10f;
+            a.DisplaceDistance = 1.5f;   // how high it knocks the enemies it stuns
+            a.Params = new List<BehaviorParam> { new BehaviorParam("height", 5f), new BehaviorParam("fall_seconds", 0.2f), new BehaviorParam("drop_from", 10f) };
+        });
+        crash = crashDown;
+        return Unit(c, u =>
+        {
+            u.DisplayName = "The Monolith"; u.Makina = true; u.MaxHealth = 30f; u.MaxStrain = 50f; u.StrainPerSecond = 2f;
+            u.StrainRecoveryPerSecond = 0f; u.BaseDodge = 0f; u.MoveSpeed = 0f; u.BodyRadius = 0.6f;
+            u.MaxEnergy = 0f; u.StartingEnergy = 0f;
+            u.BasicAttack = null;
+            u.Actions = new List<ActionDefinition> { crashDown };
+            u.ViewPrefab = viewPrefab;
+        });
+    }
+
+    /// <summary>The Hedron: a Makina that charges through enemies (Massacre) or blinks and pulls them in (Omen).</summary>
+    private static UnitDefinition CreateHedron(GameObject viewPrefab, out ActionDefinition charge)
+    {
+        const string c = "Hedron";
+        var massacre = Action(c, "Massacre", a =>
+        {
+            a.Id = "massacre"; a.DisplayName = "Massacre"; a.BehaviorId = "massacre";
+            a.Targeting = TargetType.Position; a.Range = 8f; a.IsRanged = false; a.Shape = AreaShape.Line; a.LineWidth = 1.5f;
+            a.Windup = 0.5f; a.Recovery = 2f; a.Cooldown = 0f; a.StrainOnSelf = 10f;
+            a.Impact = ImpactType.Light; a.Damage = 15f; a.BaseAccuracy = 1f; a.StunDuration = 0.5f; a.StrainOnTarget = 7f;
+        });
+        var omen = Action(c, "Omen", a =>
+        {
+            // Up over the windup, then a blink to the point; enemies around it are pulled in and stunned (OmenBehavior).
+            a.Id = "omen"; a.DisplayName = "Omen"; a.BehaviorId = "omen";
+            a.Targeting = TargetType.Position; a.Range = 20f; a.IsRanged = false; a.Shape = AreaShape.Circle; a.AreaRadius = 7f;
+            a.Windup = 0.5f; a.Recovery = 1f; a.Cooldown = 0f;
+            a.Impact = ImpactType.Light; a.Damage = 0f; a.BaseAccuracy = 1f; a.StunDuration = 0.5f;
+            a.Displace = DisplaceMode.TowardSource; a.DisplaceDistance = 7f;
+        });
+        charge = massacre;
+        return Unit(c, u =>
+        {
+            u.DisplayName = "The Hedron"; u.Makina = true; u.MaxHealth = 25f; u.MaxStrain = 60f; u.StrainPerSecond = 2f;
+            u.StrainRecoveryPerSecond = 0f; u.BaseDodge = 0f; u.MoveSpeed = 0f; u.BodyRadius = 0.5f;
+            u.MaxEnergy = 0f; u.StartingEnergy = 0f;
+            u.BasicAttack = null;
+            u.Actions = new List<ActionDefinition> { massacre, omen };
+            u.ViewPrefab = viewPrefab;
+        });
+    }
+
+    /// <summary>The Stellation: a Makina that wears down and slows the enemies around it (Dereliction, always on) and dashes
+    /// in to pin them in place (Outburst).</summary>
+    private static UnitDefinition CreateStellation(GameObject viewPrefab, out ActionDefinition burst)
+    {
+        const string c = "Stellation";
+        var dereliction = Action(c, "Dereliction", a =>
+        {
+            // Always on: a 6m dome around it, 10 damage a second and 30% slower movement for the enemies inside (InnatePassive aura).
+            a.Id = "dereliction"; a.DisplayName = "Dereliction"; a.BehaviorId = "aura";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.InnatePassive = true;
+            a.Shape = AreaShape.Circle; a.AreaRadius = 6f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.AuraDamagePerSecond = 10f;
+            a.AuraStatuses = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Dereliction, AppliesTo = StatusTarget.Enemies }.Mult(StatId.MoveSpeed, 0.7f) };
+        });
+        var outburst = Action(c, "Outburst", a =>
+        {
+            // A dash to the point, then a burst around it that always connects and IMMOBILIZES (OutburstBehavior).
+            a.Id = "outburst"; a.DisplayName = "Outburst"; a.BehaviorId = "outburst";
+            a.Targeting = TargetType.Position; a.Range = 8f; a.IsRanged = false; a.Shape = AreaShape.Circle; a.AreaRadius = 6f;
+            a.Windup = 0.5f; a.Recovery = 1.5f; a.Cooldown = 0f; a.StrainOnSelf = 10f;
+            a.Impact = ImpactType.Light; a.Damage = 0f; a.BaseAccuracy = 1f; a.StunDuration = 0f;
+            a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Immobilized, Duration = 0.75f, AppliesTo = StatusTarget.Enemies }.With(StatusFlags.Rooted) };
+        });
+        burst = outburst;
+        return Unit(c, u =>
+        {
+            u.DisplayName = "The Stellation"; u.Makina = true; u.MaxHealth = 45f; u.MaxStrain = 30f; u.StrainPerSecond = 2f;
+            u.StrainRecoveryPerSecond = 0f; u.BaseDodge = 0f; u.MoveSpeed = 0f; u.BodyRadius = 0.5f;
+            u.MaxEnergy = 0f; u.StartingEnergy = 0f;
+            u.BasicAttack = null;
+            u.Actions = new List<ActionDefinition> { outburst, dereliction };
+            u.ViewPrefab = viewPrefab;
+        });
+    }
+
+    /// <summary>The Infinite: a Makina that swallows what touches it and spits it back out (Imperfect Apotheosis, always on),
+    /// and calls enemies to it (Beckon).</summary>
+    private static UnitDefinition CreateInfinite(GameObject viewPrefab)
+    {
+        const string c = "Infinite";
+        var apotheosis = Action(c, "ImperfectApotheosis", a =>
+        {
+            // Always on (InnatePassive, no dome: ApotheosisBehavior.OnInnateTick). Range is the touch range between bodies,
+            // DisplaceDistance how far it tosses them; the toss is the hit (heavy, its stun).
+            a.Id = "imperfect_apotheosis"; a.DisplayName = "Imperfect Apotheosis"; a.BehaviorId = "apotheosis";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.InnatePassive = true;
+            a.Range = 0.5f; a.AreaRadius = 0f; a.DisplaceDistance = 4f;
+            a.Impact = ImpactType.Heavy; a.Damage = 24f; a.BaseAccuracy = 1f; a.StunDuration = 1f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("pull_seconds", 0.15f), new BehaviorParam("void_seconds", 1f) };
+        });
+        var beckon = Action(c, "Beckon", a =>
+        {
+            // The enemy walks toward The Infinite for 1.5s the next time it can act (BeckonBehavior, BattleSimulation.Compel.cs).
+            a.Id = "beckon"; a.DisplayName = "Beckon"; a.BehaviorId = "beckon";
+            a.Targeting = TargetType.Enemy; a.Range = 17f; a.IsRanged = true;
+            a.Windup = 0f; a.Recovery = 1.5f; a.Cooldown = 0f; a.StrainOnSelf = 10f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("walk_seconds", 1.5f) };
+        });
+        return Unit(c, u =>
+        {
+            u.DisplayName = "The Infinite"; u.Makina = true; u.MaxHealth = 25f; u.MaxStrain = 60f; u.StrainPerSecond = 2f;
+            u.StrainRecoveryPerSecond = 0f; u.BaseDodge = 0f; u.MoveSpeed = 0f; u.BodyRadius = 0.6f;
+            u.MaxEnergy = 0f; u.StartingEnergy = 0f;
+            u.BasicAttack = null;
+            u.Actions = new List<ActionDefinition> { beckon, apotheosis };
+            u.ViewPrefab = viewPrefab;
+        });
+    }
+
+    // ------------------------------------------------------------------ Duelist: opens weakpoints, darts in and out
+
+    private static UnitDefinition CreateDuelist(GameObject viewPrefab)
+    {
+        const string c = "Duelist";
+        var blade = Action(c, "FiniteBlade", a =>
+        {
+            Attack(a, "finite_blade", "Finite Blade", "basic_attack", range: 1.5f, windup: 0.3f, recovery: 0.1f, damage: 14f, accuracy: 1f, stun: 0.2f, strain: 7f, melee: true);
+            a.WeakpointsOnTarget = 1;
+        });
+        var incoherency = Action(c, "Incoherency", a =>
+        {
+            Attack(a, "incoherency", "Incoherency", "basic_attack", range: 1.5f, windup: 0.1f, recovery: 0.1f, damage: 9f, accuracy: 1f, stun: 0.75f, strain: 15f, melee: true);
+            a.Cooldown = 4f; a.WeakpointsOnTarget = 1;
+        });
+        var gouge = Action(c, "Gouge", a =>
+        {
+            // A dash down a line that hits everyone on it (GougeBehavior); each hit breaks one weakpoint, from any side.
+            a.Id = "gouge"; a.DisplayName = "Gouge"; a.BehaviorId = "gouge";
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 1.5f; a.Range = 5f; a.IsRanged = false;
+            a.Windup = 0.4f; a.Recovery = 0.1f; a.Cooldown = 6f;
+            a.Impact = ImpactType.Light; a.Damage = 15f; a.BaseAccuracy = 1f; a.StunDuration = 0.5f; a.StrainOnTarget = 7f;
+            a.BreaksWeakpoints = 1;
+        });
+        var severance = Action(c, "RecursiveSeverance", a =>
+        {
+            Attack(a, "recursive_severance", "Recursive Severance", "recursive_severance", range: 2f, windup: 0.3f, recovery: 0.3f, damage: 11f, accuracy: 1f, stun: 0.4f, strain: 5f, melee: true);
+            a.StrainOnSelf = 5f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("amp", 0.25f) };
+            a.LinkedAbilities = new List<ActionDefinition> { a };   // linked to itself: each use in a row hits harder
+        });
+        var graze = Action(c, "GrazeThePrecipice", a =>
+        {
+            a.Id = "graze_the_precipice"; a.DisplayName = "Graze The Precipice"; a.BehaviorId = "graze";
+            a.Targeting = TargetType.Position; a.Range = 7f; a.IsRanged = false;
+            a.Windup = 0.1f; a.Recovery = 0.2f; a.Cooldown = 11f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.WeakpointsOnSelf = 4;
+        });
+        var rebuttal = Action(c, "UnsignedRebuttal", a =>
+        {
+            // The Duelist's Block (its Block slot): no cooldown; Transcended, no windup but a 4s cooldown.
+            a.Id = "unsigned_rebuttal"; a.DisplayName = "Unsigned Rebuttal"; a.BehaviorId = "parry";
+            a.Targeting = TargetType.Self; a.IsRanged = false;
+            a.Windup = 0.5f; a.Recovery = 0.5f; a.Cooldown = 0f;
+            a.CanTranscend = true; a.TranscendStrain = 0f; a.TranscendWindupMultiplier = 0f; a.TranscendCooldown = 4f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("window", 0.25f), new BehaviorParam("strain_relief", 15f), new BehaviorParam("followup_seconds", 1.5f) };
+        });
+        var summation = Action(c, "Summation", a =>
+        {
+            a.Id = "summation"; a.DisplayName = "Summation"; a.BehaviorId = "summation";
+            a.Targeting = TargetType.Enemy; a.Range = 6f; a.IsRanged = false;   // the dash to it
+            a.Windup = 0.1f; a.Recovery = 0.5f; a.Cooldown = 10f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.WeakpointsOnTarget = 4; a.WeakpointSeconds = 3f;
+            a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Fated, Duration = 3f }.Mult(StatId.ActionSpeed, 0.35f) };
+        });
+        var monostep = Action(c, "Monostep", a =>
+        {
+            a.Id = "monostep"; a.DisplayName = "Monostep"; a.BehaviorId = "quick_dash";
+            a.Targeting = TargetType.Position; a.Range = 4f; a.IsRanged = false;
+            a.Windup = 0.1f; a.Recovery = 0.2f; a.Cooldown = 3f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.SelfStatuses = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Monostep, Duration = 1f }.Mult(StatId.MoveSpeed, 1.75f) };
+        });
+        var demise = Action(c, "ImpendingDemise", a =>
+        {
+            Attack(a, "impending_demise", "Impending Demise", "basic_attack", range: 1.5f, windup: 0.2f, recovery: 0.2f, damage: 18f, accuracy: 1f, stun: 0.2f, strain: 9f, melee: true);
+            a.Cooldown = 9f; a.WeakpointsOnTarget = 2;
+            a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Fated, Duration = 2f }.Mult(StatId.ActionSpeed, 0.35f) };
+        });
+        var duet = Action(c, "ADuet", a =>
+        {
+            Attack(a, "a_duet", "A Duet", "duet", range: 6f, windup: 0.6f, recovery: 0.2f, damage: 13f, accuracy: 1f, stun: 0.5f, strain: 6f, melee: true);
+            a.Cooldown = 4f;
+        });
+        var steady = Action(c, "ClearAndSteady", a =>
+            SelfBuff(a, "clear_and_steady", "Clear and Steady", "self_buff", windup: 0.5f, recovery: 0f, cooldown: 10f,
+                new StatusSpec { Id = StatusIds.ClearAndSteady, Duration = 4f, StrainOnWeakpointBreak = -20f }.Mult(StatId.ActionSpeed, 0.7f)));
+        // Opening Theorem -> Conjecture: the theorem's landing opens the conjecture for a moment (SelfStatuses + RequiredStatus);
+        // FollowUps brings it along.
+        var conjecture = Action(c, "Conjecture", a =>
+        {
+            a.Id = "conjecture"; a.DisplayName = "Conjecture"; a.BehaviorId = "conjecture";
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 1.5f; a.Range = 9f; a.IsRanged = false;
+            a.Windup = 0.6f; a.Recovery = 0.6f; a.Cooldown = 0f;
+            a.Impact = ImpactType.Light; a.Damage = 10f; a.BaseAccuracy = 1f; a.StunDuration = 0.5f; a.StrainOnTarget = 5f;
+            a.BreaksWeakpoints = 1;   // each slash, from any side
+            a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Fated, Duration = 1f }.Mult(StatId.ActionSpeed, 0.35f) };
+            a.RequiredStatus = StatusIds.ConjectureReady; a.ConsumesRequiredStatus = true;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("slash_interval", 0.2f) };
+        });
+        var theorem = Action(c, "OpeningTheorem", a =>
+        {
+            Attack(a, "opening_theorem", "Opening Theorem", "opening_theorem", range: 6f, windup: 0.3f, recovery: 0.3f, damage: 9f, accuracy: 1f, stun: 0.3f, strain: 5f, heavy: true, melee: true);
+            a.Cooldown = 7f;
+            a.SelfStatuses = new List<StatusSpec> { new StatusSpec { Id = StatusIds.ConjectureReady, Duration = 0.3f + 1.5f, Look = new StatusLook { Hidden = true } } };   // its recovery, then 1.5s
+            a.FollowUps = new List<ActionDefinition> { conjecture };
+            a.Params = new List<BehaviorParam> { new BehaviorParam("bound_height", 2f), new BehaviorParam("bound_range", 3f), new BehaviorParam("bound_seconds", 0.35f) };
+        });
+        var vindication = Action(c, "Vindication", a =>
+        {
+            // HASTE for a moment (x2 action speed), and a blink to the far side of its NEMESIS within Range (VindicationBehavior).
+            a.Id = "vindication"; a.DisplayName = "Vindication"; a.BehaviorId = "vindication";
+            a.Targeting = TargetType.Self; a.Range = 11f; a.IsRanged = false;
+            a.Windup = 0.1f; a.Recovery = 0f; a.Cooldown = 9f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.SelfStatuses = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Hastened, Duration = 0.75f }.Mult(StatId.ActionSpeed, 2f) };
+        });
+        var quell = Action(c, "QuellTheUproar", a =>
+        {
+            // Enemies within AreaRadius: QUELLED (75% slower movement) and pushed away, its NEMESIS only slowed (QuellBehavior).
+            a.Id = "quell_the_uproar"; a.DisplayName = "Quell The Uproar"; a.BehaviorId = "quell";
+            a.Targeting = TargetType.Self; a.Shape = AreaShape.Circle; a.AreaRadius = 6f; a.Range = 6f; a.IsRanged = false;
+            a.Windup = 0.4f; a.Recovery = 0.3f; a.Cooldown = 10f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.Displace = DisplaceMode.AwayFromSource; a.DisplaceDistance = 7f;
+            a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Quelled, Duration = 3f, AppliesTo = StatusTarget.Enemies }.Mult(StatId.MoveSpeed, 0.25f) };
+        });
+        var duelist = Unit(c, u =>
+        {
+            u.DisplayName = "Duelist"; u.MaxHealth = 75f; u.MaxStrain = 75f; u.BaseDodge = 0.3f; u.MoveSpeed = 8f;
+            u.MaxEnergy = 0f; u.StartingEnergy = 0f;
+            u.BasicAttack = blade;
+            u.Universal = rebuttal;   // its Block: kept by EnsureUniversal (TakesBlockSlot)
+            u.Actions = new List<ActionDefinition> { incoherency, gouge, graze, severance, summation, monostep, demise, duet, steady, theorem, vindication, quell };
+            u.Passives = new List<string> { Passives.KarranosSigil };
+            u.ViewPrefab = viewPrefab;
+        });
+        Grant(duelist, null, monostep, demise, duet, steady, theorem, vindication, quell);   // an asset made before them gets them too
+        return duelist;
     }
 
     // ------------------------------------------------------------------ Enemy types (each with its own AI profile, see UnitAIs)
@@ -809,17 +1282,116 @@ public static class SquadAssets
     {
         var wraith = CreateWraith(viewPrefab);   // first: the Monarch summons it
         // Deliverance's four parts first: Split The Minds brings them.
-        var syne = CreateDeliverancePart(viewPrefab, "Syne", SyneAI.Style, DeliveranceParts.PathToVictory, health: 75f, strain: 75f, moveSpeed: 6f);
-        var alio = CreateDeliverancePart(viewPrefab, "Alio", AlioAI.Style, DeliveranceParts.PlightUponStructure, health: 100f, strain: 125f, moveSpeed: 4f);
-        var revl = CreateDeliverancePart(viewPrefab, "Revl", RevlAI.Style, DeliveranceParts.SingleMindedPerfection, health: 125f, strain: 75f, moveSpeed: 8f, dodge: 0.25f, extra: Equipose());
-        var wex = CreateDeliverancePart(viewPrefab, "Wex", WexAI.Style, DeliveranceParts.LastAttachments, health: 145f, strain: 125f, moveSpeed: 5f, block: 0.2f);
+        var syne = CreateDeliverancePart(viewPrefab, "Syne", SyneAI.Style, DeliveranceParts.PathToVictory, health: 75f, strain: 75f, moveSpeed: 9f);
+        var alio = CreateDeliverancePart(viewPrefab, "Alio", AlioAI.Style, DeliveranceParts.PlightUponStructure, health: 100f, strain: 125f, moveSpeed: 6f);
+        var revl = CreateDeliverancePart(viewPrefab, "Revl", RevlAI.Style, DeliveranceParts.SingleMindedPerfection, health: 125f, strain: 75f, moveSpeed: 12f, dodge: 0.25f, extra: Equipose());
+        var wex = CreateDeliverancePart(viewPrefab, "Wex", WexAI.Style, DeliveranceParts.LastAttachments, health: 145f, strain: 125f, moveSpeed: 7.5f, block: 0.2f);
         return new Enemies
         {
             Sniper = CreateSniper(viewPrefab), Assassin = CreateAssassin(viewPrefab), Skirmisher = CreateSkirmisher(viewPrefab), Healer = CreateHealer(viewPrefab),
             Caster = CreateCaster(viewPrefab), Brutebeast = CreateBrutebeast(viewPrefab),
             Wraith = wraith, Monarch = CreateMonarch(viewPrefab, wraith), Zola = CreateZola(viewPrefab), Primavaeran = CreatePrimavaeran(viewPrefab), Exemplar = CreateExemplar(viewPrefab),
             Deliverance = CreateDeliverance(viewPrefab, syne, alio, revl, wex), Syne = syne, Alio = alio, Revl = revl, Wex = wex,
+            Howler = CreateHowler(viewPrefab), Matriarch = CreateMatriarch(viewPrefab),
         };
+    }
+
+    // ------------------------------------------------------------------ Howler, Matriarch
+
+    /// <summary>Howling Lament's slow on everyone it reaches.</summary>
+    public const string HowlSlowed = "howl_slowed";
+
+    /// <summary>
+    /// The Howler: a quadruped pack hunter (PackAI: packs with a leader, Prowl / Retaliate / Attack). It can't Block or
+    /// Focus. Ravenous Jaws is its basic attack; Howling Lament its leader's call (only the leader uses it: the AI's rule).
+    /// Asked for as 0.9 range, the bite reaches MeleeStrikeRange: ranges run centre to centre, and two bodies standing
+    /// together are already more than 0.9m apart.
+    /// </summary>
+    public static UnitDefinition CreateHowler(GameObject viewPrefab)
+    {
+        const string c = "Howler";
+        var jaws = Action(c, "RavenousJaws", a =>
+        {
+            Attack(a, "ravenous_jaws", "Ravenous Jaws", "basic_attack", range: MeleeStrikeRange, windup: 0.4f, recovery: 0.6f, damage: 11f, accuracy: 1f, stun: 0.3f, strain: 6f, heavy: true, melee: true);
+            a.Cooldown = 0f;
+        });
+        var lament = Action(c, "HowlingLament", a =>
+        {
+            // Everyone within 30m: 50% slower walking for 2s. The target: FATED (actions 50% slower) for 2s, and the pack sets on it.
+            a.Id = "howling_lament"; a.DisplayName = "Howling Lament"; a.BehaviorId = "howl";
+            a.Targeting = TargetType.Enemy; a.Range = 30f; a.IsRanged = true; a.PiercesTerrain = true;
+            a.Shape = AreaShape.Circle; a.AreaRadius = 30f;
+            a.Windup = 0.75f; a.Recovery = 0f; a.Cooldown = 9f;
+            a.Impact = ImpactType.Light; a.Damage = 0f; a.StunDuration = 0f;
+            a.AuraStatuses = new List<StatusSpec>
+            {
+                new StatusSpec { Id = HowlSlowed, Duration = 2f, AppliesTo = StatusTarget.Enemies, Look = new StatusLook { Name = "Howled", Word = "SLOWED", Color = new Color(0.55f, 0.6f, 0.85f) } }.Mult(StatId.MoveSpeed, 0.5f),
+            };
+            a.TargetStatusesOnHit = new List<StatusSpec>
+            {
+                new StatusSpec { Id = StatusIds.Fated, Duration = 2f, AppliesTo = StatusTarget.Enemies }.Mult(StatId.ActionSpeed, 0.5f),
+            };
+        });
+        return Unit(c, u =>
+        {
+            u.DisplayName = "Howler"; u.MaxHealth = 40f; u.MaxStrain = 40f; u.BaseDodge = 0.1f; u.MoveSpeed = 5f; u.AIProfile = HowlerAI.Style;
+            u.CannotBlock = true; u.CannotFocus = true;
+            u.BodyHeight = 1.1f; u.EyeHeight = 0.85f; u.BodyRadius = 0.45f;
+            u.BasicAttack = jaws;
+            u.Actions = new List<ActionDefinition> { lament };
+            u.ViewPrefab = viewPrefab;
+        });
+    }
+
+    /// <summary>
+    /// The Matriarch: a floating jellyfish that keeps its distance (MatriarchAI). Needlestorm (volley) sends out homing
+    /// barbs, projectiles (BattleSimulation.Projectiles.cs); Carapace (volley_stream) shields it and keeps barbs coming,
+    /// Needlestorm's (its LinkedAction); Captivate (reel) stuns a target and drags it in for a heavy blow. Captivate starts
+    /// the battle on cooldown.
+    /// </summary>
+    public static UnitDefinition CreateMatriarch(GameObject viewPrefab)
+    {
+        const string c = "Matriarch";
+        var needles = Action(c, "Needlestorm", a =>
+        {
+            a.Id = "needlestorm"; a.DisplayName = "Needlestorm"; a.BehaviorId = "volley";
+            a.Targeting = TargetType.Self; a.IsRanged = true; a.Range = 0f;
+            a.Windup = 0.6f; a.Recovery = 0.5f; a.Cooldown = 2.5f;
+            a.Impact = ImpactType.Light; a.Damage = 6f; a.BaseAccuracy = 1f; a.StunDuration = 0.1f; a.StrainOnTarget = 3f;   // per barb
+            a.ProjectileSpeed = 7f; a.ProjectileAcceleration = 16f; a.ProjectileMaxSpeed = 26f; a.ProjectileRadius = 0.3f;
+            a.ProjectileLifetime = 4f;   // a barb that hasn't found anyone in 4s falls apart
+            a.Params = new List<BehaviorParam> { new BehaviorParam("count", 10f), new BehaviorParam("every", 0.1f) };
+        });
+        var carapace = Action(c, "Carapace", a =>
+        {
+            a.Id = "carapace"; a.DisplayName = "Carapace"; a.BehaviorId = "volley_stream";
+            a.Targeting = TargetType.Self; a.IsRanged = false;
+            a.Windup = 0.1f; a.Recovery = 0f; a.Cooldown = 8f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.SelfStatuses = new List<StatusSpec>
+            {
+                new StatusSpec { Id = StatusIds.Shielded, Duration = 3f, Shield = 35f },
+                new StatusSpec { Id = "carapace", Duration = 3f, Look = new StatusLook { Name = "Carapace", Word = "CARAPACE", Color = new Color(0.55f, 0.95f, 0.9f) } }.Mult(StatId.MoveSpeed, 1.5f),
+            };
+            a.LinkedAction = needles;   // its barbs are Needlestorm's
+            a.Params = new List<BehaviorParam> { new BehaviorParam("every", 0.4f), new BehaviorParam("seconds", 3f) };
+        });
+        var captivate = Action(c, "Captivate", a =>
+        {
+            a.Id = "captivate"; a.DisplayName = "Captivate"; a.BehaviorId = "reel";
+            a.Targeting = TargetType.Enemy; a.Range = 17f; a.IsRanged = true;
+            a.Windup = 1.5f; a.Recovery = 0.75f; a.Cooldown = 10f; a.StartsOnCooldown = true;
+            a.ChannelSeconds = 3f;
+            a.Impact = ImpactType.Heavy; a.Damage = 50f; a.BaseAccuracy = 1f; a.StunDuration = 1.5f; a.StrainOnTarget = 20f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("pull_speed", 6f) };
+        });
+        return Unit(c, u =>
+        {
+            u.DisplayName = "Matriarch"; u.MaxHealth = 75f; u.MaxStrain = 90f; u.BaseDodge = 0.15f; u.MoveSpeed = 5f; u.AIProfile = MatriarchAI.Style;
+            u.BodyHeight = 2.8f; u.EyeHeight = 2.3f; u.BodyRadius = 0.7f;
+            u.Actions = new List<ActionDefinition> { captivate, carapace, needles };
+            u.ViewPrefab = viewPrefab;
+        });
     }
 
     // ------------------------------------------------------------------ Deliverance, the final boss, and its parts
@@ -912,7 +1484,7 @@ public static class SquadAssets
         {
             u.DisplayName = "Deliverance"; u.MaxHealth = 210f; u.MaxStrain = 160f; u.BaseDodge = 0.2f; u.BaseBlock = 0.25f;
             u.MoveSpeed = 5.5f; u.DashDistance = 3.5f; u.BodyRadius = 0.45f; u.AIProfile = "deliverance"; u.Boss = true;
-            u.Passives = new List<string> { DeliverancePassives.UnravelResistance, DeliverancePassives.FreedomsEmbrace, DeliverancePassives.SplitTheMinds };
+            u.Passives = new List<string> { DeliverancePassives.UnravelResistance, DeliverancePassives.FreedomsEmbrace, DeliverancePassives.SplitTheMinds, DeliverancePassives.HuntsTheSquad };
             u.BasicAttack = disassociate;
             u.Actions = new List<ActionDefinition> { hatred, slip, festival, dance, loop, stitch, glitch, split };
             u.ViewPrefab = viewPrefab;
@@ -974,7 +1546,7 @@ public static class SquadAssets
             Attack(a, "rend", "Rend", "basic_attack", range: MeleeStrikeRange, windup: 0.4f, recovery: 0.2f, damage: 6f, accuracy: 1f, stun: 0.2f, strain: 3f, melee: true));
         return Unit(c, u =>
         {
-            u.DisplayName = "Wraith"; u.MaxHealth = 30f; u.BaseDodge = 0.1f; u.MoveSpeed = 6f; u.AIProfile = "wraith";
+            u.DisplayName = "Wraith"; u.MaxHealth = 30f; u.BaseDodge = 0.1f; u.MoveSpeed = 9f; u.AIProfile = "wraith";
             u.BasicAttack = rend;
             u.Actions = new List<ActionDefinition>();
             u.ViewPrefab = viewPrefab;
@@ -1011,7 +1583,7 @@ public static class SquadAssets
         });
         return Unit(c, u =>
         {
-            u.DisplayName = "Monarch"; u.MaxHealth = 150f; u.BaseDodge = 0.1f; u.MoveSpeed = 5f; u.AIProfile = "monarch";
+            u.DisplayName = "Monarch"; u.MaxHealth = 150f; u.BaseDodge = 0.1f; u.MoveSpeed = 7.5f; u.AIProfile = "monarch";
             u.Passives = new List<string> { Passives.Ascension };
             u.BasicAttack = javelin;
             u.Actions = new List<ActionDefinition> { incineration, horde };
@@ -1051,7 +1623,7 @@ public static class SquadAssets
         });
         return Unit(c, u =>
         {
-            u.DisplayName = "Zola"; u.MaxHealth = 220f; u.BaseDodge = 0f; u.BaseBlock = 0.15f; u.MoveSpeed = 3.5f; u.AIProfile = "zola";
+            u.DisplayName = "Zola"; u.MaxHealth = 220f; u.BaseDodge = 0f; u.BaseBlock = 0.15f; u.MoveSpeed = 5.5f; u.AIProfile = "zola";
             u.BodyRadius = 0.6f;
             u.Actions = new List<ActionDefinition> { overload, stomp, wasteful };
             u.ViewPrefab = viewPrefab;
@@ -1061,7 +1633,7 @@ public static class SquadAssets
     /// <summary>Unmake The Harm's delayed heal on its target.</summary>
     public const string UnmakingHarm = "unmaking_harm";
     /// <summary>Destiny Closes In landed: Fate Encumbers Its Prey is open at that target. Fate landed: Witness To The End is.</summary>
-    public const string FateReady = "fate_ready", WitnessReady = "witness_ready";
+    public const string FateReady = "fate_ready", WitnessReady = "witness_ready";   // the chain's old follow-up openings (it is linked now)
     /// <summary>Seconds after a chain shot's recovery its follow-up stays open (SkyShotBehavior's "window" keeps the flight up as long).</summary>
     private const float ChainWindow = 1f;
 
@@ -1125,7 +1697,7 @@ public static class SquadAssets
         });
         return Unit(c, u =>
         {
-            u.DisplayName = "Exemplar"; u.MaxHealth = 90f; u.MaxStrain = 60f; u.BaseDodge = 0.2f; u.MoveSpeed = 6f; u.AIProfile = "exemplar";
+            u.DisplayName = "Exemplar"; u.MaxHealth = 90f; u.MaxStrain = 60f; u.BaseDodge = 0.2f; u.MoveSpeed = 9f; u.AIProfile = "exemplar";
             u.BasicAttack = spark;
             u.Actions = new List<ActionDefinition> { advance, pyre, retreat, smite };
             u.ViewPrefab = viewPrefab;
@@ -1182,7 +1754,7 @@ public static class SquadAssets
         });
         return Unit(c, u =>
         {
-            u.DisplayName = "Primavaeran"; u.MaxHealth = 110f; u.BaseDodge = 0.15f; u.MoveSpeed = 4f; u.AIProfile = "primavaeran";
+            u.DisplayName = "Primavaeran"; u.MaxHealth = 110f; u.BaseDodge = 0.15f; u.MoveSpeed = 6f; u.AIProfile = "primavaeran";
             u.Actions = new List<ActionDefinition> { tear, distortion, repel, decay };
             u.ViewPrefab = viewPrefab;
         });
@@ -1207,7 +1779,7 @@ public static class SquadAssets
         });
         return Unit(c, u =>
         {
-            u.DisplayName = "Sniper"; u.MaxHealth = 85f; u.BaseDodge = 0.15f; u.MoveSpeed = 4f; u.AIProfile = "sniper";
+            u.DisplayName = "Sniper"; u.MaxHealth = 85f; u.BaseDodge = 0.15f; u.MoveSpeed = 6f; u.AIProfile = "sniper";
             u.BasicAttack = rifle;
             u.Actions = new List<ActionDefinition> { snipe, marking };
             u.ViewPrefab = viewPrefab;
@@ -1235,7 +1807,7 @@ public static class SquadAssets
         });
         return Unit(c, u =>
         {
-            u.DisplayName = "Assassin"; u.MaxHealth = 90f; u.BaseDodge = 0.3f; u.MoveSpeed = 5.5f; u.DashDistance = 3.5f; u.AIProfile = "assassin";
+            u.DisplayName = "Assassin"; u.MaxHealth = 90f; u.BaseDodge = 0.3f; u.MoveSpeed = 8.5f; u.DashDistance = 3.5f; u.AIProfile = "assassin";
             u.BasicAttack = strike;
             u.Actions = new List<ActionDefinition> { hidden, polystep };
             u.ViewPrefab = viewPrefab;
@@ -1262,7 +1834,7 @@ public static class SquadAssets
         });
         return Unit(c, u =>
         {
-            u.DisplayName = "Skirmisher"; u.MaxHealth = 110f; u.BaseDodge = 0.25f; u.MoveSpeed = 5f; u.AIProfile = "skirmisher";
+            u.DisplayName = "Skirmisher"; u.MaxHealth = 110f; u.BaseDodge = 0.25f; u.MoveSpeed = 7.5f; u.AIProfile = "skirmisher";
             u.BasicAttack = strike;
             u.Actions = new List<ActionDefinition> { flow, currents };
             u.ViewPrefab = viewPrefab;
@@ -1291,7 +1863,7 @@ public static class SquadAssets
         });
         return Unit(c, u =>
         {
-            u.DisplayName = "Healer"; u.MaxHealth = 80f; u.BaseDodge = 0.1f; u.MoveSpeed = 4f; u.AIProfile = "healer";
+            u.DisplayName = "Healer"; u.MaxHealth = 80f; u.BaseDodge = 0.1f; u.MoveSpeed = 6f; u.AIProfile = "healer";
             u.BasicAttack = repel;
             u.Actions = new List<ActionDefinition> { deluge };
             u.ViewPrefab = viewPrefab;
@@ -1316,7 +1888,7 @@ public static class SquadAssets
         });
         return Unit(c, u =>
         {
-            u.DisplayName = "Caster"; u.MaxHealth = 80f; u.BaseDodge = 0.15f; u.BaseBlock = 0f; u.MoveSpeed = 4f; u.AIProfile = "caster";
+            u.DisplayName = "Caster"; u.MaxHealth = 80f; u.BaseDodge = 0.15f; u.BaseBlock = 0f; u.MoveSpeed = 6f; u.AIProfile = "caster";
             u.BasicAttack = blast;
             u.Actions = new List<ActionDefinition> { distort };
             u.ViewPrefab = viewPrefab;
@@ -1350,7 +1922,7 @@ public static class SquadAssets
         });
         return Unit(c, u =>
         {
-            u.DisplayName = "Brutebeast"; u.MaxHealth = 130f; u.BaseDodge = 0.05f; u.BaseBlock = 0.2f; u.MoveSpeed = 5f; u.AIProfile = "brutebeast";
+            u.DisplayName = "Brutebeast"; u.MaxHealth = 130f; u.BaseDodge = 0.05f; u.BaseBlock = 0.2f; u.MoveSpeed = 7.5f; u.AIProfile = "brutebeast";
             u.BasicAttack = ravage;
             u.Actions = new List<ActionDefinition> { followup, charge };
             u.ViewPrefab = viewPrefab;
@@ -1368,7 +1940,7 @@ public static class SquadAssets
     /// <summary>Classes whose ability assets are keyed "Class/File" in ActionPatches and Descriptions, since they share file names
     /// with squad abilities they copy (the Sniper's Snipe is not the Sharpshooter's).</summary>
     private static readonly HashSet<string> QualifiedClasses = new HashSet<string> { "Sniper", "Assassin", "Skirmisher", "Healer", "Caster", "Brutebeast", "Wraith", "Monarch", "Zola", "Primavaeran", "Exemplar",
-                                                                                     "Deliverance", "Syne", "Alio", "Revl", "Wex" };
+                                                                                     "Deliverance", "Syne", "Alio", "Revl", "Wex", "Monolith", "Hedron", "Stellation", "Infinite", "Howler", "Matriarch" };
 
     /// <summary>The folder name a class's abilities (under Assets/Actions) and unit (under Assets/Units) are in: the Fighter's
     /// were moved from Melee to Fighter. Folders may sit anywhere below those (Actions/Player Units/Tank): the builder finds them
@@ -1378,13 +1950,14 @@ public static class SquadAssets
     private static ActionDefinition Action(string cls, string file, System.Action<ActionDefinition> init)
     {
         string key = QualifiedClasses.Contains(cls) ? cls + "/" + file : file;
-        var a = CombatTestSceneBuilder.GetOrCreate<ActionDefinition>("Assets/Actions/" + ActionFolder(cls) + "/" + file + ".asset", x => { init(x); x.DataVersion = DataVersion; });
+        var a = CombatTestSceneBuilder.GetOrCreate<ActionDefinition>("Assets/Actions/" + ActionFolder(cls) + "/" + file + ".asset", x => { init(x); ApplyWeakpoints(x); x.DataVersion = DataVersion; });
         if (a.DataVersion < DataVersion)
         {
             if (a.DataVersion < PatchBaseline)
             {
                 CombatTestSceneBuilder.ResetToDefaults(a);
                 init(a);
+                ApplyWeakpoints(a);
                 a.Description = "";   // refilled below with the current text
             }
             else Upgrade(a, key, a.DataVersion, ActionPatches);
@@ -1443,8 +2016,16 @@ public static class SquadAssets
     public static void EnsureUniversal(UnitDefinition u)
     {
         if (u == null) return;
+        if (u.Makina)   // no Block, no Dash
+        {
+            if (u.Universal != null || u.Dash != null) { u.Universal = null; u.Dash = null; CombatTestSceneBuilder.MarkDirty(u); }
+            return;
+        }
         var block = UniversalBlock();
         var dash = UniversalDash();
+        // A class's own guard in the Block slot (the Duelist's Unsigned Rebuttal) stays there.
+        if (u.Universal != null && u.Universal != block && ActionBehaviors.Get(u.Universal.BehaviorId).TakesBlockSlot) block = u.Universal;
+        if (u.CannotBlock) block = null;   // no guard at all (the Howler)
         if (u.Universal == block && u.Dash == dash) return;
         u.Universal = block;
         u.Dash = dash;
@@ -1507,7 +2088,7 @@ public static class SquadAssets
         { "SubjugateHeadbutt", "Subjugate's headbutt at the unit you are holding." },
         { "TorrentOfStrife", "Emit a wave of strife in front of you, adding 40 strain to every enemy it hits." },
         { "PhantomStrike", "Phase to the target, straight through walls and cover, and slash it, marking it (attacks hit it more easily)." },
-        { "Mesmerize", "Drastically raise your dodge for a moment. The first attack you dodge blinks you to the attacker for 4 rapid strikes; you can stop after any of them." },
+        { "Mesmerize", "Drastically raise your dodge for a moment. The first attack on you is countered before any dodge, blinking you to the attacker for up to 4 rapid strikes." },
         { "MesmerStrike", "Mesmerize's counter: a rapid strike at the attacker you dodged." },
         { "AMillionCuts", "Dash to a target and strike it 15 times over 2 seconds, each strike a small hit and a brief stun. Once started it can't be cancelled (damage on you still breaks it)." },
         { "Polystep", "Blink to a point." },
@@ -1522,9 +2103,9 @@ public static class SquadAssets
         { "UnmakeTheHarm", "Target an ally or yourself: after 2 seconds they heal 15 plus 30% of their missing health." },
         { "Soulseeker", "Fire a shot and project your mind into it, beginning a CHANNEL. While channeling, send the bullet on up to 4 times to an enemy it can see (not the one it just hit), each a moment after the last, damaging and stunning each one." },
         { "RefractionCloak", "Become Hidden for 5 seconds: enemies can't target you. Taking damage ends it early." },
-        { "DestinyClosesIn", "Rise into the air over the windup and fire a shot that MARKS the target. If it lands, follow up with Fate Encumbers Its Prey while the target is still in sight." },
-        { "FateEncumbersItsPrey", "Follow-up to Destiny Closes In: stay in the air and fire another shot that makes the target FATED, its actions heavily slowed. If it lands, follow up with Witness To The End." },
-        { "WitnessToTheEnd", "Follow-up to Fate Encumbers Its Prey: stay in the air and fire a final heavy shot that also deals 20% of the target's missing health, then come back down." },
+        { "DestinyClosesIn", "Rise into the air over the windup and fire a shot that MARKS the target. Linked to Fate Encumbers Its Prey: it can be used straight after, at any target." },
+        { "FateEncumbersItsPrey", "Linked from Destiny Closes In (only straight after it): fire another shot that makes the target FATED, its actions heavily slowed. Linked to Witness To The End." },
+        { "WitnessToTheEnd", "Linked from Fate Encumbers Its Prey (only straight after it): fire a final heavy shot that also deals 20% of the target's missing health, then come back down." },
         { "Trammels", "Ensnare enemies at the target area, dealing damage and rooting them for 2 seconds." },
         { "MinutesTurnToCenturies", "Target an ally or yourself, slowing their actions during the windup before relieving 50 of their strain." },
         { "TrueInversion", "Channel for up to 2 seconds to invert an ally's mind: while it lasts, any strain they would gain they lose instead. Any damage on you breaks the channel." },
@@ -1536,6 +2117,47 @@ public static class SquadAssets
         { "WitheringEnd", "Channel cognitive decay on a target for up to 2.5 seconds while they stay in your sight, dealing damage over time and slowing their movement. If the channel runs its course, a final heavy burst damages and stuns them. Damage on you breaks the channel." },
         { "Madness", "Afflict an enemy or an ally with MADNESS for 3 seconds: 50% more damage, 75% faster actions and 50% faster movement, but they can only use their basic attack, again and again, on the nearest enemy. Without a basic attack, they gain Wild Swing, a weak, inaccurate melee attack, for as long as it lasts." },
         { "WildSwing", "A weak, inaccurate melee swing, lent by MADNESS to a unit with no basic attack." },
+        { "TermoulsMonolith", "Summon a Makina, The Monolith, which drops from the sky onto the target point at once, crashing down on enemies within 5m and knocking them into the air. Targeted abilities used on a Makina go on half their cooldown." },
+        { "KarraermsHedron", "Summon a Makina, The Hedron, in front of you, which at once charges the way you aimed, dragging enemies with it. Targeted abilities used on a Makina go on half their cooldown." },
+        { "SchalysConvextion", "Summon a Makina, The Stellation, at the target point, which at once bursts there, IMMOBILIZING enemies within 6m. Enemies near it take damage over time and move slower. Targeted abilities used on a Makina go on half their cooldown." },
+        { "MongeAmperesPerfection", "Summon a Makina, The Infinite, at the target point. Enemies that touch it are pulled in, VOIDED, then tossed out, taking damage and stunned. Targeted abilities used on a Makina go on half their cooldown." },
+        { "Infinite/ImperfectApotheosis", "Always on: an enemy that touches The Infinite is violently pulled into it and VOIDED for 1 second, then tossed 4m out in a random direction, taking 24 heavy damage and stunned for 1 second." },
+        { "Infinite/Beckon", "Target an enemy: the next time it can act, it is forced to walk toward The Infinite for 1.5 seconds." },
+        { "Stellation/Dereliction", "Always on: enemies within 6m of The Stellation take 10 damage a second and move 30% slower." },
+        { "Stellation/Outburst", "The Stellation dashes up to 8m to a point and bursts, IMMOBILIZING enemies within 6m for 0.75 seconds." },
+        { "Monolith/CrashDown", "The Monolith rises diagonally into the air above the target point, then crashes straight down onto it, damaging and stunning enemies within 5m and knocking them 1.5m into the air. Damage while it is up knocks it out of the air." },
+        { "Hedron/Massacre", "The Hedron charges 8m in a direction, damaging enemies it hits and dragging them along." },
+        { "Hedron/Omen", "The Hedron rises, then blinks to the target point, pulling enemies within 7m toward it and stunning them." },
+        { "Monostep", "A fast 4m dash, straight through walls and cover, then 75% more movement speed for 1 second." },
+        { "ImpendingDemise", "A quick melee strike that makes the target FATED (far slower actions) for 2 seconds and reveals 2 weakpoints." },
+        { "ADuet", "Dash up to 6m to an enemy, straight through walls and cover, and strike them. If the strike breaks a weakpoint, this ability's cooldown resets." },
+        { "OpeningTheorem", "Dash up to 6m to an enemy, straight through walls and cover, strike them, then bound into the air past them. Follow up with Conjecture within 1.5 seconds." },
+        { "Conjecture", "Follow-up to Opening Theorem: dash 9m through enemies, walls and cover, making each enemy in the way FATED for 1 second and slashing them once every 0.2 seconds for each weakpoint they have. Each slash breaks a weakpoint." },
+        { "ClearAndSteady", "For 4 seconds your actions are 30% slower, but every weakpoint you break sheds 20 strain." },
+        { "ScepterOfTyranny", "Blink an ally or enemy to a point within 5m of where they stand. Follow up within 1.5 seconds for the next effect instead: first, as Scepter of Neglect, 50% faster actions for 1.5 seconds and 2 weakpoints; then, as Scepter of Insanity, MADNESS for 2 seconds, after which the ability is on cooldown for 2 seconds. Focusing starts it over." },
+        { "SpatialChrysalis", "Apply VOIDED to an ally or enemy and channel for up to 3 seconds: they can do nothing and nothing can touch them. When the channel ends or is broken, they return and are stunned." },
+        { "CrossBeyondThresholds", "Blink up to 27m and mark where you stood. Gain 50% action speed for 4 seconds; taking damage or dashing in that time sends you back to the mark." },
+        { "StrideInUnison", "Blink to a point, taking every ally within 5m with you, each keeping its place relative to you. Transcend: enemies within 5m come too." },
+        { "Counterpoise", "Inscribe an area on the ground: for 1.5 seconds, every ally within it has 100% Block." },
+        { "GraspAndImpel", "Pull an ally to you and hold them for up to 2 seconds: they can't act, and you can only move or throw them. Thrown, they gain a 30 health shield and fly out up to 18m, stopping at the first enemy they strike, dealing heavy damage and stunning them." },
+        { "Impel", "The throw: the ally flies out in a straight line, stopping at the first enemy they strike." },
+        { "Fissure", "Stomp the ground, sending a slow crack through the earth along a line: every enemy it reaches is knocked into the air, damaged and stunned." },
+        { "DelayedCrush", "Strike an enemy, knocking them away and RUPTURING them. When RUPTURED runs out, they take a heavy blow and are stunned." },
+        { "Rupture", "Delayed Crush's blow, when RUPTURED runs out." },
+        { "GiftOfThought", "Channel your mind into an ally for up to 2.5 seconds: while it lasts, they are HASTED, acting 50% faster. Any damage on you breaks the channel." },
+        { "Supersede", "Swap the places of two units: pick one, then the other, both within range. Swapped enemies gain 1 weakpoint; swapped allies act 50% faster for 1.5 seconds." },
+        { "PressurePoints", "Break up to 2 of an enemy's weakpoints, from any side. An enemy with none is pushed 6m away instead." },
+        { "FiniteBlade", "A melee slash that opens 1 weakpoint on its target." },
+        { "Incoherency", "A quick melee strike that stuns, strains, and opens 1 weakpoint." },
+        { "Gouge", "Dash 5m in a line, hitting every enemy in the way and breaking 1 of their weakpoints, from any side." },
+        { "RecursiveSeverance", "A brutal slash, linked to itself: use it again and again in a row, on any target, and each one deals 25% more damage and costs 25% more strain than the first." },
+        { "GrazeThePrecipice", "Dash up to 7m. Every other ability comes off cooldown, and 4 weakpoints open on you." },
+        { "UnsignedRebuttal", "The Duelist's Block. After the windup, parry for 0.25 seconds: no damage, no stun. Parrying a hit sheds 15 strain, skips the recovery, and opens a follow-up: another parry with no windup. No cooldown; Transcended, no windup but a 4 second cooldown." },
+        { "Vindication", "Gain HASTE for a moment (100% faster actions for 0.75 seconds). If your NEMESIS is within 11m, instantly teleport to its far side." },
+        { "QuellTheUproar", "Enemies within 6m are heavily slowed (75% slower movement for 3 seconds) and pushed 7m away. Your NEMESIS is slowed but not pushed." },
+        { "Mindmeld", "Cleanse every debuff from an ally (not a stun). If they are recovering, their recovery ends at once." },
+        { "TheoryOfDisplacement", "Pick two units in range: they are displaced up to 6m toward each other. Transcend (+5 strain) to displace them 6m away from each other instead." },
+        { "Summation", "Dash up to 6m to an enemy, open 4 weakpoints on them for 3 seconds, and make them FATED (far slower actions) for as long." },
         { "Splinters", "Lodge a splinter in reality in an enemy: a stack of SPLINTER. When they become UNRAVELED, each SPLINTER deals 15 extra damage and stuns them 0.2 seconds longer." },
         { "BanefulDomain", "Create a zone that damages enemies inside, more the longer it stays up. Casting this again while the zone is up renews it, for 15 strain." },
         { "Mindshatter", "Deal heavy damage to a target. Transcend (hold its key, +40 strain): +1% damage for each point of strain on the target and on you, and you UNRAVEL right after." },
@@ -1576,13 +2198,18 @@ public static class SquadAssets
         { "Zola/WastefulThought", "Always on: enemies within 7m gain 5 strain every second." },
         { "Zola/Stomp", "Stomps the ground around it, damaging and stunning everyone within 7m and flinging them into the air." },
         { "Zola/MentalOverload", "Unstoppable while it winds up, then emits a huge pulse that damages, stuns and strains every enemy within 15m." },
+        { "Howler/RavenousJaws", "Bite the target, dealing damage and stunning." },
+        { "Howler/HowlingLament", "Only the pack's leader howls. Slows every enemy within 30m and marks the target as FATED (its actions slowed), setting the pack on it." },
+        { "Matriarch/Needlestorm", "Summons a swarm of 10 barbs that shoot out in random directions, then home in on the closest enemy, gaining speed as they travel." },
+        { "Matriarch/Carapace", "Gain a shield and bonus movement speed for 3 seconds, firing a Needlestorm barb every 0.4 seconds meanwhile." },
+        { "Matriarch/Captivate", "Stuns and interrupts the target, then channels for up to 3 seconds, dragging it toward the Matriarch. If it arrives, it takes heavy damage and is stunned." },
         { "Deliverance/Disassociate", "A melee attack that afflicts the target with PERPLEXITY. It does nothing on its own, but lets Deliverance Slip behind them at once." },
         { "Deliverance/PraasHatred", "A fast, powerful melee attack that can be followed up again and again on the same target. After the 2nd follow-up, each one is a Heavy impact dealing double damage." },
         { "Deliverance/Slip", "Teleport behind a PERPLEXED target instantly, from anywhere." },
         { "Deliverance/FestivalOfColors", "Gain 50% action speed and move speed for 4 seconds, and access to Joyous Dance." },
         { "Deliverance/JoyousDance", "During Festival Of Colors: always dash away from enemies for the whole windup, keeping the target in range, then zap it with one of Marked, Time Slowed or Immobilized at random." },
         { "Deliverance/CloseTheLoop", "A powerful, wall-piercing ranged attack. If it is blocked or dodged, Deliverance teleports to the target and makes it FATED." },
-        { "Deliverance/Stitch", "A melee attack that melds Deliverance into its target: untargetable and taking no damage, it heals while the target is lifted into the air, then dashes out of them." },
+        { "Deliverance/Stitch", "A melee attack that melds Deliverance into its target: untargetable and taking no damage, it heals and sheds strain while the target is lifted into the air, then dashes out of them." },
         { "Deliverance/Reduction", "Afflict every enemy in a line with REDUCTION: half movement speed, and strain building up over time." },
         { "Deliverance/SplitTheMinds", "At death's door: unkillable and unstoppable, Deliverance splits into its four parts. A pulse takes 75% of every other enemy's maximum health and pushes every unit 9m away." },
         { "Deliverance/ImprintUponItself", "Copy a random ability from a player unit's loadout into this unit's own, where it can be used normally. Each use adds 0.1s to its windup and recovery, 0.25s to its cooldown, and takes 2m off its range." },
@@ -1604,6 +2231,44 @@ public static class SquadAssets
 
     /// <summary>Gives an ability its look (ActionDefinition.Visuals) if it has none yet: an asset's own, once set (here or in
     /// the Inspector), is never overwritten. Abilities not listed keep Auto, and CombatVfx works a look out from them.</summary>
+    /// <summary>The weakpoints an ability opens when it is first made (by ActionDefinition.Id): on its target, on its user
+    /// while it winds up, on its user as it starts. Tune them on the asset afterwards.</summary>
+    private static readonly Dictionary<string, int[]> WeakpointsById = new Dictionary<string, int[]>
+    {
+        { "mental_overload", new[] { 4, 4, 0 } },
+        { "swift_engagement", new[] { 1, 0, 0 } },
+        { "the_endless_hunt", new[] { 4, 0, 0 } },
+        { "mark_of_the_unmaker", new[] { 1, 0, 0 } },
+        { "extricate", new[] { 1, 0, 0 } },
+        { "tracking_shot", new[] { 0, 0, 1 } },
+        { "dreadful_fixation", new[] { 1, 0, 0 } },
+        { "marking_shot", new[] { 1, 0, 0 } },
+        { "sniper_marking_shot", new[] { 1, 0, 0 } },
+        { "cataclysm", new[] { 0, 0, 4 } },
+        { "true_inversion", new[] { 4, 0, 0 } },
+        { "withering_end", new[] { 1, 0, 0 } },
+        { "madness", new[] { 3, 0, 0 } },
+        { "wrinkles_of_reality", new[] { 1, 0, 0 } },
+        { "subjugate", new[] { 0, 2, 0 } },
+        { "death_sentence", new[] { 4, 0, 0 } },
+        { "cognitive_burden", new[] { 1, 0, 0 } },
+        { "distort_space", new[] { 0, 1, 0 } },
+        { "split_apart_the_sky", new[] { 0, 2, 0 } },
+        { "charge", new[] { 0, 1, 0 } },
+        { "hidden_strike", new[] { 1, 0, 0 } },
+        { "divine_javelin", new[] { 1, 1, 0 } },
+        { "disassociate", new[] { 1, 0, 0 } },
+        { "close_the_loop", new[] { 4, 0, 0 } },
+        { "joyous_dance", new[] { 1, 0, 0 } },
+    };
+
+    private static void ApplyWeakpoints(ActionDefinition a)
+    {
+        int[] w;
+        if (a == null || !WeakpointsById.TryGetValue(a.Id ?? "", out w)) return;
+        a.WeakpointsOnTarget = w[0]; a.WeakpointsOnSelfDuringWindup = w[1]; a.WeakpointsOnSelf = w[2];
+    }
+
     public static void ApplyVisuals(ActionDefinition a)
     {
         ActionVisuals v;
@@ -1661,6 +2326,46 @@ public static class SquadAssets
         { "withering_end", new ActionVisuals(VfxKind.Beam, new Color(0.55f, 0.75f, 0.3f), 0.12f) },
         { "madness", new ActionVisuals(VfxKind.Bolt, new Color(1f, 0.25f, 0.35f), 0.06f) },
         { "wild_swing", new ActionVisuals(VfxKind.Slash, new Color(1f, 0.8f, 0.6f), 0.09f) },
+        { "termouls_monolith", new ActionVisuals(VfxKind.Buff, new Color(0.55f, 0.8f, 1f), 0.06f) },
+        { "karraerms_hedron", new ActionVisuals(VfxKind.Buff, new Color(0.75f, 0.55f, 1f), 0.06f) },
+        { "crash_down", new ActionVisuals(VfxKind.Shockwave, new Color(0.55f, 0.8f, 1f), 0.16f) },
+        { "massacre", new ActionVisuals(VfxKind.Slash, new Color(0.75f, 0.55f, 1f), 0.14f) },
+        { "omen", new ActionVisuals(VfxKind.Shockwave, new Color(0.75f, 0.55f, 1f), 0.12f) },
+        { "monge_amperes_perfection", new ActionVisuals(VfxKind.Buff, new Color(0.6f, 0.95f, 1f), 0.06f) },
+        { "beckon", new ActionVisuals(VfxKind.Bolt, new Color(0.75f, 0.85f, 1f), 0.05f) },
+        { "schalys_convextion", new ActionVisuals(VfxKind.Buff, new Color(0.85f, 0.5f, 0.95f), 0.06f) },
+        { "outburst", new ActionVisuals(VfxKind.Shockwave, new Color(0.85f, 0.5f, 0.95f), 0.12f) },
+        { "dereliction", new ActionVisuals(VfxKind.Buff, new Color(0.85f, 0.5f, 0.95f), 0.06f) },
+        { "opening_theorem", new ActionVisuals(VfxKind.Slash, new Color(0.95f, 0.9f, 0.6f), 0.14f) },
+        { "conjecture", new ActionVisuals(VfxKind.Slash, new Color(0.95f, 0.9f, 0.6f), 0.1f) },
+        { "monostep", new ActionVisuals(VfxKind.Buff, new Color(0.9f, 0.95f, 1f), 0.06f) },
+        { "impending_demise", new ActionVisuals(VfxKind.Slash, new Color(1f, 0.8f, 0.2f), 0.1f) },
+        { "a_duet", new ActionVisuals(VfxKind.Slash, new Color(0.9f, 0.95f, 1f), 0.12f) },
+        { "clear_and_steady", new ActionVisuals(VfxKind.Buff, new Color(0.6f, 0.9f, 1f), 0.06f) },
+        { "scepter_of_tyranny", new ActionVisuals(VfxKind.Bolt, new Color(0.6f, 0.45f, 1f), 0.06f) },
+        { "spatial_chrysalis", new ActionVisuals(VfxKind.Buff, new Color(0.6f, 0.45f, 1f), 0.06f) },
+        { "cross_beyond_thresholds", new ActionVisuals(VfxKind.Buff, new Color(0.6f, 0.8f, 1f), 0.06f) },
+        { "stride_in_unison", new ActionVisuals(VfxKind.Buff, new Color(0.6f, 0.8f, 1f), 0.06f) },
+        { "counterpoise", new ActionVisuals(VfxKind.Buff, new Color(0.55f, 0.85f, 1f), 0.06f) },
+        { "grasp_and_impel", new ActionVisuals(VfxKind.Bolt, new Color(0.9f, 0.85f, 0.6f), 0.05f) },
+        { "fissure", new ActionVisuals(VfxKind.Shockwave, new Color(0.7f, 0.55f, 0.35f), 0.12f) },
+        { "delayed_crush", new ActionVisuals(VfxKind.Slash, new Color(1f, 0.45f, 0.35f), 0.08f) },
+        { "rupture", new ActionVisuals(VfxKind.Shockwave, new Color(1f, 0.45f, 0.35f), 0.1f) },
+        { "impel", new ActionVisuals(VfxKind.Shockwave, new Color(0.9f, 0.85f, 0.6f), 0.1f) },
+        { "gift_of_thought", new ActionVisuals(VfxKind.Bolt, new Color(1f, 0.85f, 0.45f), 0.05f) },
+        { "supersede", new ActionVisuals(VfxKind.Bolt, new Color(0.75f, 0.6f, 1f), 0.06f) },
+        { "pressure_points", new ActionVisuals(VfxKind.Bolt, new Color(1f, 0.8f, 0.2f), 0.07f) },
+        { "finite_blade", new ActionVisuals(VfxKind.Slash, new Color(0.9f, 0.95f, 1f), 0.09f) },
+        { "incoherency", new ActionVisuals(VfxKind.Slash, new Color(1f, 0.5f, 0.8f), 0.09f) },
+        { "gouge", new ActionVisuals(VfxKind.Slash, new Color(1f, 0.8f, 0.2f), 0.12f) },
+        { "recursive_severance", new ActionVisuals(VfxKind.Slash, new Color(1f, 0.35f, 0.3f), 0.11f) },
+        { "graze_the_precipice", new ActionVisuals(VfxKind.Buff, new Color(0.9f, 0.95f, 1f), 0.06f) },
+        { "unsigned_rebuttal", new ActionVisuals(VfxKind.Buff, new Color(0.9f, 0.95f, 1f), 0.06f) },
+        { "summation", new ActionVisuals(VfxKind.Slash, new Color(1f, 0.8f, 0.2f), 0.1f) },
+        { "vindication", new ActionVisuals(VfxKind.Buff, new Color(0.95f, 0.25f, 0.2f), 0.06f) },
+        { "quell_the_uproar", new ActionVisuals(VfxKind.Shockwave, new Color(0.45f, 0.55f, 0.9f), 0.15f) },
+        { "mindmeld", new ActionVisuals(VfxKind.Bolt, new Color(0.6f, 1f, 0.85f), 0.05f) },
+        { "theory_of_displacement", new ActionVisuals(VfxKind.Bolt, new Color(0.75f, 0.6f, 1f), 0.06f) },
         { "splinters", new ActionVisuals(VfxKind.Bolt, new Color(0.85f, 0.75f, 1f), 0.035f) },
         { "baneful_domain", new ActionVisuals(VfxKind.Shockwave, new Color(0.6f, 0.15f, 0.3f), 0.2f) },
         { "mindshatter", new ActionVisuals(VfxKind.Bolt, new Color(1f, 0.35f, 0.85f), 0.12f) },
@@ -1745,6 +2450,11 @@ public static class SquadAssets
         { "horde_of_memories", new ActionVisuals(VfxKind.Buff, new Color(0.55f, 0.45f, 0.85f)) },
         { "incineration", new ActionVisuals(VfxKind.Beam, new Color(1f, 0.6f, 0.2f), 0.35f) },
         { "wasteful_thought", new ActionVisuals(VfxKind.Buff, new Color(0.45f, 0.75f, 1f)) },
+        { "ravenous_jaws", new ActionVisuals(VfxKind.Slash, new Color(0.95f, 0.55f, 0.35f), 0.12f) },
+        { "howling_lament", new ActionVisuals(VfxKind.Shockwave, new Color(0.6f, 0.65f, 1f), 0.1f) },
+        { "needlestorm", new ActionVisuals(VfxKind.Buff, new Color(0.85f, 0.5f, 1f)) },
+        { "carapace", new ActionVisuals(VfxKind.Buff, new Color(0.55f, 0.95f, 0.9f)) },
+        { "captivate", new ActionVisuals(VfxKind.Beam, new Color(0.95f, 0.45f, 0.95f), 0.08f) },
         { "stomp", new ActionVisuals(VfxKind.Shockwave, new Color(0.45f, 0.75f, 1f), 0.2f) },
         { "mental_overload", new ActionVisuals(VfxKind.Shockwave, new Color(0.55f, 0.85f, 1f), 0.3f) },
         { "abstract_decay", new ActionVisuals(VfxKind.Lob, new Color(0.55f, 0.2f, 0.45f)) },
@@ -1760,6 +2470,10 @@ public static class SquadAssets
     // description above changes, add the text it had here.
     private static readonly Dictionary<string, string[]> OldDescriptions = new Dictionary<string, string[]>
     {
+        { "TermoulsMonolith", new[] { "Summon a Makina, The Monolith, which drops from the sky onto the target point at once, crashing down on enemies within 5m. Targeted abilities used on a Makina go on half their cooldown." } },
+        { "Monolith/CrashDown", new[] { "The Monolith rises into the air, then crashes down at the target point, damaging and stunning enemies within 5m and knocking them 1.5m into the air. Damage while it is up knocks it out of the air." } },
+        { "Monostep", new[] { "A fast 4m dash, then 75% more movement speed for 1 second." } },
+        { "ADuet", new[] { "Dash up to 6m to an enemy and strike them. If the strike breaks a weakpoint, this ability's cooldown resets." } },
         { "Monarch/Incineration", new[] { "Flies up and toward its target over the windup until it is within 12m, then fires a continuous beam for 3 seconds that deals massive damage. Then flies back down." } },
         { "Stutter", new[] { "A near-instant jolt that interrupts the target's windup or charge. Deals no damage and costs you 15 strain." } },
         { "BattleTrance", new[] { "Briefly enter a trance: sheds strain and speeds up your actions. Enables Final Cut." } },

@@ -48,13 +48,15 @@ namespace TacticsGame.Presentation
                 case ActionStat.EnergyCost: return "Energy cost";
                 case ActionStat.Duration: return "Duration";
                 case ActionStat.TranscendStrain: return "Transcend strain";
+                case ActionStat.CritChance: return "Critical chance";
+                case ActionStat.CritDamage: return "Critical damage";
             }
             return stat.ToString();
         }
 
         /// <summary>How a unit stat's numbers read: fractions (dodge, block, hit chance) as percentages, distances in metres.</summary>
         private static bool IsFraction(StatId stat) { return stat == StatId.Dodge || stat == StatId.Block || stat == StatId.IncomingAccuracy; }
-        private static bool IsFraction(ActionStat stat) { return stat == ActionStat.Accuracy || stat == ActionStat.BlockPierce; }
+        private static bool IsFraction(ActionStat stat) { return stat == ActionStat.Accuracy || stat == ActionStat.BlockPierce || stat == ActionStat.CritChance || stat == ActionStat.CritDamage; }
 
         private static string UnitOf(ActionStat stat)
         {

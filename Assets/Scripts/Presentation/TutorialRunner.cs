@@ -242,7 +242,7 @@ namespace TacticsGame.Presentation
                     if (IsPlayer(e.TargetId)) justDodged.Add(e.TargetId);
                     break;
                 case Core.EventType.Dash:
-                    if (e.Payload is DashInfo && !((DashInfo)e.Payload).Forced && justDodged.Remove(e.ActorId) && ClassMatches(e.ActorId) && Is(TutorialGoal.DodgeDash)) Count();
+                    if (e.Payload is DashInfo && !((DashInfo)e.Payload).Forced && !((DashInfo)e.Payload).Step && justDodged.Remove(e.ActorId) && ClassMatches(e.ActorId) && Is(TutorialGoal.DodgeDash)) Count();
                     break;
                 case Core.EventType.QueuedActionChanged:
                     if (e.TargetId != null && IsPlayer(e.ActorId) && ClassMatches(e.ActorId) && Is(TutorialGoal.ChaseOrQueue)) Count();

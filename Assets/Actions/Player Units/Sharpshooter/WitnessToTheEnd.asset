@@ -16,7 +16,10 @@ MonoBehaviour:
   DisplayName: Witness To The End
   BehaviorId: sky_shot
   Roles: 0
-  Description: Fire a final shot that deals more damage based on missing health.
+  Description: 'Linked from Fate Encumbers Its Prey (only straight after it): fire
+    a final shot that deals more damage based on missing health.'
+  Details: 
+  WindupName: 
   Targeting: 2
   Range: 16
   IsRanged: 1
@@ -27,12 +30,12 @@ MonoBehaviour:
   Cooldown: 0
   EnergyCost: 0
   EnergyGain: 0
-  RequiredStatus: witness_ready
-  ConsumesRequiredStatus: 1
-  RequiredStatusOnTarget: 1
+  RequiredStatus: 
+  ConsumesRequiredStatus: 0
+  RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 1
-  Damage: 35
+  Damage: 40
   BaseAccuracy: 1
   StunDuration: 1
   StrainOnTarget: 15
@@ -86,14 +89,23 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  LinkedAbilities: []
+  RequiresLink: 1
   CanTranscend: 0
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
+  TranscendCooldown: -1
   ExtraCinematic: 0
   Visuals:
     Kind: 1

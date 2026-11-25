@@ -49,6 +49,10 @@ namespace TacticsGame.Presentation
             }
             foreach (var block in FindObjectsByType<ElevationBlock>(FindObjectsSortMode.InstanceID))
                 if (block.isActiveAndEnabled) state.Terrain.Blocks.Add(block.ToBlock());
+            // A blockout map's climbable ground: its sampled heights.
+            var loader = FindFirstObjectByType<MapLoader>();
+            if (loader != null && loader.Current != null && loader.Current.Blockout != null && loader.Current.Heights != null && !loader.Current.Heights.IsEmpty)
+                state.Terrain.Grid = loader.Current.Heights;
             return state;
         }
     }
