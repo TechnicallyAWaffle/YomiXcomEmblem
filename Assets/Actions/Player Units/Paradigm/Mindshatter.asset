@@ -16,9 +16,10 @@ MonoBehaviour:
   DisplayName: Mindshatter
   BehaviorId: mindshatter
   Roles: 0
-  Description: 'Deal heavy damage to a target. Transcend (hold its key, +40 strain):
-    +1% damage for each point of strain on the target and on you, and you UNRAVEL
-    right after.'
+  Description: Shatter a target's mind, dealing heavy damage. Transcend to deal more
+    damage the higher you and your target's Strain is and UNRAVEL you after casting.
+  Details: 
+  WindupName: 
   Targeting: 2
   Range: 15
   IsRanged: 1
@@ -88,8 +89,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1

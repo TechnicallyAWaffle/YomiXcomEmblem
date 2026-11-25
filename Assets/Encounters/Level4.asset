@@ -36,6 +36,11 @@ MonoBehaviour:
     - Unit: {fileID: 11400000, guid: 0f1833ed2b2883c469a1093e9f4303e8, type: 2}
       Count: 1
       Upgrades: []
+      ArriveAfter: 5
+      Side: 1
+    - Unit: {fileID: 11400000, guid: 1c1630d06c3ce1341b0febc38013f263, type: 2}
+      Count: 1
+      Upgrades: []
       ArriveAfter: 0
       Side: 1
     Objective: 0

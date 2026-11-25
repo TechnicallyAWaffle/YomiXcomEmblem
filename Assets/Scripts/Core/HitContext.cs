@@ -6,6 +6,7 @@ namespace TacticsGame.Core
         Aiming,   // before the hit roll: change AccuracyBonus
         Damage,   // the hit landed and wasn't dodged, before block: change DamageMultiplier
         Landed,   // damage, strain and the Damage event are done, before reactions (interrupts, statuses, stun); the target is alive
+        Resolved, // the attack is over, however it ended (missed, dodged, killed, or landed with its reactions and stun): tidy up
     }
 
     /// <summary>A rule that reads or changes a hit as it resolves (see BattleSimulation.AddHitRule).</summary>
@@ -29,8 +30,12 @@ namespace TacticsGame.Core
         // Damage
         public float Dodge, Block;         // the target's, as the tick began (simultaneous hits all see the same)
         public float DamageMultiplier = 1f;// rules multiply this (Lethal Prescience on a stunned target)
-        public float Raw, Dealt;           // before and after block
+        public float Raw, Dealt;           // before and after block (and shields)
+        public float Shielded;             // what shields on the target soaked up of it (AbsorbWithShields)
         public bool Negated;               // a Transcended Block: no damage, no strain, no wear
+        public bool Critical;              // it struck critically (BattleSimulation.CritChanceFor): DamageMultiplier already counts it
+        public int WeakpointsBroken;       // weakpoints this hit broke (BreakWeakpointsOnHit): DamageMultiplier counts them, and its stun will
+        public bool Shattered;             // that was the target's last one: what it was doing is interrupted
 
         // Landed
         public bool Unravel;               // a Heavy hit at max strain: unravels, whatever the target is immune to

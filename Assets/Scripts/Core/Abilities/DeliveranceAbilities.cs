@@ -127,7 +127,7 @@ namespace TacticsGame.Core
                 }
             if (bestScore == float.MinValue) best = closest;
             // The whole windup is the dash: the attack winds up on the way and lands as it ends.
-            if (Flat(best, actor.Position) > MinDash) sim.SlideUnitTo(actor, best, Mathf.Max(BattleSimulation.TickLength, a.ResolveAt - sim.Now));
+            if (Flat(best, actor.Position) > MinDash) sim.SlideUnitTo(actor, best, Mathf.Max(BattleSimulation.TickLength, a.ResolveAt - sim.Now), best);   // through walls and cover
         }
 
         /// <summary>A spot closer than this isn't a dash.</summary>
@@ -206,7 +206,8 @@ namespace TacticsGame.Core
     /// <summary>
     /// Stitch (stitch): a melee strike whose stun (StunDuration, the meld's length) lifts the target 'lift' (5m) up over
     /// that time (BattleSimulation.LiftUnit) and melds the user into it (BattleSimulation.BeginMeld): untargetable, taking
-    /// no damage, healing 'heal_per_second' (70: 7 per 0.1s). When the meld ends, or the target is knocked out of the air,
+    /// no damage, healing 'heal_per_second' (70: 7 per 0.1s) and shedding 'strain_relief_per_second' (70: 7 per 0.1s) of
+    /// strain. When the meld ends, or the target is knocked out of the air,
     /// the user dashes 'exit_dash' (5m) out of it.
     /// </summary>
     public class StitchBehavior : BasicAttackBehavior
@@ -217,6 +218,7 @@ namespace TacticsGame.Core
             {
                 yield return new BehaviorParam("lift", 5f);
                 yield return new BehaviorParam("heal_per_second", 70f);
+                yield return new BehaviorParam("strain_relief_per_second", 70f);
                 yield return new BehaviorParam("exit_dash", 5f);
             }
         }
@@ -224,7 +226,8 @@ namespace TacticsGame.Core
         public override void Describe(AbilityTip tip)
         {
             base.Describe(tip);
-            tip.Add("Meld", string.Format("lifts them {0}; heal {1:0}/s inside; dash {2} out", AbilityTip.Metres(Param(tip.Def, "lift")), Param(tip.Def, "heal_per_second"), AbilityTip.Metres(Param(tip.Def, "exit_dash"))));
+            tip.Add("Meld", string.Format("lifts them {0}; heal {1:0}/s and shed {2:0} strain/s inside; dash {3} out", AbilityTip.Metres(Param(tip.Def, "lift")),
+                Param(tip.Def, "heal_per_second"), Param(tip.Def, "strain_relief_per_second"), AbilityTip.Metres(Param(tip.Def, "exit_dash"))));
         }
 
         protected override void DescribeMovement(AbilityTip tip) { }
@@ -235,7 +238,7 @@ namespace TacticsGame.Core
             if (target == null || !target.IsAlive) return;
             var actor = a.Actor; var def = a.Definition;
             float seconds = a.Stat(ActionStat.StunDuration);
-            float lift = Param(def, "lift"), heal = Param(def, "heal_per_second"), exit = Param(def, "exit_dash");
+            float lift = Param(def, "lift"), heal = Param(def, "heal_per_second"), relief = Param(def, "strain_relief_per_second"), exit = Param(def, "exit_dash");
             effects.Add(new AttackEffect
             {
                 Source = actor, TargetId = target.Id, Definition = def, DamageMultiplier = a.DamageMultiplier, Tag = a.Tag,
@@ -243,7 +246,7 @@ namespace TacticsGame.Core
                 {
                     if (t.Phase != UnitPhase.Stunned) return;   // a guard that stopped the stun stops the meld
                     s.LiftUnit(t, lift, actor, seconds);
-                    s.BeginMeld(actor, t, def, seconds, heal, exit);
+                    s.BeginMeld(actor, t, def, seconds, heal, exit, relief);
                 },
             });
         }

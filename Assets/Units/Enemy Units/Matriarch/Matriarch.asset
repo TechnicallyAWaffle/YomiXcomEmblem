@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
+  m_Name: Matriarch
+  m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
+  DisplayName: Matriarch
+  MaxHealth: 75
+  BaseDodge: 0.15
+  BaseBlock: 0
+  MaxStrain: 90
+  StrainRecoveryPerSecond: 6
+  StrainRecoveryDelay: 0.5
+  MaxEnergy: 0
+  StartingEnergy: 0
+  ActionSpeed: 1
+  MoveSpeed: 5
+  DashDistance: 3
+  EyeHeight: 2.3
+  BodyHeight: 2.8
+  BodyRadius: 0.7
+  BasicAttack: {fileID: 0}
+  Makina: 0
+  CannotBlock: 0
+  CannotFocus: 0
+  StrainPerSecond: 0
+  Description: 
+  Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
+  Actions:
+  - {fileID: 11400000, guid: bc64800e477d1ea4e81453b339a1d520, type: 2}
+  - {fileID: 11400000, guid: ce2c8915ccc4fc74eaae13376abc061e, type: 2}
+  - {fileID: 11400000, guid: 8811e3e8e754806448726f9977d8c544, type: 2}
+  Passives: []
+  AIProfile: matriarch
+  AI: {fileID: 0}
+  Boss: 0
+  ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Model: {fileID: 919132149155446097, guid: 1af4800e456b11b40bb60e1634cbf0ff, type: 3}
+  ModelAnimations: {fileID: 9100000, guid: e280037afd3f33a408f16c22735507f0, type: 2}
+  ModelEtchings: {fileID: 0}
+  Icon: {fileID: 0}
+  GrantedActions: []
+  DataVersion: 15

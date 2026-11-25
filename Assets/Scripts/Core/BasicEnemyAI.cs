@@ -123,7 +123,7 @@ namespace TacticsGame.Core
         }
 
         /// <summary>A stable number in [0, 1) for this unit and window (FNV-1a, then a final mix).</summary>
-        private static float Roll01(string id, int window)
+        protected static float Roll01(string id, int window)
         {
             uint h = 2166136261u;
             foreach (char c in id) { h ^= c; h *= 16777619u; }

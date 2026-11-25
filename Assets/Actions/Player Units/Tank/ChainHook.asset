@@ -17,6 +17,8 @@ MonoBehaviour:
   BehaviorId: basic_attack
   Roles: 0
   Description: Drag an enemy towards you, stunning them briefly.
+  Details: 
+  WindupName: 
   Targeting: 2
   Range: 15
   IsRanged: 1
@@ -24,11 +26,12 @@ MonoBehaviour:
   DestinationRange: 0
   Windup: 0.6
   Recovery: 0.5
-  Cooldown: 8
+  Cooldown: 7
   EnergyCost: 0
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 0
   Damage: 6
@@ -47,8 +50,22 @@ MonoBehaviour:
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonUnits: []
+  RandomStatusesOnHit: []
+  SummonCount: 0
+  SummonAIStyle: 
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
+  MissingHealthDamage: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5
@@ -58,6 +75,7 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  SelfStatusesOnHit: []
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -70,7 +88,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
+  FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1

@@ -18,6 +18,8 @@ MonoBehaviour:
   Roles: 0
   Description: Enter a Flurry, gaining bonus movement speed and faster actions, but
     you can only use your basic attack.
+  Details: 
+  WindupName: 
   Targeting: 1
   Range: 15
   IsRanged: 0
@@ -30,6 +32,7 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 0
   Damage: 0
@@ -51,12 +54,17 @@ MonoBehaviour:
   AuraAtTarget: 0
   AuraDamagePerSecond: 0
   AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
   InnatePassive: 0
   SummonUnit: {fileID: 0}
+  SummonUnits: []
+  RandomStatusesOnHit: []
   SummonCount: 0
+  SummonAIStyle: 
   GuardBreakSeconds: 0
   StartsOnCooldown: 0
   ChannelSeconds: 0
+  MissingHealthDamage: 0
   ChannelNeedsSight: 0
   ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
@@ -74,7 +82,7 @@ MonoBehaviour:
       Value: 2.5
     - Stat: 7
       Op: 1
-      Value: 1.5
+      Value: 1.25
     ActionModifiers: []
     Flags: 512
     ForbidsActions: []
@@ -87,7 +95,12 @@ MonoBehaviour:
       Hidden: 0
       Important: 0
     HealPerSecond: 0
+    StrainPerSecond: 0
+    StrainOnWeakpointBreak: 0
     BreakStun: 0
+    HealOnExpire: 0
+    HealMissingOnExpire: 0
+    Shield: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -105,6 +118,7 @@ MonoBehaviour:
     RedirectsHits: 0
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  SelfStatusesOnHit: []
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -117,7 +131,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
+  FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1

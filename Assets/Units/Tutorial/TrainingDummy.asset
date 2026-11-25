@@ -23,7 +23,7 @@ MonoBehaviour:
   MaxEnergy: 0
   StartingEnergy: 0
   ActionSpeed: 1
-  MoveSpeed: 3
+  MoveSpeed: 4.5
   DashDistance: 3
   EyeHeight: 1.6
   BodyHeight: 1.8

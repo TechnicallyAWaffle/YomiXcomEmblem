@@ -19,6 +19,7 @@ MonoBehaviour:
   Description: Copy a random ability from a player unit's loadout into this unit's
     own, where it can be used normally. Each use adds 0.1s to its windup and recovery,
     0.25s to its cooldown, and takes 2m off its range.
+  Details: 
   Targeting: 2
   Range: 25
   IsRanged: 1
@@ -26,7 +27,7 @@ MonoBehaviour:
   DestinationRange: 0
   Windup: 0.1
   Recovery: 0.1
-  Cooldown: 0.25
+  Cooldown: 0.1
   EnergyCost: 0
   EnergyGain: 0
   RequiredStatus: 
@@ -88,8 +89,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
@@ -112,5 +119,5 @@ MonoBehaviour:
   - Key: range_step
     Value: 2
   - Key: cooldown_step
-    Value: 0.25
+    Value: 0.2
   DataVersion: 15

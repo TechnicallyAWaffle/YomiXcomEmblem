@@ -19,6 +19,7 @@ namespace TacticsGame.Core
             var def = cmd.Action;
             unit.Waiting = false;
             ClearQueued(unit, null);
+            BreakLinks(unit);   // charging is using an ability
             PayCosts(unit, def, behavior, null);
             unit.ActiveAction = new ActionInstance { Actor = unit, Definition = def, Behavior = behavior, StartedAt = Now, ResolveAt = float.MaxValue };
             unit.Phase = UnitPhase.Charging;
@@ -45,7 +46,7 @@ namespace TacticsGame.Core
             var def = charged.Definition;
             var release = def.Targeting == TargetType.Position ? UnitCommand.UseActionAt(unit.Id, def, cmd.TargetPos)
                                                                : UnitCommand.UseAction(unit.Id, def, cmd.TargetUnitId ?? unit.Id);
-            if (def.Targeting == TargetType.Enemy || def.Targeting == TargetType.Ally)
+            if (def.Targeting == TargetType.Enemy || def.Targeting == TargetType.Ally || def.Targeting == TargetType.AnyUnit)
             {
                 if (!CanUse(unit, def, GetUnit(release.TargetUnitId), out reason, false)) return false;   // already paid for
             }
@@ -83,11 +84,44 @@ namespace TacticsGame.Core
 
         /// <summary>Slide a unit to 'to' over 'duration' (Phantom Strike, Mesmerize's blink). Can't start anything until it lands.
         /// phaseFrom: for a move that passes through walls (Phantom Strike), the point a crowded landing spot is searched
-        /// from instead of the unit, so the search stays on the far side.</summary>
-        public void SlideUnitTo(Unit unit, Vector3 to, float duration, Vector3? phaseFrom = null)
+        /// from instead of the unit, so the search stays on the far side. arc: a bound through the air, this high at its peak
+        /// (shown by the views; the simulation keeps it on the ground).</summary>
+        public void SlideUnitTo(Unit unit, Vector3 to, float duration, Vector3? phaseFrom = null, float arc = 0f)
         {
             if (!unit.IsAlive || (to - unit.Position).sqrMagnitude <= 1e-4f) return;
-            Relocate(unit, to, duration, false, null, phaseFrom);
+            Relocate(unit, to, duration, false, null, phaseFrom, false, arc);
+        }
+
+        /// <summary>A dash toward 'desired' that phases through walls and cover (PhaseLanding), over 'duration'.</summary>
+        public void PhaseDashTo(Unit unit, Vector3 desired, float duration, float arc = 0f)
+        {
+            Vector3 landing = PhaseLanding(unit.Position, desired);
+            SlideUnitTo(unit, landing, duration, landing, arc);
+        }
+
+        /// <summary>A dash up to 'target' that phases through walls and cover (Phantom Strike's way): it lands at arm's length on
+        /// the side it comes from, on the target's side of anything in between. Returns where it lands.</summary>
+        public Vector3 PhaseDashBeside(Unit unit, Unit target, float duration)
+        {
+            Vector3 d = unit.Position - target.Position; d.y = 0f;
+            d = d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.back;
+            Vector3 landed = Paths.ClampDash(target.Position, target.Position + d * (unit.BodyRadius + target.BodyRadius + 0.3f));   // from the target out
+            SlideUnitTo(unit, landed, duration, target.Position);
+            FollowDuringGlide(unit, target);
+            return landed;
+        }
+
+        /// <summary>
+        /// The dash 'unit' just started ends beside 'target': keep it so while it flies (AdvanceGlides re-aims it at where
+        /// 'target' is now, on the same side, at the same distance), so a target on the move is still caught. Any other
+        /// relocation of 'unit' ends it.
+        /// </summary>
+        public void FollowDuringGlide(Unit unit, Unit target)
+        {
+            if (unit == null || target == null || target == unit || !IsGliding(unit)) return;
+            unit.GlideFollowId = target.Id;
+            unit.GlideFollowOffset = unit.GlideTo - target.Position;
+            unit.GlideFollowOffset.y = 0f;
         }
 
         /// <summary>Shove a unit to 'to' over 'duration', as a push does (forced: off a ledge it falls; a jump is broken). Charge's drag.</summary>

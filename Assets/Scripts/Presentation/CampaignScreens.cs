@@ -34,13 +34,14 @@ namespace TacticsGame.Presentation
         public const string SaveFile = "campaign.json";
         private const string TutorialSeenKey = "TacticsGame.TutorialPlayed";
 
-        private enum Screen { NewCampaign, Preparation, Battle, Results, Upgrades, Finished, Tutorial }
+        private enum Screen { NewCampaign, Preparation, Battle, Results, Upgrades, Finished, Tutorial, ClassSelect }
 
         private SquadRoster roster;
         private Screen screen;
         private EncounterResult result;
         private int memberIndex;
         private string etchingId;   // a One Ability Etching clicked: its ability is being picked
+        private string firstAbilityId;   // a Two Abilities Etching: the first of its pair, picked (the second is being picked)
         private Vector2 scroll;
         private GUIStyle head, title, small, card, wrapped, tipStyle, tabStyle;
         private static readonly Color OneAbilityCard = new Color(0.45f, 1f, 0.95f), UnitCard = new Color(1f, 0.9f, 0.7f);   // card tints
@@ -70,6 +71,7 @@ namespace TacticsGame.Presentation
         {
             var c = ScriptableObject.CreateInstance<ContentCatalog>();
             foreach (var u in Campaign.Squad) if (u != null && !c.Units.Contains(u)) c.Units.Add(u);
+            if (Campaign.Classes != null) foreach (var u in Campaign.Classes) if (u != null && !c.Units.Contains(u)) c.Units.Add(u);
             return c;
         }
 
@@ -250,9 +252,9 @@ namespace TacticsGame.Presentation
 
         // ------------------------------------------------------------------ the loop
 
-        private void NewCampaign(LoadoutStart start)
+        private void NewCampaign(LoadoutStart start, List<UnitDefinition> classes = null)
         {
-            roster = Progression.NewCampaign(Campaign.Squad, Config, start, System.Environment.TickCount);
+            roster = Progression.NewCampaign(classes ?? Campaign.Squad, Config, start, System.Environment.TickCount);
             foreach (var m in roster.Members) m.AbilityPoints += Campaign.StartingPointsFor(Catalog != null ? Catalog.Unit(m.Class) : null);
             // An upgrade phase before the first mission, unless the campaign gives no Etchings for it.
             bool upgradeFirst = Config != null && Campaign.EtchingsBeforeFirstMission > 0;
@@ -363,6 +365,7 @@ namespace TacticsGame.Presentation
             switch (screen)
             {
                 case Screen.NewCampaign: Panel(new Vector2(520f, 310f), true, DrawNewCampaign); break;
+                case Screen.ClassSelect: Panel(new Vector2(940f, 620f), true, DrawClassSelect); break;
                 case Screen.Preparation: Panel(new Vector2(460f, 620f), false, DrawPreparation); break;
                 case Screen.Results: DrawResults(); break;
                 case Screen.Upgrades: Panel(new Vector2(1000f, 640f), true, DrawUpgrades); break;
@@ -389,7 +392,7 @@ namespace TacticsGame.Presentation
         /// <summary>The hover text in a popup just above the cursor (below it when there is no room above), kept on screen.</summary>
         private void DrawHoverPopup()
         {
-            if (string.IsNullOrEmpty(hoverTip) || screen != Screen.Upgrades || !hoverReal) return;
+            if (string.IsNullOrEmpty(hoverTip) || (screen != Screen.Upgrades && screen != Screen.ClassSelect) || !hoverReal) return;
             var content = new GUIContent(hoverTip);
             float h = popupStyle.CalcHeight(content, PopupWidth);
             Vector2 mouse = UiScale.CursorGui;
@@ -423,9 +426,121 @@ namespace TacticsGame.Presentation
             bool def = GUILayout.Button("Default loadouts" + (Config != null && Config.DefaultStart == LoadoutStart.Default ? "  (recommended)" : ""), GUILayout.Height(36f));
             bool rnd = GUILayout.Button("Random loadouts" + (Config != null && Config.DefaultStart == LoadoutStart.Random ? "  (recommended)" : ""), GUILayout.Height(36f));
             bool tutorial = DrawTutorialButton(true);
-            if (def) { NewCampaign(LoadoutStart.Default); GUIUtility.ExitGUI(); }
-            if (rnd) { NewCampaign(LoadoutStart.Random); GUIUtility.ExitGUI(); }
+            if (def) { ChooseStart(LoadoutStart.Default); GUIUtility.ExitGUI(); }
+            if (rnd) { ChooseStart(LoadoutStart.Random); GUIUtility.ExitGUI(); }
             if (tutorial) { StartTutorial(); GUIUtility.ExitGUI(); }
+        }
+
+        // ------------------------------------------------------------------ picking the squad's classes
+
+        private LoadoutStart pendingStart;
+        private readonly List<UnitDefinition> pickedClasses = new List<UnitDefinition>();
+        private UnitDefinition inspectedClass;
+
+        /// <summary>The classes a squad can be picked from: the campaign's pool, or its fixed squad without one.</summary>
+        private List<UnitDefinition> ClassPool()
+        {
+            var pool = new List<UnitDefinition>();
+            if (Campaign.Classes != null) foreach (var u in Campaign.Classes) if (u != null && !pool.Contains(u)) pool.Add(u);
+            if (pool.Count == 0) foreach (var u in Campaign.Squad) if (u != null && !pool.Contains(u)) pool.Add(u);
+            return pool;
+        }
+
+        /// <summary>The loadout start is chosen: on to picking classes if there are more than a squad's worth, else straight in.</summary>
+        private void ChooseStart(LoadoutStart start)
+        {
+            var pool = ClassPool();
+            int size = Mathf.Max(1, Campaign.SquadSize);
+            if (pool.Count <= size) { NewCampaign(start); return; }
+            pendingStart = start;
+            pickedClasses.Clear();
+            foreach (var u in Campaign.Squad) if (u != null && pool.Contains(u) && pickedClasses.Count < size && !pickedClasses.Contains(u)) pickedClasses.Add(u);   // the usual squad, to start from
+            inspectedClass = pool[0];
+            Show(Screen.ClassSelect);
+        }
+
+        /// <summary>
+        /// Pick the squad: the classes on the left (click one to inspect it), the inspected one's description, stats and
+        /// starting abilities on the right, with a button to put it in or take it out. Begins once the squad is full.
+        /// </summary>
+        private void DrawClassSelect()
+        {
+            var pool = ClassPool();
+            int size = Mathf.Max(1, Campaign.SquadSize);
+            if (inspectedClass == null || !pool.Contains(inspectedClass)) inspectedClass = pool.Count > 0 ? pool[0] : null;
+            GUILayout.Label("Choose your squad", title);
+            GUILayout.Label(string.Format("Pick {0} classes. Click a class to inspect it, then add it to the squad.", size), small);
+            GUILayout.Space(8f);
+            bool begin = false, back = false;
+            GUILayout.BeginHorizontal();
+
+            // ---- the classes
+            GUILayout.BeginVertical(GUILayout.Width(230f));
+            foreach (var c in pool)
+            {
+                bool inSquad = pickedClasses.Contains(c);
+                var old = GUI.backgroundColor;
+                if (c == inspectedClass) GUI.backgroundColor = OneAbilityCard;
+                if (GUILayout.Button((inSquad ? "[x]  " : "[  ]  ") + c.DisplayName, GUILayout.Height(40f))) inspectedClass = c;
+                GUI.backgroundColor = old;
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.Label(string.Format("Squad: {0} / {1}", pickedClasses.Count, size), head);
+            foreach (var c in pickedClasses) GUILayout.Label(c.DisplayName, wrapped);
+            GUILayout.EndVertical();
+            GUILayout.Space(14f);
+
+            // ---- the inspected class
+            GUILayout.BeginVertical();
+            var u = inspectedClass;
+            if (u != null)
+            {
+                scroll = GUILayout.BeginScrollView(scroll);
+                GUILayout.Label(u.DisplayName, title);
+                if (!string.IsNullOrEmpty(u.Description)) { GUILayout.Label(u.Description, wrapped); GUILayout.Space(6f); }
+                GUILayout.Label("Stats", head);
+                GUILayout.Label(string.Format("Health {0:0}     Max strain {1:0}     Move speed {2:0.#} m/s", u.MaxHealth, u.MaxStrain, u.MoveSpeed), wrapped);
+                GUILayout.Label(string.Format("Dodge {0:0}%     Block {1:0}%     Dash {2:0.#}m", u.BaseDodge * 100f, u.BaseBlock * 100f, u.DashDistance), wrapped);
+                GUILayout.Space(6f);
+                GUILayout.Label("Starting abilities", head);
+                var start = Config != null ? Config.StartFor(u) : null;
+                if (u.BasicAttack != null) GUILayout.Label(new GUIContent(u.BasicAttack.DisplayName + "  (basic attack)", AbilityTip(u.BasicAttack, null)), wrapped);
+                if (pendingStart == LoadoutStart.Default && start != null && start.DefaultAbilities.Count > 0)
+                {
+                    foreach (var a in start.DefaultAbilities) if (a != null) GUILayout.Label(new GUIContent(a.DisplayName, AbilityTip(a, null)), wrapped);
+                }
+                else GUILayout.Label(string.Format("{0} of its abilities, at random.", start != null ? start.RandomCount : 3), small);
+                var later = u.Actions.FindAll(a => a != null && a != u.BasicAttack && (pendingStart != LoadoutStart.Default || start == null || !start.DefaultAbilities.Contains(a)));
+                if (later.Count > 0)
+                {
+                    GUILayout.Space(6f);
+                    GUILayout.Label(pendingStart == LoadoutStart.Default ? "Can unlock later" : "All its abilities", head);
+                    foreach (var a in later) GUILayout.Label(new GUIContent(a.DisplayName, AbilityTip(a, null)), wrapped);
+                }
+                GUILayout.EndScrollView();
+                GUILayout.Space(6f);
+                bool inSquad = pickedClasses.Contains(u);
+                bool full = pickedClasses.Count >= size;
+                GUI.enabled = inSquad || !full;
+                if (GUILayout.Button(inSquad ? "Remove from squad" : full ? "Squad is full" : "Add to squad", GUILayout.Height(34f)))
+                {
+                    if (inSquad) pickedClasses.Remove(u); else pickedClasses.Add(u);
+                }
+                GUI.enabled = true;
+            }
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(6f);
+            GUILayout.BeginHorizontal();
+            back = GUILayout.Button("Back", GUILayout.Width(120f), GUILayout.Height(36f));
+            GUI.enabled = pickedClasses.Count == size;
+            begin = GUILayout.Button(pickedClasses.Count == size ? "Begin campaign" : string.Format("Pick {0} more", size - pickedClasses.Count), GUILayout.Height(36f));
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+            TakeTooltip();
+            if (back) { screen = Screen.NewCampaign; GUIUtility.ExitGUI(); }
+            if (begin) { NewCampaign(pendingStart, new List<UnitDefinition>(pickedClasses)); GUIUtility.ExitGUI(); }
         }
 
         private void DrawPreparation()
@@ -483,7 +598,7 @@ namespace TacticsGame.Presentation
         private List<string> EtchingNames(RosterMember m)
         {
             var names = new List<string>();
-            foreach (var p in m.Etchings) { var e = Config != null ? Config.Etching(p.Id) : null; names.Add(e != null ? e.Name : p.Id); }
+            foreach (var s in EtchingStacks.Of(m.Etchings)) { var e = Config != null ? Config.Etching(s.Key.Id) : null; names.Add((e != null ? e.Name : s.Key.Id) + EtchingStacks.Times(s.Value)); }
             return names;
         }
 
@@ -535,6 +650,20 @@ namespace TacticsGame.Presentation
 
             if (etchingId != null) { DrawAbilityPicker(m, def, config.Etching(etchingId)); return; }
 
+            // The phase's one reroll: this member's offered Etchings swapped for new ones.
+            GUILayout.BeginHorizontal();
+            GUI.enabled = Progression.CanReroll(roster, m);
+            bool reroll = GUILayout.Button(new GUIContent(roster.RerollUsed ? "Reroll used this phase" : "Reroll " + def.DisplayName + "'s Etchings  (once per phase)",
+                "Swap the Etchings offered to this unit for new ones. One reroll per upgrade phase, for any one unit."), GUILayout.Width(330f), GUILayout.Height(28f));
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+            if (reroll && Progression.RerollOffer(roster, m, config, Catalog))
+            {
+                Save();
+                message = def.DisplayName + "'s Etchings rerolled.";
+                GUIUtility.ExitGUI();
+            }
+
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.BeginHorizontal();
             // Left: the offered Etchings, three to a row, then the ones it has.
@@ -548,11 +677,14 @@ namespace TacticsGame.Presentation
             GUILayout.Space(8f);
             GUILayout.Label("Etchings", head);
             if (m.Etchings.Count == 0) GUILayout.Label("None yet.", small);
-            foreach (var p in m.Etchings)
+            foreach (var s in EtchingStacks.Of(m.Etchings))   // copies of one Etching: listed once, "x2"
             {
+                var p = s.Key;
                 var e = config.Etching(p.Id);
                 var on = string.IsNullOrEmpty(p.ActionId) ? null : Progression.Abilities(m, def).Find(a => a.Id == p.ActionId);
-                GUILayout.Label(new GUIContent((e != null ? e.Name : p.Id) + (on != null ? "  on " + on.DisplayName : ""), EtchingTip(e, on)), small);
+                var also = string.IsNullOrEmpty(p.SecondActionId) ? null : Progression.Abilities(m, def).Find(a => a.Id == p.SecondActionId);
+                string where = on == null ? "" : also != null ? "  on " + on.DisplayName + " and " + also.DisplayName : "  on " + on.DisplayName;
+                GUILayout.Label(new GUIContent((e != null ? e.Name : p.Id) + EtchingStacks.Times(s.Value) + where, EtchingTip(e, on)), small);
             }
             GUILayout.EndVertical();
             GUILayout.Space(12f);
@@ -636,9 +768,9 @@ namespace TacticsGame.Presentation
         {
             if (e == null) return;
             // One Ability Etchings read apart from unit-wide ones by their teal card.
-            bool one = e.Scope == EtchingScope.OneAbility;
+            bool one = e.Scope != EtchingScope.Unit;
             string text = one
-                ? string.Format("<b><size=15>{0}</size></b>\n{1}\n<i><color=#7FE6D9>Click, then pick the ability</color></i>", e.Name, e.Description)
+                ? string.Format("<b><size=15>{0}</size></b>\n{1}\n<i><color=#7FE6D9>Click, then pick the {2}</color></i>", e.Name, e.Description, e.Scope == EtchingScope.TwoAbilities ? "two abilities" : "ability")
                 : string.Format("<b><size=15>{0}</size></b>\n{1}", e.Name, e.Description);
             GUI.enabled = m.PicksLeft > 0;
             var oldBackground = GUI.backgroundColor;
@@ -647,7 +779,7 @@ namespace TacticsGame.Presentation
             GUI.backgroundColor = oldBackground;
             if (clicked)
             {
-                if (one) { etchingId = e.Id; message = null; scroll = Vector2.zero; }
+                if (one) { etchingId = e.Id; firstAbilityId = null; message = null; scroll = Vector2.zero; }
                 else if (Progression.Take(m, def, e)) { Save(); message = e.Name + " etched."; }
                 GUI.enabled = true;
                 GUIUtility.ExitGUI();
@@ -663,15 +795,21 @@ namespace TacticsGame.Presentation
             GUILayout.Label(e.Name, head);
             GUILayout.Label(e.Description, small);
             GUILayout.Space(6f);
-            GUILayout.Label("Etch it onto which ability?", head);
+            // A pair (Related Concepts): the first ability, then the one it links to.
+            bool pair = e.Scope == EtchingScope.TwoAbilities;
+            var first = pair && firstAbilityId != null ? Progression.Etchable(m, def, e).Find(x => x.Id == firstAbilityId) : null;
+            GUILayout.Label(!pair ? "Etch it onto which ability?" : first == null ? "Etch it onto which ability? (the first of two)" : "Link " + first.DisplayName + " to which other ability?", head);
             scroll = GUILayout.BeginScrollView(scroll);
             foreach (var a in Progression.Etchable(m, def, e))
             {
+                if (first != null && a.Id == first.Id) continue;
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button(new GUIContent(a.DisplayName, AbilityTip(a, m)), GUILayout.Width(200f), GUILayout.Height(30f)))
                 {
-                    if (Progression.Take(m, def, e, a.Id)) { Save(); message = e.Name + " etched onto " + a.DisplayName + "."; }
-                    etchingId = null; scroll = Vector2.zero;
+                    if (pair && first == null) { firstAbilityId = a.Id; scroll = Vector2.zero; GUIUtility.ExitGUI(); }
+                    if (pair) { if (Progression.Take(m, def, e, first.Id, a.Id)) { Save(); message = e.Name + " links " + first.DisplayName + " and " + a.DisplayName + "."; } }
+                    else if (Progression.Take(m, def, e, a.Id)) { Save(); message = e.Name + " etched onto " + a.DisplayName + "."; }
+                    etchingId = null; firstAbilityId = null; scroll = Vector2.zero;
                     GUIUtility.ExitGUI();
                 }
                 GUILayout.Label(Changes(e, a, preview), small);
@@ -679,7 +817,7 @@ namespace TacticsGame.Presentation
             }
             GUILayout.EndScrollView();
             TakeTooltip();
-            if (GUILayout.Button("Back", GUILayout.Height(30f))) { etchingId = null; GUIUtility.ExitGUI(); }
+            if (GUILayout.Button("Back", GUILayout.Height(30f))) { if (firstAbilityId != null) firstAbilityId = null; else etchingId = null; GUIUtility.ExitGUI(); }
         }
 
         /// <summary>What a One Ability Etching would change on 'a', number by number ("Cooldown 8s -> 5.6s").</summary>
@@ -721,6 +859,18 @@ namespace TacticsGame.Presentation
                 }
                 case TranscendGrant.NoRecovery:
                     what = "Recovery " + Number(ActionStat.Recovery, u != null ? u.ActionStat(a, ActionStat.Recovery) : Stats.Base(a, ActionStat.Recovery)) + " -> 0s";
+                    break;
+                case TranscendGrant.CritChance:
+                    what = string.Format("{0:0}% critical strike chance", g.Param("crit_chance", 0.5f) * 100f);
+                    break;
+                case TranscendGrant.BreakWeakpoints:
+                    what = string.Format("breaks up to {0:0} weakpoints on each enemy hit, from any side", g.Param("breaks", 2f));
+                    break;
+                case TranscendGrant.ExposeWeakpoints:
+                    what = string.Format("exposes {0:0} weakpoints on enemies hit for {1}", g.Param("count", 4f), Number(ActionStat.Duration, g.Param("seconds", 3f)));
+                    break;
+                case TranscendGrant.ShieldOnCast:
+                    what = string.Format("a {0:0} health shield for {1}", g.Param("shield", 40f), Number(ActionStat.Duration, g.Param("seconds", 1.5f)));
                     break;
                 case TranscendGrant.NoCooldown:
                     what = "Cooldown " + Number(ActionStat.Cooldown, u != null ? u.ActionStat(a, ActionStat.Cooldown) : Stats.Base(a, ActionStat.Cooldown)) + " -> 0s";
@@ -771,7 +921,7 @@ namespace TacticsGame.Presentation
             var sb = new System.Text.StringBuilder();
             sb.Append("<b>").Append(a.DisplayName).Append("</b>");
             if (!string.IsNullOrEmpty(a.Description)) sb.Append("\n").Append(a.Description);
-            var u = PreviewFor(m);
+            var u = m != null ? PreviewFor(m) : null;   // no member (inspecting a class): the ability's own numbers
             var tip = new TacticsGame.Core.AbilityTip(a, u);
             var stats = new List<string>();
             stats.Add("Windup " + TacticsGame.Core.AbilityTip.Secs(tip.V(ActionStat.Windup)));
@@ -785,16 +935,18 @@ namespace TacticsGame.Presentation
             if (Mathf.Abs(strain) > 0.01f) stats.Add(strain > 0f ? "Strain +" + strain.ToString("0") : "Sheds " + (-strain).ToString("0") + " strain");
             if (a.HealthCost > 0f) stats.Add("Health -" + tip.V(ActionStat.HealthCost).ToString("0"));
             sb.Append("\n<color=#BBBBBB>").Append(string.Join("   ", stats.ToArray())).Append("</color>");
-            ActionBehaviors.Get(a.BehaviorId).Describe(tip);
+            ActionBehavior.DescribeNumbers(tip, ActionBehaviors.Get(a.BehaviorId));   // numbers only; the rest is Details
             if (tip.Effect.Count > 0)
                 sb.Append("\n").Append(string.Join("   ", tip.Effect.ConvertAll(c => c.Key + " " + c.Value).ToArray()));
+            if (!string.IsNullOrEmpty(a.Details)) sb.Append("\n").Append(a.Details.Trim());
             if (a.CanTranscend) sb.Append(string.Format("\nTranscend: +{0:0} strain", a.TranscendStrain));
             else if (u != null && u.GrantOf(a) != TranscendGrant.None) sb.Append("\n").Append(GrantText(u.GrantedTranscends[a.Id], a, u));
-            foreach (var p in m.Etchings)
+            if (m != null) foreach (var s in EtchingStacks.Of(m.Etchings))   // no member when a class is being inspected
             {
-                if (p.ActionId != a.Id) continue;
+                var p = s.Key;
+                if (p.ActionId != a.Id && p.SecondActionId != a.Id) continue;
                 var e = Config != null ? Config.Etching(p.Id) : null;
-                sb.Append("\n<color=#7FE6D9>Etched: ").Append(e != null ? e.Name + " (" + e.Description + ")" : p.Id).Append("</color>");
+                sb.Append("\n<color=#7FE6D9>Etched: ").Append(e != null ? e.Name + EtchingStacks.Times(s.Value) + " (" + e.Description + ")" : p.Id).Append("</color>");
             }
             return sb.ToString();
         }

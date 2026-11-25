@@ -76,6 +76,9 @@ namespace TacticsGame.Presentation
             if (PlayerMaterial == null) PlayerMaterial = SceneMaterial(Team.Player);
 
             foreach (var p in Context.Placements) if (p.View != null) Destroy(p.View.gameObject);
+            // Any other unit standing in the scene is a stand-in too (the test scene builder's placeholders, CombatTest_Generated):
+            // none of it belongs in this battle.
+            foreach (var stray in FindObjectsByType<UnitView>(FindObjectsInactive.Include, FindObjectsSortMode.None)) if (stray != null) Destroy(stray.gameObject);
             var placements = new List<BattleContext.Placement>();
             var memberAt = new List<string>();
             var squadSlots = Campaign.Squad(squad, catalog, progression);

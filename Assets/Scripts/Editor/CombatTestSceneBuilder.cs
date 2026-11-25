@@ -55,8 +55,8 @@ public static class CombatTestSceneBuilder
 
         var playerMat = GetOrCreateMaterial("Assets/Materials/Team_Player.mat", new Color(0.25f, 0.5f, 1f));
         var enemyMat = GetOrCreateMaterial("Assets/Materials/Team_Enemy.mat", new Color(1f, 0.3f, 0.25f));
-        var coverMat = GetOrCreateMaterial("Assets/Materials/Cover.mat", new Color(0.55f, 0.55f, 0.5f));
-        var elevationMat = GetOrCreateMaterial("Assets/Materials/Elevation.mat", new Color(0.5f, 0.44f, 0.36f));
+        var coverMat = GetOrCreateMaterial("Assets/Materials/Cover.mat", Palette.Cover);
+        var elevationMat = GetOrCreateMaterial("Assets/Materials/Elevation.mat", Palette.Raised);
 
         FixUnitPrefab(unitLayer);
         unitPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(UnitPrefabPath);
@@ -203,7 +203,7 @@ public static class CombatTestSceneBuilder
         launcher.EnemyMaterial = enemyMat;
         EditorUtility.SetDirty(launcher);
 
-        var catalog = WriteCatalog(new[] { squad.Sharpshooter, squad.Melee, squad.Tank, squad.Paradigm,
+        var catalog = WriteCatalog(new[] { squad.Sharpshooter, squad.Melee, squad.Tank, squad.Paradigm, squad.Strategist, squad.Duelist,
                                            enemies.Sniper, enemies.Assassin, enemies.Skirmisher, enemies.Healer, enemies.Caster, enemies.Brutebeast,
                                            enemies.Wraith, enemies.Monarch, enemies.Zola, enemies.Primavaeran, enemies.Exemplar,
                                            enemies.Deliverance, enemies.Syne, enemies.Alio, enemies.Revl, enemies.Wex });
@@ -321,7 +321,8 @@ public static class CombatTestSceneBuilder
             e.Spec.Waves.FirstAfter = 6f; e.Spec.Waves.Every = 12f; e.Spec.Waves.PerWave = 2; e.Spec.Waves.MaxUp = 6;
             e.Spec.Rewards.Experience = 100; e.Spec.Rewards.AbilityPoints = 3;
         });
-        var squadClasses = new List<UnitDefinition> { squad.Sharpshooter, squad.Melee, squad.Tank, squad.Paradigm };
+        var startingSquad = new List<UnitDefinition> { squad.Sharpshooter, squad.Melee, squad.Tank, squad.Paradigm };
+        var squadClasses = new List<UnitDefinition>(startingSquad) { squad.Strategist, squad.Duelist };   // every class a campaign can be started with
         var progression = GetOrCreate<ProgressionConfig>(CampaignFolder + "/Progression.asset", p => FillProgression(p, squadClasses));
         if (progression.Etchings == null || progression.Etchings.Count == 0)   // made before Etchings existed
         {
@@ -330,15 +331,18 @@ public static class CombatTestSceneBuilder
         }
         AddNewEtchings(progression);
         AddAbilityCosts(progression, squadClasses);
+        AddClassStarts(progression, squadClasses);
         var campaign = GetOrCreate<CampaignDefinition>(CampaignFolder + "/Campaign.asset", c =>
         {
             c.DisplayName = "The Proving";
             c.Missions = new List<EncounterDefinition> { firstContact, ambush, lastStand };
-            c.Squad = new List<UnitDefinition>(squadClasses);
+            c.Squad = new List<UnitDefinition>(startingSquad);
+            c.Classes = new List<UnitDefinition>(squadClasses);
             c.Progression = progression;
         });
         // Later missions go on the end, of a new campaign asset or one made before them (its own edits stay). Only missions
         // made by this build are added: one already in the project that isn't in the list was taken out of it, and stays out.
+        AddClasses(campaign, squadClasses);   // classes added since the campaign asset was made join its pool
         AppendMissions(campaign, thePass, ruinedCourt, siege, finalTrial);
         InsertMissionsBefore(campaign, finalTrial, monarchsCourt, stormOfThought);   // the new enemies come before the finale
         InsertMissionsBefore(campaign, finalTrial, gildedVanguard);   // the Exemplars and the first reinforcements
@@ -498,6 +502,11 @@ public static class CombatTestSceneBuilder
         { "you", 2 }, { "savior", 2 },
         { "withering_end", 1 }, { "madness", 3 }, { "splinters", 1 }, { "baneful_domain", 2 }, { "mindshatter", 3 },
         { "dreadful_fixation", 1 }, { "crippling_pursuit", 2 }, { "mental_weapon", 2 },
+        { "spatial_chrysalis", 2 }, { "cross_beyond_thresholds", 2 }, { "stride_in_unison", 3 }, { "supersede", 2 }, { "pressure_points", 1 },
+        { "termouls_monolith", 3 }, { "karraerms_hedron", 3 }, { "monostep", 1 }, { "impending_demise", 2 }, { "a_duet", 2 }, { "clear_and_steady", 2 },
+        { "schalys_convextion", 3 }, { "opening_theorem", 2 }, { "gift_of_thought", 2 }, { "monge_amperes_perfection", 3 }, { "counterpoise", 2 }, { "grasp_and_impel", 3 }, { "fissure", 3 }, { "delayed_crush", 2 },
+        { "incoherency", 1 }, { "gouge", 2 }, { "recursive_severance", 2 }, { "graze_the_precipice", 3 }, { "unsigned_rebuttal", 2 }, { "summation", 3 },
+        { "vindication", 2 }, { "quell_the_uproar", 2 }, { "mindmeld", 1 }, { "theory_of_displacement", 2 },
     };
 
     /// <summary>Every class ability gets an unlock cost on the config (abilities added since it was made had none).</summary>
@@ -522,23 +531,56 @@ public static class CombatTestSceneBuilder
     /// A new progression config's ballpark numbers: three starting abilities per class (its Default loadout), unlock costs
     /// from ProgressionConfig.BallparkCost, and the starting Etchings. Tune them on the asset.
     /// </summary>
-    private static void FillProgression(ProgressionConfig p, List<UnitDefinition> classes)
+    /// <summary>Each class's Default loadout, by ability id (its basic attack comes as well).</summary>
+    private static readonly Dictionary<string, string[]> DefaultStarts = new Dictionary<string, string[]>
     {
-        var starts = new Dictionary<string, string[]>
-        {
             { "Sharpshooter", new[] { "snipe", "snapshot", "take_aim" } },
             { "Fighter", new[] { "rapid_slices", "evasive_strike", "battle_trance" } },
             { "Tank", new[] { "shield_slam", "chain_hook", "brace" } },
             { "Paradigm User", new[] { "rift_line", "reconstruct", "stutter" } },
-        };
+        { "Strategist", new[] { "spatial_chrysalis", "cross_beyond_thresholds", "supersede", "wrinkles_of_reality" } },
+        { "Duelist", new[] { "incoherency", "gouge", "unsigned_rebuttal", "graze_the_precipice" } },
+    };
+
+    private static ClassStart StartFor(UnitDefinition c)
+    {
+        string[] ids;
+        var cs = new ClassStart { Class = c, RandomCount = 3 };
+        if (DefaultStarts.TryGetValue(c.DisplayName, out ids))
+        {
+            foreach (var id in ids) { var a = c.Actions.Find(x => x != null && x.Id == id); if (a != null) cs.DefaultAbilities.Add(a); }
+            cs.RandomCount = Mathf.Max(3, cs.DefaultAbilities.Count);
+        }
+        return cs;
+    }
+
+    /// <summary>Classes the config has no start for yet (added since it was made) get their default one; the others keep their tuning.</summary>
+    private static void AddClassStarts(ProgressionConfig p, List<UnitDefinition> classes)
+    {
+        bool changed = false;
+        foreach (var c in classes)
+            if (c != null && !p.Classes.Exists(x => x != null && x.Class == c)) { p.Classes.Add(StartFor(c)); changed = true; }
+        if (changed) EditorUtility.SetDirty(p);
+    }
+
+    /// <summary>Classes the campaign's pool doesn't list yet join it (its starting squad, first, if the pool is empty).</summary>
+    private static void AddClasses(CampaignDefinition campaign, List<UnitDefinition> classes)
+    {
+        bool changed = false;
+        if (campaign.Classes == null) campaign.Classes = new List<UnitDefinition>();
+        if (campaign.Classes.Count == 0) foreach (var u in campaign.Squad) if (u != null) { campaign.Classes.Add(u); changed = true; }
+        foreach (var c in classes) if (c != null && !campaign.Classes.Contains(c)) { campaign.Classes.Add(c); changed = true; }
+        if (changed) EditorUtility.SetDirty(campaign);
+    }
+
+    private static void FillProgression(ProgressionConfig p, List<UnitDefinition> classes)
+    {
+
         p.DefaultStart = LoadoutStart.Default;
         foreach (var c in classes)
         {
             if (c == null) continue;
-            string[] ids;
-            var cs = new ClassStart { Class = c, RandomCount = 3 };
-            if (starts.TryGetValue(c.DisplayName, out ids)) foreach (var id in ids) { var a = c.Actions.Find(x => x != null && x.Id == id); if (a != null) cs.DefaultAbilities.Add(a); }
-            p.Classes.Add(cs);
+            p.Classes.Add(StartFor(c));
             foreach (var a in c.Actions)
                 if (a != null && a != c.BasicAttack) p.AbilityCosts.Add(new AbilityCost { Ability = a, Cost = AbilityCostsById.TryGetValue(a.Id, out var asked) ? asked : ProgressionConfig.BallparkCost(a) });
         }

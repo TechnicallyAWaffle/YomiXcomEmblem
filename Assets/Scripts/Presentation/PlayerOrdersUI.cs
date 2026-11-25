@@ -44,6 +44,10 @@ namespace TacticsGame.Presentation
 
         [Header("Markers")]
         public Color SelectionColor = new Color(1f, 0.9f, 0.3f, 0.9f);
+        [Tooltip("Seconds the left button is held while picking a target before the ability is aimed freely that way instead.")]
+        public float FreeAimSeconds = 1f;
+        public Color FreeAimColor = new Color(1f, 0.75f, 0.35f, 0.9f);   // the free-aim cone while it fills
+        public Color GatherColor = new Color(0.55f, 0.85f, 1f, 0.85f);   // who an ability takes along (Stride In Unison)
         public Color RangeColor = new Color(1f, 1f, 1f, 0.35f);
         public Color PlanColor = new Color(0.4f, 0.85f, 1f, 0.9f);
         public Color ValidTargetColor = new Color(0.35f, 1f, 0.45f, 0.9f);
@@ -51,6 +55,7 @@ namespace TacticsGame.Presentation
         public Color ComboColor = new Color(1f, 0.75f, 0.15f, 0.95f);
         public Color HoldColor = new Color(1f, 0.85f, 0.4f, 0.75f);   // out of range: ordering it chases (melee) or queues (ranged)
         public Color FollowupColor = new Color(1f, 0.8f, 0.25f, 1f);   // the follow-up its own key re-casts
+        public Color LinkedColor = new Color(0.3f, 0.85f, 1f, 1f);     // a linked ability open now (straight after the one linking to it)
         [Tooltip("Picking a move: enemies (and allies) the unit would have line of sight to from the destination.")]
         public Color SightEnemyColor = new Color(1f, 0.45f, 0.35f, 0.95f);
         public Color SightAllyColor = new Color(0.4f, 0.75f, 1f, 0.8f);
@@ -64,6 +69,7 @@ namespace TacticsGame.Presentation
         // or move carrying them). PickDestination: the point an ability with a DestinationRange sends its target to, after the unit.
         private enum Mode { ChooseAction, PickTarget, PickMove, PickDash, Mesmer, Grapple, PickDestination }
         private Unit destinationFor;   // PickDestination: the unit picked first
+        private bool pickingSecond;    // PickDestination, for an ability used on two units (Supersede): the next click picks the other unit, not a point
         private bool releasing;   // PickTarget for a charging ability's release: Space keeps charging, no going back
         private bool redirecting;   // PickTarget for a channel's next target (Soulseeker: DecisionKind.Redirect); Stop or Esc ends it
 
@@ -155,7 +161,7 @@ namespace TacticsGame.Presentation
             redirecting = pending[0].Kind == DecisionKind.Redirect && current.Channel != null;
             mode = pending[0].Kind == DecisionKind.DodgeDash ? Mode.PickDash : releasing || redirecting ? Mode.PickTarget : current.Grapple != null ? Mode.Grapple
                  : current.MesmerStrikesLeft > 0 ? Mode.Mesmer : Mode.ChooseAction;
-            destinationFor = null;
+            destinationFor = null; pickingSecond = false;
             selected = releasing ? current.ActiveAction.Definition : redirecting ? current.Channel.Action.Definition : null;
             selectedTranscend = false;
             holdDef = null;
@@ -171,7 +177,7 @@ namespace TacticsGame.Presentation
             if (u == null || Rig == null) return;
             // Redirecting Soulseeker's bullet: the camera follows the bullet (the unit it is in), not the shooter.
             if (redirecting && u.Channel != null) { var b = sim.GetUnit(u.Channel.Action.TargetUnitId); Rig.FocusOn(b != null ? b.Position : u.Channel.Action.TargetPos, false); return; }
-            Rig.FocusOn(u.Position);
+            Rig.FocusOn(u.Position, false);   // centred on the unit, the view turned the way the player left it
         }
 
         private void Next()
@@ -227,6 +233,7 @@ namespace TacticsGame.Presentation
             switch (key)
             {
                 case KeyCode.F:
+                    if (unit.IsMakina) { message = "A Makina can't move."; return true; }
                     if (plan.Count == 0 && unit.IsRooted) { message = "Can't move: immobilized"; return true; }
                     mode = Mode.PickMove; selected = null; message = null;
                     return true;
@@ -253,28 +260,39 @@ namespace TacticsGame.Presentation
         /// their own: while one is open it takes its opener's slot (and key), and the slot is framed as a follow-up.
         private static List<ActionDefinition> Slots(Unit unit)
         {
-            var list = unit.Actions.Where(a => a.BehaviorId != "dash" && !IsChainStage(unit, a)).Select(a => OpenStage(unit, a, 0)).ToList();
+            // Always-on abilities (a Makina's passives) are no buttons: they show when the unit is hovered (BattleHUD).
+            var list = unit.Actions.Where(a => a.BehaviorId != "dash" && !a.InnatePassive && !IsChainStage(unit, a)).Select(a => OpenStage(unit, a, 0)).ToList();
             int basic = list.FindIndex(a => a.Id == unit.BasicAttackId);
             if (basic > 0) { var b = list[basic]; list.RemoveAt(basic); list.Insert(0, b); }
             return list;
         }
-        /// <summary>Is 'a' a follow-up another of the unit's abilities opens (ActionDefinition.FollowUps)?</summary>
+        /// <summary>Is 'a' a stage another of the unit's abilities opens: its follow-up (ActionDefinition.FollowUps), or a linked
+        /// ability usable only that way (LinkedAbilities, RequiresLink)? It shows in its opener's slot, not one of its own.</summary>
         private static bool IsChainStage(Unit unit, ActionDefinition a)
         {
-            return unit.Actions.Exists(o => o != null && o != a && o.FollowUps != null && o.FollowUps.Contains(a));
+            return unit.Actions.Exists(o => o != null && o != a && ((o.FollowUps != null && o.FollowUps.Contains(a))
+                                                                    || (a.RequiresLink && o.LinkedAbilities != null && o.LinkedAbilities.Contains(a))));
+        }
+
+        /// <summary>The stages 'a' opens: its follow-ups, and the linked abilities that are usable only through it.</summary>
+        private static IEnumerable<ActionDefinition> StagesOf(ActionDefinition a)
+        {
+            if (a.FollowUps != null) foreach (var f in a.FollowUps) if (f != null) yield return f;
+            if (a.LinkedAbilities != null) foreach (var f in a.LinkedAbilities) if (f != null && f != a && f.RequiresLink) yield return f;
         }
 
         /// <summary>What 'a's slot shows: the furthest stage of its follow-up chain that is open now, else 'a' itself.</summary>
         private static ActionDefinition OpenStage(Unit unit, ActionDefinition a, int depth)
         {
-            if (a.FollowUps == null || depth > 8) return a;
-            foreach (var f in a.FollowUps)
+            if (depth > 8) return a;
+            foreach (var f in StagesOf(a))
             {
-                if (f == null || !unit.Actions.Contains(f)) continue;
+                if (!unit.Actions.Contains(f)) continue;
                 var deeper = OpenStage(unit, f, depth + 1);
                 if (deeper != f) return deeper;   // a later stage is open
                 var req = f.RequiredStatuses();
                 if (req.Length > 0 && System.Array.Exists(req, unit.HasStatus)) return f;
+                if (f.RequiresLink && unit.LinkedOpen.Contains(f.Id)) return f;   // a linked stage, open now
             }
             return a;
         }
@@ -323,7 +341,7 @@ namespace TacticsGame.Presentation
         /// <summary>A Focus order (BattleSimulation.StartWait).</summary>
         private void OrderFocus(Unit unit)
         {
-            AddOrder(UnitCommand.Wait(unit.Id, WaitSeconds), string.Format("Focus {0:0.00}s", WaitSeconds), PlannedPosition(unit));
+            AddOrder(UnitCommand.Wait(unit.Id, WaitSeconds), string.Format(unit.IsMakina ? "Wait {0:0.00}s" : "Focus {0:0.00}s", WaitSeconds), PlannedPosition(unit));
         }
 
         private void Transcend(Unit unit, ActionDefinition def)
@@ -366,6 +384,8 @@ namespace TacticsGame.Presentation
         {
             if (plan.Count > 0) return null;
             bool usable; string why;
+            var recast = sim.RecastOrder(unit);   // Incessant: the ability just used, again on the same target
+            if (recast != null) { ActionDetail(unit, recast.Action, out usable, out why); if (usable) return recast.Action; }
             var def = string.IsNullOrEmpty(unit.LastActionId) ? null : unit.Actions.FirstOrDefault(a => a.Id == unit.LastActionId && a.IsFollowup);
             if (def != null) { ActionDetail(unit, def, out usable, out why); if (!usable) def = null; }
             if (def == null)
@@ -379,7 +399,7 @@ namespace TacticsGame.Presentation
                 }
                 return null;
             }
-            if (TargetsUnit(def))
+            if (TargetsUnit(def) && !ActionBehaviors.Get(def.BehaviorId).FollowupRetargets(def))
             {
                 var t = sim.GetUnit(unit.LastActionTargetId);
                 if (t == null || !t.IsAlive || !sim.IsTargetableBy(t, unit) || !sim.HasSightOf(unit, def, t)) return null;
@@ -403,8 +423,11 @@ namespace TacticsGame.Presentation
         {
             mode = Mode.ChooseAction;
             selected = null;
-            if (FollowupOpen(unit, def)) ChooseAction(unit, def);
-            else if (TargetsUnit(def) && def.DestinationRange <= 0f) TryAddAction(unit, def, sim.GetUnit(unit.LastActionTargetId));
+            var recast = sim.RecastOrder(unit);
+            if (recast != null && recast.Action == def) { AddOrder(recast, def.DisplayName + " (recast)", PlannedPosition(unit)); return; }   // Incessant: no aiming
+            if (FollowupOpen(unit, def) || ActionBehaviors.Get(def.BehaviorId).FollowupRetargets(def)) ChooseAction(unit, def);   // a fresh target each time (Scepter)
+            else if (TargetsUnit(def) && !ActionBehaviors.Get(def.BehaviorId).PicksDestination(sim, PlannedUnit(unit), def) && !ActionBehaviors.Get(def.BehaviorId).PicksSecondUnit(def))
+                TryAddAction(unit, def, sim.GetUnit(unit.LastActionTargetId));
             else if (def.Targeting == TargetType.Position) AddOrder(UnitCommand.UseActionAt(unit.Id, def, unit.LastActionPos), def.DisplayName + " (point)", PlannedPosition(unit));
             else ChooseAction(unit, def);
         }
@@ -439,7 +462,7 @@ namespace TacticsGame.Presentation
             if (redirecting) { StopRedirect(); return; }
             if (releasing || mode == Mode.Mesmer || mode == Mode.Grapple) return;   // charges can't be cancelled; a counter or a hold has its own buttons
             if (mode == Mode.PickMove && Current != null && Current.Grapple != null) { mode = Mode.Grapple; message = null; return; }
-            if (mode == Mode.PickDestination) { mode = Mode.PickTarget; destinationFor = null; message = null; return; }
+            if (mode == Mode.PickDestination) { mode = Mode.PickTarget; destinationFor = null; pickingSecond = false; message = null; return; }
             if (mode == Mode.PickTarget || mode == Mode.PickMove) { mode = Mode.ChooseAction; selected = null; selectedTranscend = false; message = null; }
         }
 
@@ -608,6 +631,7 @@ namespace TacticsGame.Presentation
         /// <summary>While aiming an enemy-only (or ally-only) ability, units on the wrong side can't be picked.</summary>
         private bool Pickable(Unit unit, Unit other)
         {
+            if (mode == Mode.PickDestination && pickingSecond) return destinationFor == null || other.Id != destinationFor.Id;   // the second unit: anyone but the first
             if (mode == Mode.PickDestination) return false;   // a destination is ground: see through everyone
             if (mode != Mode.PickTarget || selected == null) return true;
             if (redirecting) return other.Team != unit.Team;
@@ -640,7 +664,7 @@ namespace TacticsGame.Presentation
                 var snap = EnemyNearCursor(unit, screenPos);
                 if (snap != null) return snap.Position;
             }
-            return sim.Terrain.OnGround(hit.point - hit.normal * 0.05f);
+            return sim.Terrain.NearestFloor(hit.point - hit.normal * 0.05f);
         }
 
         /// <summary>The visible enemy whose body (feet to head, on screen) passes closest to the cursor, within AimSnapPixels.</summary>
@@ -729,19 +753,31 @@ namespace TacticsGame.Presentation
                     if (selected.Targeting == TargetType.Position)
                     {
                         bool dash = selected.BehaviorId == "dash";
-                        Vector3 point = dash ? hit.point : AimPoint(unit, screenPos, hit, clickedUnit);
+                        Vector3 point = dash ? Floor(hit) : AimPoint(unit, screenPos, hit, clickedUnit);
                         if (selected.Shape != AreaShape.Line && Vector3.Distance(from, point) > unit.ActionStat(selected, ActionStat.Range)) { message = "Out of range."; return; }
                         AddOrder(UnitCommand.UseActionAt(unit.Id, selected, point).Transcended(selectedTranscend), selected.DisplayName + (dash ? "" : " (point)"),
                             dash ? sim.DashDestination(PlannedUnit(unit), point, selectedTranscend) : from);
                     }
-                    else if (clickedUnit != null && selected.DestinationRange > 0f) BeginDestination(unit, clickedUnit);
+                    else if (clickedUnit != null && ActionBehaviors.Get(selected.BehaviorId).PicksSecondUnit(selected)) { BeginDestination(unit, clickedUnit); pickingSecond = mode == Mode.PickDestination; }
+                    else if (clickedUnit != null && ActionBehaviors.Get(selected.BehaviorId).PicksDestination(sim, PlannedUnit(unit), selected)) { pickingSecond = false; BeginDestination(unit, clickedUnit); }
                     else if (clickedUnit != null) TryAddAction(unit, selected, clickedUnit, selectedTranscend);
                     break;
 
                 case Mode.PickDestination:
                 {
                     var who = destinationFor;
-                    if (who == null || !who.IsAlive) { mode = Mode.PickTarget; destinationFor = null; return; }
+                    if (who == null || !who.IsAlive) { mode = Mode.PickTarget; destinationFor = null; pickingSecond = false; return; }
+                    if (pickingSecond)
+                    {
+                        // The other unit of the pair (Supersede).
+                        if (clickedUnit == null || clickedUnit.Id == who.Id) { message = "Click the second unit."; return; }
+                        var two = UnitCommand.UseActionOnTwo(unit.Id, selected, who.Id, clickedUnit.Id).Transcended(selectedTranscend);
+                        string why;
+                        if (!ActionBehaviors.Get(selected.BehaviorId).CanStart(sim, PlannedUnit(unit), two, out why)) { message = "Can't: " + why; return; }
+                        destinationFor = null; pickingSecond = false;
+                        AddOrder(two, selected.DisplayName + " > " + who.DisplayName + " and " + clickedUnit.DisplayName, from);
+                        break;
+                    }
                     Vector3 point = DestinationPoint(hit);
                     if (FlatDistance(who.Position, point) > selected.DestinationRange) { message = string.Format("Too far: pick a point within {0:0}m of {1}.", selected.DestinationRange, who.DisplayName); return; }
                     string label = selected.DisplayName + " > " + (who.Id == unit.Id ? "self" : who.DisplayName);
@@ -754,13 +790,14 @@ namespace TacticsGame.Presentation
                 {
                     if (clickedUnit != null) { message = "Click open ground."; return; }
                     var path = new List<Vector3>();
-                    if (!sim.PlanPath(unit, from, sim.FreeSpotNear(unit, hit.point, from, true), path)) { message = "Can't get there."; return; }
-                    AddOrder(UnitCommand.MoveTo(unit.Id, hit.point), "Move", path[path.Count - 1], path);
+                    Vector3 to = Floor(hit);   // the exact point: under a floating platform, that ground; on it, its top
+                    if (!sim.PlanPath(unit, from, sim.FreeSpotNear(unit, to, from, true), path)) { message = "Can't get there."; return; }
+                    AddOrder(UnitCommand.MoveTo(unit.Id, to), "Move", path[path.Count - 1], path);
                     break;
                 }
 
                 case Mode.PickDash:
-                    sim.SubmitDodgeDashTo(unit.Id, clickedUnit != null && clickedUnit.Id == unit.Id ? unit.Position : hit.point);
+                    sim.SubmitDodgeDashTo(unit.Id, clickedUnit != null && clickedUnit.Id == unit.Id ? unit.Position : Floor(hit));
                     Next();
                     break;
 
@@ -787,10 +824,14 @@ namespace TacticsGame.Presentation
             message = null;
         }
 
+        /// <summary>The ground the cursor's hit is on, on the floor nearest the hit (TerrainMap.NearestFloor): the ground under a
+        /// floating platform where the hit is that ground, the platform's top where it is the platform.</summary>
+        private Vector3 Floor(RaycastHit hit) { return sim.Terrain.NearestFloor(hit.point - hit.normal * 0.05f); }
+
         /// <summary>The walkable point under the cursor for a destination (a cliff face counts as the top of its block).</summary>
         private Vector3 DestinationPoint(RaycastHit hit)
         {
-            return sim.WalkablePointNear(sim.Terrain.OnGround(hit.point - hit.normal * 0.05f));
+            return sim.WalkablePointNear(sim.Terrain.NearestFloor(hit.point - hit.normal * 0.05f));   // under a floating platform: that ground
         }
 
         private static float FlatDistance(Vector3 a, Vector3 b) { a.y = 0f; b.y = 0f; return Vector3.Distance(a, b); }
@@ -947,11 +988,74 @@ namespace TacticsGame.Presentation
             var unit = Current;
             if (!Suspended) UpdateHold(unit);
             if (unit != null) UpdateHover();
+            if (unit != null && !Suspended) UpdateFreeAim(unit);
             if (unit != null) Highlight(unit, SelectionColor, true);   // the unit being commanded pulses
             if (unit != null) DrawMarkers(unit);
             // The unit glows violet while an ability is held toward a Transcend, and while a Transcended one is aimed.
             if (unit != null && (HoldProgress > 0f || Transcending)) Highlight(unit, TranscendColor, true);
             markers.End();
+        }
+
+        // ------------------------------------------------------------------ free aim (hold the left button)
+
+        private float aimHoldStart = -1f;   // real time the left button went down while picking a single target (-1: not held)
+        private Vector2 aimHoldScreen;      // where it went down (a quick click lands there)
+
+        /// <summary>Is the ability being aimed one that can be aimed freely (a single target, nothing else to pick)?</summary>
+        private bool FreeAimable()
+        {
+            if (mode != Mode.PickTarget || selected == null || redirecting || releasing || !BattleSimulation.CanFreeAim(selected) || Current == null) return false;
+            // And one that would take the order now: affordable (its required status too) and fine with no target yet.
+            var u = PlannedUnit(Current);
+            string why;
+            if (plan.Count == 0 && !sim.CanAfford(u, selected, out why, null, selectedTranscend)) return false;
+            return ActionBehaviors.Get(selected.BehaviorId).CanStart(sim, u, UnitCommand.UseActionToward(u.Id, selected, u.Position + Vector3.forward), out why);
+        }
+
+        /// <summary>
+        /// Holding the left button while picking a single target: let go before FreeAimSeconds and it was a click (on the
+        /// unit or ground where it went down); keep holding and the ability is ordered toward the cursor (UseActionToward):
+        /// it winds up that way and takes the closest target in its cone as it lands.
+        /// </summary>
+        private void UpdateFreeAim(Unit unit)
+        {
+            if (aimHoldStart < 0f) return;
+            if (!FreeAimable() || !Active) { aimHoldStart = -1f; return; }
+            float held = Time.unscaledTime - aimHoldStart;
+            if (!Input.GetMouseButton(0))
+            {
+                aimHoldStart = -1f;
+                if (held < FreeAimSeconds) HandleWorldClick(unit, aimHoldScreen);
+                return;
+            }
+            if (held < FreeAimSeconds) return;
+            aimHoldStart = -1f;
+            Vector3 from = PlannedPosition(unit);
+            Vector3 d = hoverPoint - from; d.y = 0f;
+            if (d.sqrMagnitude < 0.04f) { message = "Hold toward a direction away from the unit."; return; }
+            Vector3 toward = from + d.normalized * Mathf.Max(1f, unit.ActionStat(selected, ActionStat.Range));
+            AddOrder(UnitCommand.UseActionToward(unit.Id, selected, toward).Transcended(selectedTranscend), selected.DisplayName + " (aimed)", from);
+        }
+
+        /// <summary>The free-aim cone toward the cursor, filling as the button is held; the unit it would take now is lit.</summary>
+        private void DrawFreeAimCone(Unit unit, Vector3 from)
+        {
+            Vector3 d = hoverPoint - from; d.y = 0f;
+            if (d.sqrMagnitude < 1e-4f) return;
+            d.Normalize();
+            float range = unit.ActionStat(selected, ActionStat.Range), k = Mathf.Clamp01((Time.unscaledTime - aimHoldStart) / Mathf.Max(0.05f, FreeAimSeconds));
+            float half = BattleSimulation.FreeAimCone * 0.5f;
+            System.Func<float, float, Vector3> at = (deg, r) => from + Quaternion.Euler(0f, deg, 0f) * d * r;
+            var edge = new List<Vector3> { from };
+            for (int i = 0; i <= 16; i++) edge.Add(at(-half + i * BattleSimulation.FreeAimCone / 16f, range));
+            edge.Add(from);
+            var faint = FreeAimColor; faint.a *= 0.45f;
+            markers.Polyline(edge.ToArray(), faint, 0.05f);
+            var fill = new List<Vector3>();
+            for (int i = 0; i <= 16; i++) fill.Add(at(-half + i * BattleSimulation.FreeAimCone / 16f, range * k));
+            markers.Polyline(fill.ToArray(), FreeAimColor, 0.08f);
+            var t = sim.FreeAimTarget(PlannedUnit(unit), selected, from + d * range);
+            if (t != null) { markers.Circle(t.Position, t.BodyRadius + 0.3f, ValidTargetColor, 0.08f); Highlight(t, ValidTargetColor); }
         }
 
         /// <summary>The player is aiming an order (a target, a point, a move): anything but the ability list is up.</summary>
@@ -970,7 +1074,7 @@ namespace TacticsGame.Presentation
             RaycastHit hit;
             if (!PickWorld(Current, Input.mousePosition, out hit, out hovered)) return;
             hoverOnGround = hovered == null;
-            hoverPoint = hit.point;
+            hoverPoint = Floor(hit);   // the floor under the cursor (the ground under a floating platform, or its top)
             if (AimingPoint)
             {
                 hoverPoint = AimPoint(Current, Input.mousePosition, hit, hovered);   // an enemy under the cursor is aimed at, not blocking the preview
@@ -1017,6 +1121,7 @@ namespace TacticsGame.Presentation
 
                 case Mode.PickTarget:
                 {
+                    if (aimHoldStart >= 0f) { DrawFreeAimCone(unit, from); break; }   // holding to aim freely: the cone, filling
                     Color aim = selectedTranscend ? TranscendColor : SelectionColor;
                     if (selected.BehaviorId == "dash")
                     {
@@ -1039,6 +1144,7 @@ namespace TacticsGame.Presentation
                     if (selected.Shape != AreaShape.Line) RangeRing(from, unit.ActionStat(selected, ActionStat.Range), aimedAt, false, selectedTranscend ? TranscendColor : RangeColor, 0.06f);
                     if (selected.Targeting == TargetType.Position)
                     {
+                        DrawGatherRing(unit, from);
                         if (hoverOnGround) DrawAreaPreview(unit, from);
                         break;
                     }
@@ -1072,6 +1178,19 @@ namespace TacticsGame.Presentation
                     var who = destinationFor;
                     if (who == null) break;
                     Color aim = selectedTranscend ? TranscendColor : SelectionColor;
+                    if (pickingSecond)
+                    {
+                        // The first unit is picked: the ability's reach again, and a line to whoever is under the cursor.
+                        RangeRing(from, unit.ActionStat(selected, ActionStat.Range), hovered != null ? hovered.Position : (Vector3?)null, false, RangeColor, 0.06f);
+                        markers.Circle(who.Position, who.BodyRadius + 0.3f, ValidTargetColor, 0.1f);
+                        Highlight(who, ValidTargetColor, true);
+                        if (hovered != null && hovered.Id != who.Id)
+                        {
+                            markers.Segment(who.Position, hovered.Position, aim, 0.06f);
+                            markers.Circle(hovered.Position, hovered.BodyRadius + 0.3f, aim, 0.1f);
+                        }
+                        break;
+                    }
                     RangeRing(who.Position, selected.DestinationRange, hoverOnGround ? hoverPoint : (Vector3?)null, true, RangeColor, 0.05f);
                     markers.Circle(who.Position, who.BodyRadius + 0.3f, ValidTargetColor, 0.1f);
                     Highlight(who, ValidTargetColor, true);
@@ -1091,7 +1210,7 @@ namespace TacticsGame.Presentation
                     // It swings round to the side it is thrown toward (the cursor), then flies GrappleThrowDistance that way.
                     Vector3 dir = ThrowDirection(unit);
                     Vector3 throwFrom = unit.Position + dir * BattleSimulation.CarryOffset(unit, held);
-                    Vector3 throwTo = sim.Paths.ClampDash(throwFrom, throwFrom + dir * sim.GrappleThrowDistance);
+                    Vector3 throwTo = sim.Paths.ClampDash(throwFrom, throwFrom + dir * sim.ThrowReach(unit));
                     markers.Segment(throwFrom, throwTo, InvalidTargetColor, 0.06f);
                     markers.Circle(throwTo, held.BodyRadius, InvalidTargetColor, 0.05f);
                     break;
@@ -1197,6 +1316,24 @@ namespace TacticsGame.Presentation
         }
 
         /// <summary>Point-targeted preview: the line or circle the action would cover, with the enemies it would catch ringed.</summary>
+        /// <summary>Who an ability takes along (Stride In Unison: ActionBehavior.GatherRadius): the ring around the user, and
+        /// the allies inside it ringed. Nothing for one that takes no one.</summary>
+        private void DrawGatherRing(Unit unit, Vector3 from)
+        {
+            // Who it takes along (Stride In Unison): the ring around the user, and the allies inside it ringed.
+            float gather = ActionBehaviors.Get(selected.BehaviorId).GatherRadius(unit, selected);
+            if (gather > 0f)
+            {
+                markers.Circle(from, gather, GatherColor, 0.05f, 64);
+                foreach (var o in sim.State.Units)
+                {
+                    if (o == unit || !o.IsAlive || o.Team != unit.Team || !sim.IsTargetableBy(o, unit)) continue;
+                    Vector3 d = o.Position - from; d.y = 0f;
+                    if (d.magnitude <= gather + o.BodyRadius) { markers.Circle(o.Position, o.BodyRadius + 0.3f, GatherColor, 0.07f); Highlight(o, GatherColor); }
+                }
+            }
+        }
+
         private void DrawAreaPreview(Unit unit, Vector3 from)
         {
             if (selected.Shape == AreaShape.Line)
@@ -1323,7 +1460,9 @@ namespace TacticsGame.Presentation
 
             if (e.type == UnityEngine.EventType.MouseDown && !panelRect.Contains(e.mousePosition) && !UnitPanel.ScreenRect.Contains(e.mousePosition))
             {
-                if (e.button == 0 && mode != Mode.ChooseAction) HandleWorldClick(unit, GuiToScreen(e.mousePosition));
+                // A single-target ability: the click waits for the release (a click), or held FreeAimSeconds it is aimed freely.
+                if (e.button == 0 && FreeAimable()) { aimHoldStart = Time.unscaledTime; aimHoldScreen = GuiToScreen(e.mousePosition); }
+                else if (e.button == 0 && mode != Mode.ChooseAction) HandleWorldClick(unit, GuiToScreen(e.mousePosition));
                 if (e.button == 0) e.Use();   // middle and right mouse belong to the camera (pan, rotate)
             }
             // Right-click backs out, but only a click: a right-drag rotates the camera.
@@ -1352,6 +1491,7 @@ namespace TacticsGame.Presentation
                     return unit.Grapple != null ? unit.DisplayName + ": click the ground to move there, carrying " + HeldName(unit)
                                                 : unit.DisplayName + ": click the ground to move there (lit units: in sight from there)";
                 case Mode.PickDestination:
+                    if (pickingSecond) return string.Format("{0}: click the unit to swap {1} with ({2})", unit.DisplayName, destinationFor != null ? destinationFor.DisplayName : "it", selected.DisplayName);
                     return string.Format("{0}: click where {1} {2} for {3}", unit.DisplayName, destinationFor != null && destinationFor.Id == unit.Id ? "you" : destinationFor != null ? destinationFor.DisplayName : "it",
                         destinationFor != null && destinationFor.Id == unit.Id ? "go" : "goes", (selectedTranscend ? "TRANSCENDED " : "") + selected.DisplayName);
                 case Mode.Grapple:
@@ -1390,7 +1530,7 @@ namespace TacticsGame.Presentation
                 }
                 case Mode.Mesmer: return "Keep striking, or stop and give a normal order. Any other order ends the counter.";
                 case Mode.Grapple: return "1 keep headbutting, click or 2 throw now (toward the cursor), F move while carrying them.";
-                case Mode.PickDestination: return "Click a point inside the ring. Right-click or Esc to pick another unit.";
+                case Mode.PickDestination: return pickingSecond ? "Click the second unit. Right-click or Esc to pick another first unit." : "Click a point inside the ring. Right-click or Esc to pick another unit.";
                 default:
                     return redirecting ? "Click an enemy the bullet can see (green) to send it on. Esc or Stop ends it."
                          : releasing ? "Hold Space to keep charging (time runs slowly). Click to release it there."
@@ -1415,7 +1555,8 @@ namespace TacticsGame.Presentation
         private float tileWidth = TileMinWidth, tileRowOffset;
         private int tilesPerRow = 1, tileCount;
 
-        private static int TileCount(Unit unit) { return unit.Actions.Count + 3; }   // abilities and Dash, + Move, Focus, Auto
+        /// <summary>The tiles DrawChooseAction lays out: the ability slots, Dash, Move (not for a Makina), Focus / Wait.</summary>
+        private static int TileCount(Unit unit) { return Slots(unit).Count + (DashOf(unit) != null ? 1 : 0) + (unit.IsMakina ? 0 : 1) + 1; }
 
         /// <summary>Tile width and columns for this unit's buttons: as wide as fits (within bounds), rows centred.</summary>
         private void LayoutTiles(Unit unit)
@@ -1481,7 +1622,7 @@ namespace TacticsGame.Presentation
         {
             bool usable; string why;
             string detail = ActionDetail(unit, def, out usable, out why);
-            string name = def.DisplayName;
+            string name = ActionBehaviors.Get(def.BehaviorId).NameFor(unit, def);   // a staged follow-up goes by its stage's name (Scepter Of Tyranny)
             SetActionTip(rect, def, usable ? null : "Can't use now: " + why);
             var e = Event.current;
             if (usable && CanTranscendNow(def) && e.type == UnityEngine.EventType.MouseDown && e.button == 0 && rect.Contains(e.mousePosition))
@@ -1492,7 +1633,8 @@ namespace TacticsGame.Presentation
             GUI.enabled = usable;
             bool chainStage = IsChainStage(unit, def);   // an open follow-up in its opener's slot
             bool openFollowup = usable && FollowupOpen(unit, def);   // open by itself (Baneful Domain), even with another follow-up up
-            if (def == followup || chainStage || openFollowup)
+            bool linkedNow = usable && sim.LinkedOpenFor(unit, def);   // a linked ability (cyan), stage of a chain or not
+            if (!linkedNow && (def == followup || chainStage || openFollowup))
             {
                 string tag = chainStage || openFollowup ? "follow-up" : "again";
                 detail = string.IsNullOrEmpty(detail) ? tag : tag + " · " + detail;
@@ -1500,10 +1642,20 @@ namespace TacticsGame.Presentation
                 Fill(new Rect(rect.x - 3f, rect.y - 3f, rect.width + 6f, rect.height + 6f), FollowupColor);
                 GUI.backgroundColor = FollowupColor;
             }
+            else if (linkedNow)
+            {
+                // A linked ability, open until another ability is used: a cyan frame, apart from the follow-ups' gold.
+                detail = string.IsNullOrEmpty(detail) ? "linked" : "linked · " + detail;
+                Fill(new Rect(rect.x - 3f, rect.y - 3f, rect.width + 6f, rect.height + 6f), LinkedColor);
+                GUI.backgroundColor = LinkedColor;
+            }
             if (def == holdDef) GUI.backgroundColor = Color.Lerp(Color.white, TranscendColor, 0.4f + 0.6f * HoldProgress);
             bool clicked = Tile(rect, key, name, detail);
             GUI.backgroundColor = Color.white;
             GUI.enabled = true;
+            // No cooldown pie while a follow-up of it is still there to use (its chain ignores the cooldown).
+            bool followupLeft = def == followup || chainStage || openFollowup || ActionBehaviors.Get(def.BehaviorId).IgnoresCooldown(sim, unit, def, null);
+            if (!followupLeft) DrawCooldownWipe(unit, def, rect);
             if (CanTranscendNow(def))
             {
                 Fill(new Rect(rect.x + 1f, rect.y + 3f, 3f, rect.height - 6f), new Color(TranscendColor.r, TranscendColor.g, TranscendColor.b, usable ? 0.9f : 0.35f));
@@ -1512,6 +1664,57 @@ namespace TacticsGame.Presentation
             }
             if (clicked) { ChooseAction(unit, def); return true; }   // the button still lets you pick a new target; its key repeats the last
             return false;
+        }
+
+        // ---- the cooldown wipe: a dark pie over an ability's tile, shrinking clockwise from the top as its cooldown runs down
+
+        private const int WipeSteps = 48;
+        private static readonly Texture2D[] wipes = new Texture2D[WipeSteps + 1];
+        /// <summary>Per unit and ability: the longest time left seen on its cooldown this time round (the full length to draw
+        /// against: a cooldown a behavior sets itself, or one an Etching changed, needs no special case).</summary>
+        private readonly Dictionary<string, float> cooldownFull = new Dictionary<string, float>();
+
+        /// <summary>The share (0..1) of 'def''s cooldown 'unit' still has to wait; 0 when it is ready.</summary>
+        private float CooldownLeft(Unit unit, ActionDefinition def)
+        {
+            string key = unit.Id + "|" + def.Id;
+            float readyAt;
+            float left = unit.CooldownReadyAt.TryGetValue(def.Id, out readyAt) ? readyAt - sim.Now : 0f;
+            if (left <= 0.001f) { cooldownFull.Remove(key); return 0f; }
+            float full;
+            if (!cooldownFull.TryGetValue(key, out full) || left > full) full = Mathf.Max(left, unit.ActionStat(def, ActionStat.Cooldown));
+            cooldownFull[key] = full;
+            return Mathf.Clamp01(left / Mathf.Max(0.01f, full));
+        }
+
+        private void DrawCooldownWipe(Unit unit, ActionDefinition def, Rect rect)
+        {
+            if (Event.current.type != UnityEngine.EventType.Repaint || plan.Count > 0) return;   // a later order's cooldowns aren't known yet
+            float left = CooldownLeft(unit, def);
+            if (left <= 0f) return;
+            int step = Mathf.Clamp(Mathf.CeilToInt(left * WipeSteps), 1, WipeSteps);
+            GUI.DrawTexture(new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, rect.height - 2f), Wipe(step), ScaleMode.StretchToFill, true);
+        }
+
+        /// <summary>A square texture dark over 'step' / WipeSteps of the circle, counted clockwise from the top (so the dark
+        /// part shrinks back toward 12 o'clock), clear elsewhere. Made once per step.</summary>
+        private static Texture2D Wipe(int step)
+        {
+            if (wipes[step] != null) return wipes[step];
+            const int size = 64;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
+            float share = step / (float)WipeSteps;
+            var dark = new Color(0f, 0f, 0f, 0.62f); var clear = new Color(0f, 0f, 0f, 0f);
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = x + 0.5f - size / 2f, dy = y + 0.5f - size / 2f;   // texture y runs up the screen
+                    float turn = Mathf.Atan2(dx, dy) / (Mathf.PI * 2f);            // 0 at the top, growing clockwise
+                    if (turn < 0f) turn += 1f;
+                    tex.SetPixel(x, y, 1f - turn <= share ? dark : clear);         // the remaining share ends at the top: it empties clockwise
+                }
+            tex.Apply();
+            return wipes[step] = tex;
         }
 
         private static void Fill(Rect r, Color c)
@@ -1609,6 +1812,7 @@ namespace TacticsGame.Presentation
             public string Title;
             public readonly List<KeyValuePair<string, string>> Cells = new List<KeyValuePair<string, string>>();
             public readonly List<string> Notes = new List<string>();
+            public string Text;   // a block of plain text under the cells (Details)
             public void Add(string label, string value) { Cells.Add(new KeyValuePair<string, string>(label, value)); }
         }
 
@@ -1670,10 +1874,10 @@ namespace TacticsGame.Presentation
             if (V(ActionStat.Cooldown) > 0f) use.Add("Cooldown", Secs(V(ActionStat.Cooldown)));
             sections.Add(use);
 
-            // What it does: its behavior words it (ActionBehavior.Describe), so special rules need no case here.
+            // What it does, in numbers (ActionBehavior.DescribeNumbers); the rest is the asset's Details text, below.
             var behavior = ActionBehaviors.Get(def.BehaviorId);
             var tip = new AbilityTip(def, who, sim);
-            behavior.Describe(tip);
+            ActionBehavior.DescribeNumbers(tip, behavior);
             var effect = new TipSection { Title = "EFFECT" };
             foreach (var c in tip.Effect) effect.Add(c.Key, c.Value);
             if (effect.Cells.Count > 0) sections.Add(effect);
@@ -1697,12 +1901,15 @@ namespace TacticsGame.Presentation
             if (def.AuraStatuses != null)
                 foreach (var s in def.AuraStatuses) if (s != null) sections.Add(StatusSection("IN DOME", s, false, "while inside"));
 
+            // The asset's own extra information (ActionDefinition.Details), under the stats.
+            if (!string.IsNullOrEmpty(def.Details)) sections.Add(new TipSection { Title = "DETAILS", Text = def.Details.Trim() });
+
             // The Etchings on this ability, last. Unit-wide ones (even those that change every ability) are in UnitPanel's list.
             if (who != null && who.Etchings != null)
             {
                 var etched = new TipSection { Title = "ETCHED" };
-                foreach (var n in who.Etchings)
-                    if (n.ActionId == def.Id) etched.Notes.Add(n.Name + ": " + n.Description);
+                foreach (var n in EtchingStacks.Of(who.Etchings))
+                    if (n.Key.ActionId == def.Id) etched.Notes.Add(n.Key.Name + EtchingStacks.Times(n.Value) + ": " + n.Key.Description);
                 if (etched.Notes.Count > 0) sections.Add(etched);
             }
             return sections;
@@ -1760,6 +1967,7 @@ namespace TacticsGame.Presentation
             int rows = Mathf.CeilToInt(s.Cells.Count / (float)CellsPerRow);
             float h = SectionTitleHeight + rows * (CellHeight + CellGap);
             if (s.Notes.Count > 0) h += tipNoteStyle.CalcHeight(new GUIContent(Bullets(s.Notes)), inner - 8f) + 2f;
+            if (!string.IsNullOrEmpty(s.Text)) h += tipNoteStyle.CalcHeight(new GUIContent(s.Text), inner - 8f) + 2f;
             return h;
         }
 
@@ -1813,6 +2021,12 @@ namespace TacticsGame.Presentation
                         string notes = Bullets(s.Notes);
                         GUI.Label(new Rect(left + 4f, ny, inner - 8f, tipNoteStyle.CalcHeight(new GUIContent(notes), inner - 8f)), notes, tipNoteStyle);
                     }
+                    if (!string.IsNullOrEmpty(s.Text))
+                    {
+                        float ty = ry + Mathf.CeilToInt(s.Cells.Count / (float)CellsPerRow) * (CellHeight + CellGap)
+                                   + (s.Notes.Count > 0 ? tipNoteStyle.CalcHeight(new GUIContent(Bullets(s.Notes)), inner - 8f) + 2f : 0f);
+                        GUI.Label(new Rect(left + 4f, ty, inner - 8f, tipNoteStyle.CalcHeight(new GUIContent(s.Text), inner - 8f)), s.Text, tipNoteStyle);
+                    }
                     cy += sh + SectionGap;
                 }
             }
@@ -1831,28 +2045,29 @@ namespace TacticsGame.Presentation
                 if (AbilityButton(unit, def, ButtonRect(index++, x, y), slotKey, followup)) return true;
             }
             bool rooted = plan.Count == 0 && unit.IsRooted;
-            var moveRect = ButtonRect(index++, x, y);
-            SetTip(moveRect, "Move", "Walk to any point on the navmesh. Hold Shift to click waypoints to walk through on the way.",
-                string.Format("speed {0:0.#} m/s", unit.EffectiveMoveSpeed()), rooted ? "Can't move: immobilized" : null);
-            GUI.enabled = !rooted;
-            if (Tile(moveRect, "F", "Move", rooted ? "rooted" : string.Format("{0:0.#} m/s", unit.EffectiveMoveSpeed())))
+            if (!unit.IsMakina)   // a Makina can't move
             {
-                GUI.enabled = true; mode = Mode.PickMove; message = null; return true;
+                var moveRect = ButtonRect(index++, x, y);
+                SetTip(moveRect, "Move", "Walk to any point on the navmesh. Hold Shift to click waypoints to walk through on the way.",
+                    string.Format("speed {0:0.#} m/s", unit.EffectiveMoveSpeed()), rooted ? "Can't move: immobilized" : null);
+                GUI.enabled = !rooted;
+                if (Tile(moveRect, "F", "Move", rooted ? "rooted" : string.Format("{0:0.#} m/s", unit.EffectiveMoveSpeed())))
+                {
+                    GUI.enabled = true; mode = Mode.PickMove; message = null; return true;
+                }
+                GUI.enabled = true;
             }
-            GUI.enabled = true;
             var dash = DashOf(unit);
             if (dash != null && AbilityButton(unit, dash, ButtonRect(index++, x, y), "G", followup)) return true;
             var waitRect = ButtonRect(index++, x, y);
-            SetTip(waitRect, "Focus", string.Format("Stand still and focus for {0:0.00}s, then ask for orders again. After {1:0.###}s of focus in a row " +
-                "(back-to-back Focus orders, or hold Space to keep focusing with time running slowly) the unit enters Clear Mind: strain drains fast until it does anything else. A hit restarts the count.",
-                WaitSeconds, sim.FocusDelayOf(unit)), string.Format("sheds {0:0} strain/s in Clear Mind", sim.FocusStrainOf(unit)));
-            if (Tile(waitRect, "Space", "Focus", string.Format("{0:0.00}s · hold Space: keep going", WaitSeconds))) { OrderFocus(unit); return true; }
-            var autoRect = ButtonRect(index++, x, y);
-            SetTip(autoRect, "Auto", "Let the AI pick this unit's order: its first usable attack on the nearest enemy, or close the distance.",
-                null, plan.Count > 0 ? "Clear the plan to use Auto." : null);
-            GUI.enabled = plan.Count == 0;
-            if (Tile(autoRect, null, "Auto", "AI picks")) { GUI.enabled = true; AutoDecide(pending[0]); Next(); return true; }
-            GUI.enabled = true;
+            if (unit.IsMakina)
+                SetTip(waitRect, "Wait", string.Format("Stand still for {0:0.00}s, then ask for orders again. A Makina never enters Clear Mind: its strain only climbs, and it breaks at its maximum.", WaitSeconds),
+                    string.Format("+{0:0.#} strain/s", unit.StrainDrift), null);
+            else
+                SetTip(waitRect, "Focus", string.Format("Stand still and focus for {0:0.00}s, then ask for orders again. After {1:0.###}s of focus in a row " +
+                    "(back-to-back Focus orders, or hold Space to keep focusing with time running slowly) the unit enters Clear Mind: strain drains fast until it does anything else. A hit restarts the count.",
+                    WaitSeconds, sim.FocusDelayOf(unit)), string.Format("sheds {0:0} strain/s in Clear Mind", sim.FocusStrainOf(unit)));
+            if (Tile(waitRect, "Space", unit.IsMakina ? "Wait" : "Focus", string.Format("{0:0.00}s · hold Space: keep going", WaitSeconds))) { OrderFocus(unit); return true; }
             y += ButtonRows(unit) * (ButtonHeight + gap);
 
             if (plan.Count > 0)
@@ -1872,7 +2087,7 @@ namespace TacticsGame.Presentation
             {
                 float cost; string reason;
                 if (!sim.CanCancelMove(other.Id, out cost, out reason)) continue;
-                if (GUI.Button(new Rect(sx, y, 180f, 22f), string.Format("Stop {0} (+{1:0} strain)", other.DisplayName, cost)))
+                if (GUI.Button(new Rect(sx, y, 180f, 22f), string.Format("Stop {0}", other.DisplayName)))
                 {
                     sim.CancelMove(other.Id);
                     message = other.DisplayName + " stopped; it will ask for orders next.";
@@ -1922,17 +2137,19 @@ namespace TacticsGame.Presentation
             var holdRect = new Rect(x, y, 220f, 28f);
             var throwRect = new Rect(x + 230f, y, 170f, 28f);
             var moveRect = new Rect(x + 410f, y, 200f, 28f);
-            SetTip(holdRect, "Keep headbutting", "Stand and keep hold: headbutt again, then choose again.");
+            bool headbutts = sim.HoldHeadbutts(unit);   // Subjugate headbutts; Grasp and Impel just holds
+            SetTip(holdRect, headbutts ? "Keep headbutting" : "Keep holding", headbutts ? "Stand and keep hold: headbutt again, then choose again." : "Stand and keep hold a moment, then choose again.");
             bool awaiting = sim.AwaitingThrow(unit);
             SetTip(throwRect, "Throw now", "Wind up the throw and hurl them toward the cursor (or click the ground to throw that way).");
-            SetTip(moveRect, "Move", "Walk somewhere, carrying them. You keep headbutting on the way.");
+            SetTip(moveRect, "Move", headbutts ? "Walk somewhere, carrying them. You keep headbutting on the way." : "Walk somewhere, carrying them.");
             var old = GUI.backgroundColor;
             GUI.backgroundColor = FollowupColor;
             GUI.enabled = !awaiting;   // the grab is up: throwing is all that's left
-            bool hold = GUI.Button(holdRect, "1  Keep headbutting");
+            bool hold = GUI.Button(holdRect, headbutts ? "1  Keep headbutting" : "1  Keep holding");
             GUI.backgroundColor = old;
             GUI.enabled = true;
-            bool toss = GUI.Button(throwRect, "2  Throw");
+            var throwDef = sim.ThrowActionOf(unit);   // a throw of its own (Impel) goes by its name
+            bool toss = GUI.Button(throwRect, "2  " + (throwDef != null && unit.Grapple != null && throwDef != unit.Grapple.Definition ? throwDef.DisplayName : "Throw"));
             GUI.enabled = !awaiting;
             bool move = GUI.Button(moveRect, "F  Move (carrying)");
             GUI.enabled = true;

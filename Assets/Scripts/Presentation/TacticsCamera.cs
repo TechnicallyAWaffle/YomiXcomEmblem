@@ -80,8 +80,9 @@ namespace TacticsGame.Presentation
             Apply(true);
         }
 
-        /// <summary>Glide to center 'point' and return to the starting rotation (zoom is kept). Any camera input cancels it.</summary>
-        public void FocusOn(Vector3 point, bool resetRotation = true)
+        /// <summary>Glide to center 'point', keeping the current rotation and zoom (resetRotation: back to the starting
+        /// rotation too). Any camera input cancels it.</summary>
+        public void FocusOn(Vector3 point, bool resetRotation = false)
         {
             gliding = true;
             glideT = 0f;

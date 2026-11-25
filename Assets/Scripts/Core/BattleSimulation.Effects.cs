@@ -24,6 +24,7 @@ namespace TacticsGame.Core
                 if (!u.IsAlive) continue;
                 float heal = 0f, strain = 0f;
                 foreach (var s in u.Statuses) { if (s.HealPerSecond > 0f) heal += s.HealPerSecond * step; strain += s.StrainPerSecond * step; }
+                strain += u.StrainDrift * step;   // a Makina's decay
                 if (strain != 0f) AddStrain(u, strain);   // REDUCTION builds it; EQUIPOSE sheds it
                 heal = Mathf.Min(heal, u.MaxHealth - u.Health);
                 if (heal <= 1e-4f) continue;
@@ -51,10 +52,11 @@ namespace TacticsGame.Core
         }
 
         /// <summary>Land one hit now (not as part of an action resolving): the full hit pipeline, against the target as it is.</summary>
-        public void StrikeNow(AttackEffect attack)
+        /// <param name="sourceMayBeDown">It lands even if its source has fallen since (a blow a status was holding back: RUPTURED).</param>
+        public void StrikeNow(AttackEffect attack, bool sourceMayBeDown = false)
         {
             var t = GetUnit(attack.TargetId);
-            if (t == null || !t.IsAlive || attack.Source == null || !attack.Source.IsAlive) return;
+            if (t == null || !t.IsAlive || attack.Source == null || (!attack.Source.IsAlive && !sourceMayBeDown)) return;
             var snapshot = new Dictionary<string, CombatSnapshot> { { t.Id, new CombatSnapshot { Dodge = t.EffectiveDodge(), Block = t.EffectiveBlock() } } };
             ApplyEffect(attack, snapshot);
         }
@@ -105,6 +107,7 @@ namespace TacticsGame.Core
         {
             if (u == null || u.GlideEnd < 0f || u.FallLandAt >= 0f) return;
             u.GlideEnd = -1f;
+            u.GlideFollowId = null;
             Emit(EventType.MoveEnded, u.Id, null, new MoveEndedInfo { Position = u.Position });
         }
 

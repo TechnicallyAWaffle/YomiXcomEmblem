@@ -26,6 +26,12 @@ namespace TacticsGame.Core
         public bool NoRecovery;              // Transcended through Uncloud The Mind: no recovery once it lands
         public float RecoveryScale = 1f;     // its recovery is scaled by this (Quickness And Lethargy's Transcend: longer)
         public List<Vector3> Points;         // points it has picked so far (Tear Apart Reality's explosions)
+        public string SecondTargetId;        // the other unit of an ability used on two (UnitCommand.SecondTargetId)
+        public bool FreeAimed;               // ordered toward a point (UnitCommand.FreeAim): its target is picked as it lands (BattleSimulation.FreeAim.cs)
+        public Vector3? ApproachAim;         // where its target stood when its user last stepped toward it (BattleSimulation.StepIntoMelee)
+        public float ApproachGlideEnd = -1f; // when that step lands (another glide since: a dodge, a shove; leave it be)
+        public bool LinkedUse;               // used as a linked ability (BattleSimulation.Recasts.cs)
+        public int LinkDepth;                // linked uses in a row up to and including this one (0: used fresh)
 
         /// <summary>One of this action's numbers for its actor, upgrades and statuses included (Unit.ActionStat).</summary>
         public float Stat(ActionStat stat) { return Actor.ActionStat(Definition, stat); }
@@ -67,16 +73,24 @@ namespace TacticsGame.Core
         public float AccuracyBonus;
         public float BlockPierceBonus;   // added to the definition's BlockPierce (Steady Strikes' follow-up)
         public float StunMultiplier = 1f;
+        public float CritChance = -1f;   // its chance to strike critically, set as its action resolves (Transcended or not); -1: the ability's own as it lands
+        public int BreakWeakpoints;      // it breaks this many of the target's weakpoints from any side (a Transcend an Etching gave: Brute Force)
+        public int ExtraWeakpoints;      // it opens this many more on an enemy it hits, for ExtraWeakpointSeconds (Unwind Their Self's Transcend)
+        public float ExtraWeakpointSeconds;
         public bool HasPush;        // shove the target to PushTo if this hits (Bash)
         public Vector3 PushTo;
         public bool IgnoreRange;    // area hits: the target only needs to be in the area, not in the action's range
         public bool IgnoreCover;    // area hits land regardless of the target's exposure
         public bool Unerring;       // no hit roll and no dodge: it always connects (a chain snapping taut)
         public bool Heavy;          // lands as a Heavy impact whatever the ability's own (Praa's Hatred deep in its chain)
+        public bool NoStatuses;     // lands without the ability's TargetStatusesOnHit: they were put on already (Conjecture's slashes)
         public string Tag;
         /// <summary>Runs once the hit has landed (damage, statuses and stun applied) on a target that is still alive:
         /// for rules that follow a hit (Subjugate's grab, Amblivate's lift).</summary>
         public System.Action<BattleSimulation, Unit> OnLanded;
+        /// <summary>Runs once the hit's damage is dealt (killing or not), with everything worked out about it: what it broke,
+        /// whether it crit (A Duet's cooldown reset on a weakpoint).</summary>
+        public System.Action<BattleSimulation, HitContext> AfterHit;
     }
 
     public class HealEffect : SimEffect { public string TargetId; public float Amount; }
@@ -114,11 +128,29 @@ namespace TacticsGame.Core
         /// <summary>True if it may be used now although it is on cooldown (a chain's follow-ups). targetId null = on anyone.</summary>
         public virtual bool IgnoresCooldown(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId) { return false; }
 
+        /// <summary>A grab's hold (BattleSimulation.TickGrapples): what it strikes the held unit with every GrappleHeadbuttSeconds
+        /// (Subjugate's headbutt: its LinkedAction), or null for a hold that only holds.</summary>
+        public virtual ActionDefinition GrappleHeadbutt(ActionDefinition def) { return def.LinkedAction; }
+
+        /// <summary>A grab's throw: the ability that winds up and resolves it (Subjugate: itself, tagged ThrowTag).</summary>
+        public virtual ActionDefinition GrappleThrow(ActionDefinition def) { return def; }
+
+        /// <summary>How far around its user it takes units along (Stride In Unison: allies within AreaRadius), for the aiming
+        /// preview's ring around the user. 0: it takes no one.</summary>
+        public virtual float GatherRadius(Unit actor, ActionDefinition def) { return 0f; }
+
+        /// <summary>For one that MovesUser as it lands: are its hits held until the user reaches each target
+        /// (BattleSimulation.HoldHitsForArrival)? False for those that time their own (Conjecture's slashes).</summary>
+        public virtual bool HitsOnArrival(ActionDefinition def) { return true; }
+
         /// <summary>True for abilities that move the user (dashes, blinks, leaps): they can't be used while airborne.</summary>
         public virtual bool MovesUser { get { return false; } }
 
         /// <summary>True for dashes (the Dash, Phantom Strike's, Savior's): a CRIPPLED unit can't use them (StatusFlags.NoDash).</summary>
         public virtual bool Dashes { get { return false; } }
+        /// <summary>True for guards that can stand in a unit's Block slot (UnitDefinition.Universal): Block, and a class's own guard
+        /// in its place (the Duelist's Unsigned Rebuttal). The editor keeps such an ability there instead of the shared Block.</summary>
+        public virtual bool TakesBlockSlot { get { return false; } }
 
         /// <summary>Is its follow-up open for this unit right now, whatever it did last? Then ordering it needs no aiming: it goes
         /// at FollowupPoint and its button is framed as a follow-up (Baneful Domain, while its zone is up).</summary>
@@ -214,6 +246,27 @@ namespace TacticsGame.Core
             if (def.IsCharge && def.ChargeHealMultiplier > 1f) tip.Add("Full charge", AbilityTip.Mult(def.ChargeHealMultiplier) + " heal");
         }
 
+        /// <summary>
+        /// The popup's EFFECT cells as the player sees them: numbers only (the hit, heals, charge bonuses, weakpoints, and a
+        /// plain push or pull). The lines behaviors word themselves (Describe's overrides) are left out: what an ability does
+        /// beyond its numbers is the asset's Details text. TargetStatusesTitle still comes from the behavior.
+        /// </summary>
+        public static void DescribeNumbers(AbilityTip tip, ActionBehavior behavior)
+        {
+            var def = tip.Def;
+            var scratch = new AbilityTip(def, tip.Who, tip.Sim);
+            behavior.Describe(scratch);   // for its target statuses' heading only
+            tip.TargetStatusesTitle = scratch.TargetStatusesTitle;
+            if (behavior.RollsToHit(def)) DescribeHit(tip, "Damage", "Stun", true);
+            if (tip.V(ActionStat.Heal) > 0f) tip.Add("Heal", tip.V(ActionStat.Heal).ToString("0"));
+            // A push or pull, only where DisplaceDistance means one (behaviors that reword it use it as a height or the like).
+            var move = behavior.GetType().GetMethod("DescribeMovement", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (move != null && move.DeclaringType == typeof(ActionBehavior)) behavior.DescribeMovement(tip);
+            if (def.IsCharge && def.ChargeDamageMultiplier > 1f) tip.Add("Full charge", AbilityTip.Mult(def.ChargeDamageMultiplier) + " dmg");
+            if (def.IsCharge && def.ChargeHealMultiplier > 1f) tip.Add("Full charge", AbilityTip.Mult(def.ChargeHealMultiplier) + " heal");
+            DescribeWeakpoints(tip);
+        }
+
         /// <summary>The hit's lines: damage (or just "heavy" without any), accuracy, stun, target strain, the bonus on a stunned target.</summary>
         protected static void DescribeHit(AbilityTip tip, string damageLabel, string stunLabel, bool accuracy)
         {
@@ -222,10 +275,52 @@ namespace TacticsGame.Core
             if (damage > 0f) tip.Add(damageLabel, string.Format("{0:0} {1}", damage, def.Impact == ImpactType.Heavy ? "heavy" : "light"));
             else if (def.Impact == ImpactType.Heavy) tip.Add("Impact", "heavy");
             if (accuracy && tip.V(ActionStat.Accuracy) < 0.995f) tip.Add("Accuracy", string.Format("{0:0}%", tip.V(ActionStat.Accuracy) * 100f));
+            if (tip.V(ActionStat.CritChance) > 0f) tip.Add("Critical", string.Format("{0:0}% for +{1:0}% dmg", tip.V(ActionStat.CritChance) * 100f, tip.V(ActionStat.CritDamage) * 100f));
             if (tip.V(ActionStat.StunDuration) > 0f) tip.Add(stunLabel, AbilityTip.Secs(tip.V(ActionStat.StunDuration)));
             if (tip.V(ActionStat.StrainOnTarget) > 0f) tip.Add("Target strain", string.Format("+{0:0}", tip.V(ActionStat.StrainOnTarget)));
             if (def.StunnedDamageMultiplier > 1f) tip.Add("Vs stunned", AbilityTip.Mult(def.StunnedDamageMultiplier) + " dmg");
         }
+
+        /// <summary>Is its follow-up aimed afresh (true: a new target is picked each time, Scepter Of Tyranny), rather than
+        /// re-cast at the last one (false: Space repeats it on the same target)?</summary>
+        public virtual bool FollowupRetargets(ActionDefinition def) { return false; }
+
+        /// <summary>The name 'def' goes by for 'actor' right now: its DisplayName, or a StageNames entry at a later stage of a
+        /// staged follow-up (Scepter Of Tyranny).</summary>
+        public virtual string NameFor(Unit actor, ActionDefinition def) { return def.DisplayName; }
+
+        /// <summary>After its target unit, is a point picked for it (where the unit is sent: within DestinationRange of it)?
+        /// By default whenever the ability has a DestinationRange; Scepter Of Tyranny only on its first stage.</summary>
+        public virtual bool PicksDestination(BattleSimulation sim, Unit actor, ActionDefinition def) { return def.DestinationRange > 0f; }
+
+        /// <summary>After its target unit, is a second unit picked for it (UnitCommand.SecondTargetId: Supersede's swap)?</summary>
+        public virtual bool PicksSecondUnit(ActionDefinition def) { return false; }
+
+        /// <summary>Do its WeakpointsOnTarget open on what its hits land on (true), or, for an ability with no hit of its own
+        /// (a status spell, a teleport, a pull), on the unit it was used on as it resolves (false)?</summary>
+        public virtual bool WeakpointsOnHit(ActionDefinition def) { return true; }
+
+        /// <summary>Its weakpoint lines for the ability popup (after Describe).</summary>
+        public static void DescribeWeakpoints(AbilityTip tip)
+        {
+            var def = tip.Def;
+            string lasts = def.WeakpointSeconds > 0f ? " for " + AbilityTip.Secs(def.WeakpointSeconds) : "";
+            if (def.WeakpointsOnTarget > 0) tip.Add("Weakpoints", def.WeakpointsOnTarget + " on the target" + lasts);
+            if (def.WeakpointsOnSelfDuringWindup > 0) tip.Add("Weakpoints", def.WeakpointsOnSelfDuringWindup + " on you while it winds up");
+            if (def.WeakpointsOnSelf > 0) tip.Add("Weakpoints", def.WeakpointsOnSelf + " on you" + lasts);
+            if (def.BreaksWeakpoints > 0) tip.Add("Breaks", def.BreaksWeakpoints + (def.BreaksWeakpoints == 1 ? " weakpoint" : " weakpoints") + " on each unit hit");
+        }
+
+        /// <summary>Does its user close in on the target while it winds up (BattleSimulation.StepIntoMelee)? Melee abilities
+        /// aimed at a unit, unless the behavior moves its user itself.</summary>
+        public virtual bool ApproachesTarget(ActionDefinition def)
+        {
+            return !def.IsRanged && !MovesUser && (def.Targeting == TargetType.Enemy || def.Targeting == TargetType.AnyUnit);
+        }
+
+        /// <summary>Does it move what it hits by itself, beyond its Displace (a line push, a charge carrying them ahead)? Then a
+        /// raised Block isn't also knocked back by its hits (BattleSimulation.GuardKnockback): the ability's own push is all.</summary>
+        public virtual bool MovesTargets(ActionDefinition def) { return false; }
 
         /// <summary>What DisplaceDistance does: a pull, a reposition or a knockback by default; behaviors that use it as a
         /// height (lifts, leaps, slams) say that instead.</summary>
@@ -236,6 +331,10 @@ namespace TacticsGame.Core
             var mode = tip.Def.Displace;
             tip.Add(mode == DisplaceMode.TowardSource ? "Pull" : mode == DisplaceMode.AwayFromEnemies ? "Moves them" : "Knockback", AbilityTip.Metres(d));
         }
+
+        /// <summary>An always-on ability (ActionDefinition.InnatePassive): called every tick its owner is alive and not VOIDED
+        /// (BattleSimulation.TickInnatePassives). Imperfect Apotheosis catches what touches The Infinite.</summary>
+        public virtual void OnInnateTick(BattleSimulation sim, Unit owner, ActionDefinition def) { }
 
         /// <summary>Channeled actions (ActionDefinition.ChannelSeconds): called every tick of the channel. Return false to break it.</summary>
         public virtual bool OnChannelTick(BattleSimulation sim, ActionInstance a) { return true; }
@@ -353,6 +452,11 @@ namespace TacticsGame.Core
             // Universal
             { "block", new BlockBehavior() },
             { "dash", new DashBehavior() },
+            // Duelist and Strategist additions
+            { "vindication", new VindicationBehavior() },
+            { "quell", new QuellBehavior() },
+            { "mindmeld", new MindmeldBehavior() },
+            { "displacement", new DisplacementBehavior() },
             // Tank, Fighter, Paradigm additions
             { "bash", new BashBehavior() },
             { "phantom_strike", new PhantomStrikeBehavior() },
@@ -394,6 +498,11 @@ namespace TacticsGame.Core
             { "soulseeker", new SoulseekerBehavior() },
             { "sky_shot", new SkyShotBehavior() },
             { "chain_tether", new ChainTetherBehavior() },
+            // Matriarch, Howler (and any kit that fires projectiles: ProjectileBehavior)
+            { "volley", new VolleyBehavior() },
+            { "volley_stream", new VolleyStreamBehavior() },
+            { "reel", new ReelBehavior() },
+            { "howl", new HowlBehavior() },
             // Deliverance
             { "perplexity_step", new PerplexityStepBehavior() },
             { "praas_hatred", new PraasHatredBehavior() },
@@ -407,6 +516,34 @@ namespace TacticsGame.Core
             { "savior", new SaviorBehavior() },
             // Paradigm User and Sharpshooter, round AF (Madness and Dreadful Fixation are status_spell)
             { "withering_end", new WitheringEndBehavior() },
+            // Strategist
+            { "scepter", new ScepterBehavior() },
+            { "chrysalis", new ChrysalisBehavior() },
+            { "threshold", new ThresholdBehavior() },
+            { "stride", new StrideBehavior() },
+            { "supersede", new SupersedeBehavior() },
+            { "pressure_points", new PressurePointsBehavior() },
+            // Duelist
+            { "gouge", new GougeBehavior() },
+            { "recursive_severance", new RecursiveSeveranceBehavior() },
+            { "graze", new GrazeBehavior() },
+            { "parry", new ParryBehavior() },
+            { "summation", new SummationBehavior() },
+            { "quick_dash", new QuickDashBehavior() },
+            { "duet", new DuetBehavior() },
+            { "opening_theorem", new OpeningTheoremBehavior() },
+            { "conjecture", new ConjectureBehavior() },
+            // Makina (the Strategist's constructs)
+            { "summon_makina", new SummonMakinaBehavior() },
+            { "crash_down", new CrashDownBehavior() },
+            { "massacre", new MassacreBehavior() },
+            { "omen", new OmenBehavior() },
+            { "outburst", new OutburstBehavior() },
+            { "grasp", new GraspBehavior() },
+            { "impel", new ImpelBehavior() },
+            { "fissure", new FissureBehavior() },
+            { "apotheosis", new ApotheosisBehavior() },
+            { "beckon", new BeckonBehavior() },
             { "splinter", new SplinterBehavior() },
             { "baneful_domain", new BanefulDomainBehavior() },
             { "mindshatter", new MindshatterBehavior() },

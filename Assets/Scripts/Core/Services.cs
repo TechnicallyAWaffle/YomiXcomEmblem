@@ -30,6 +30,16 @@ namespace TacticsGame.Core
         UnitCommand Decide(BattleSimulation sim, Unit unit);
     }
 
+    /// <summary>
+    /// An AI that keeps watch between its units' decisions (a pack noticing an opening the moment it comes): the battle
+    /// calls Watch every BattleSimulation.WatchTicks ticks for each living unit it plays (BattleSimulation.TickWatchers).
+    /// Watch may change the AI's plans and wake units (BattleSimulation.Wake); it orders nothing itself.
+    /// </summary>
+    public interface IBattleWatcher
+    {
+        void Watch(BattleSimulation sim, Unit unit);
+    }
+
     // ---- Defaults so the Core runs with no scene at all (tests, prototyping) ----
     public class OpenFieldVisibility : IVisibilityService
     {

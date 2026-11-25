@@ -10,6 +10,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class BashBehavior : ActionBehavior
     {
+        public override bool MovesTargets(ActionDefinition def) { return true; }
+
         public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Peel; }   // Repel too
 
         public override bool RollsToHit(ActionDefinition def) { return true; }
@@ -196,6 +198,10 @@ namespace TacticsGame.Core
                 if (amount <= 0f) return;
                 sim.AddStrain(u, -amount);
                 sim.AddStrain(enemy, amount);
+                // The enemy it lands on gets the burden's weakpoints too (the ability's WeakpointsOnTarget).
+                var giver = sim.GetUnit(burden.SourceId);
+                var def = giver != null ? giver.Actions.Find(x => x != null && x.BehaviorId == "strain_burden") : null;
+                if (def != null) sim.AddTargetWeakpoints(u, enemy, def);
             });
         }
 
@@ -223,6 +229,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class TelekineticPullBehavior : ActionBehavior
     {
+        public override bool WeakpointsOnHit(ActionDefinition def) { return false; }
+
         public override IEnumerable<BehaviorParam> Parameters
         {
             get
@@ -245,6 +253,7 @@ namespace TacticsGame.Core
 
         public override bool OnWindupTick(BattleSimulation sim, ActionInstance a)
         {
+            if (a.FreeAimed) return true;   // aimed freely: no target to keep in sight (it needs sight of the one it finds as it lands)
             var target = sim.GetUnit(a.TargetUnitId);
             return target != null && target.IsAlive && sim.HasSightOf(a.Actor, a.Definition, target);
         }
@@ -279,6 +288,124 @@ namespace TacticsGame.Core
         {
             if (a.Steps > 0 && broken) sim.StopGlide(sim.GetUnit(a.TargetUnitId));   // let go: it stops where it is
             a.Steps = 0;
+        }
+    }
+
+    /// <summary>
+    /// Grasp and Impel (grasp): pull an ally within Range to you over the windup's end, at 'pull_speed' (30 m/s), and hold
+    /// it for up to 'hold_seconds' (2s; BattleSimulation.StartHold): it can't act, and you can only move (carrying it) or
+    /// throw it. The throw is the LinkedAction (Impel, ImpelBehavior). The windup bar reads "Grasp" (WindupName).
+    /// </summary>
+    public class GraspBehavior : ActionBehavior
+    {
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get { yield return new BehaviorParam("pull_speed", 30f); yield return new BehaviorParam("hold_seconds", 2f); }
+        }
+
+        public override bool RollsToHit(ActionDefinition def) { return false; }
+        public override bool WeakpointsOnHit(ActionDefinition def) { return false; }
+        public override ActionDefinition GrappleHeadbutt(ActionDefinition def) { return null; }   // it only holds
+        public override ActionDefinition GrappleThrow(ActionDefinition def) { return def.LinkedAction ?? def; }
+
+        public override bool CanStart(BattleSimulation sim, Unit actor, UnitCommand cmd, out string reason)
+        {
+            var t = sim.GetUnit(cmd.TargetUnitId);
+            reason = actor.Grapple != null ? "already holding someone" : t != null && t.IsUnstoppable ? "can't be held" : null;
+            return reason == null;
+        }
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var actor = a.Actor; var def = a.Definition;
+            var ally = sim.GetUnit(a.TargetUnitId);
+            if (ally == null || !ally.IsAlive || ally == actor || !sim.InReach(actor, def, ally) || ally.IsUnstoppable) return;
+            // Pulled in to just in front of the user, then held there.
+            Vector3 d = ally.Position - actor.Position; d.y = 0f;
+            Vector3 dir = d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward;
+            Vector3 to = sim.Paths.ClampDash(actor.Position, actor.Position + dir * BattleSimulation.CarryOffset(actor, ally));
+            Vector3 gap = to - ally.Position; gap.y = 0f;
+            float seconds = Mathf.Max(BattleSimulation.TickLength, gap.magnitude / Mathf.Max(1f, Param(def, "pull_speed")));
+            if (gap.magnitude > 0.05f) sim.PushUnit(ally, to, seconds, actor);   // first: being moved breaks a hold (HeldState.OnShoved)
+            if (gap.magnitude > 0.05f && !sim.IsGliding(ally)) return;   // it wouldn't be moved (it resists it): no hold
+            sim.StartHold(actor, ally, def, Param(def, "hold_seconds") * actor.DurationScale(def) + seconds);
+        }
+    }
+
+    /// <summary>
+    /// Impel (impel), Grasp and Impel's throw: the held ally gains a shield of 'shield' (30) for 'shield_seconds' (1.5s) and
+    /// flies out the way it is thrown at 'speed' (10 m/s), up to Range, stopping at the first enemy it strikes: that enemy
+    /// takes this ability's hit (heavy, its Damage and stun; it always connects).
+    /// </summary>
+    public class ImpelBehavior : ActionBehavior
+    {
+        public override IEnumerable<BehaviorParam> Parameters
+        {
+            get { yield return new BehaviorParam("speed", 10f); yield return new BehaviorParam("shield", 30f); yield return new BehaviorParam("shield_seconds", 1.5f); }
+        }
+
+        public override bool RollsToHit(ActionDefinition def) { return true; }   // its impact is a hit (always connecting)
+        public override bool MovesTargets(ActionDefinition def) { return true; }
+
+        public override void OnInterrupted(BattleSimulation sim, ActionInstance a) { sim.EndGrapple(a.Actor); }   // let go where it is
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var actor = a.Actor; var def = a.Definition;
+            var ally = sim.GetUnit(a.TargetUnitId);
+            Vector3 dir = sim.GrappleFacing(actor);
+            sim.EndGrapple(actor);   // let go: it flies from here
+            if (ally == null || !ally.IsAlive) return;
+            sim.ApplyStatus(ally, new StatusEffect
+            {
+                Id = StatusIds.Shielded, SourceId = actor.Id, ExpiresAt = sim.Now + Param(def, "shield_seconds") * actor.DurationScale(def), Shield = Param(def, "shield"),
+            }, actor);
+            float range = a.Stat(ActionStat.Range), speed = Mathf.Max(1f, Param(def, "speed"));
+            Vector3 end = sim.Paths.ClampDash(ally.Position, ally.Position + dir * range);
+            Vector3 flight = end - ally.Position; flight.y = 0f;
+            if (flight.magnitude < 0.1f) return;
+            sim.SlideUnitTo(ally, end, flight.magnitude / speed, end);
+            float mult = a.DamageMultiplier * actor.DamageDealtMult();
+            sim.StartSweep(new Sweep
+            {
+                Source = actor, Definition = def, Origin = ally.Position, Dir = dir, Speed = speed, Range = range, HalfWidth = ally.BodyRadius,
+                Rider = ally, StopAtFirst = true,
+                OnHit = (s, enemy) => s.StrikeNow(new AttackEffect
+                {
+                    Source = actor, TargetId = enemy.Id, Definition = def, DamageMultiplier = mult, IgnoreRange = true, IgnoreCover = true, Unerring = true,
+                }),
+            });
+        }
+    }
+
+    /// <summary>
+    /// Fissure (fissure): stomp, and a crack runs out along the aimed line at 'speed' (4 m/s), Range long and LineWidth wide
+    /// (BattleSimulation.StartSweep). Every enemy it reaches takes this ability's hit (heavy, its Damage and stun; it always
+    /// connects) and is knocked DisplaceDistance (4m) into the air (BattleSimulation.LiftUnit).
+    /// </summary>
+    public class FissureBehavior : ActionBehavior
+    {
+        public override IEnumerable<BehaviorParam> Parameters { get { yield return new BehaviorParam("speed", 4f); } }
+
+        public override bool RollsToHit(ActionDefinition def) { return true; }
+        protected override void DescribeMovement(AbilityTip tip) { }   // DisplaceDistance is how high it knocks them
+
+        public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
+        {
+            var actor = a.Actor; var def = a.Definition;
+            Vector3 dir = a.TargetPos - actor.Position; dir.y = 0f;
+            float up = a.Stat(ActionStat.DisplaceDistance), mult = a.DamageMultiplier * actor.DamageDealtMult();
+            sim.StartSweep(new Sweep
+            {
+                Source = actor, Definition = def, Origin = actor.Position, Dir = dir, Speed = Mathf.Max(0.5f, Param(def, "speed")),
+                Range = a.Stat(ActionStat.Range), HalfWidth = def.LineWidth / 2f, FxKind = "fissure",
+                OnHit = (s, enemy) => s.StrikeNow(new AttackEffect
+                {
+                    Source = actor, TargetId = enemy.Id, Definition = def, DamageMultiplier = mult, IgnoreRange = true, IgnoreCover = true, Unerring = true,
+                    OnLanded = up > 0f ? (s2, t) => s2.LiftUnit(t, up, actor) : (System.Action<BattleSimulation, Unit>)null,
+                }),
+            });
+            sim.EmitFx(actor, null, "stomp", def, actor.Position, 1.5f);
         }
     }
 }

@@ -115,4 +115,9 @@ MonoBehaviour:
   InterruptedByDamage: 0
   InterruptedByStun: 0
   Params: []
+  WeakpointsOnTarget: 1
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   DataVersion: 15

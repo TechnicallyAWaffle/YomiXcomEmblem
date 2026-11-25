@@ -16,8 +16,11 @@ MonoBehaviour:
   DisplayName: Destiny Closes In
   BehaviorId: sky_shot
   Roles: 0
-  Description: Rise into the air over the windup and fire a shot that MARKS the target.
-    If it lands, follow up with Fate Encumbers Its Prey.
+  Description: 'Rise into the air over the windup and fire a shot that MARKS the
+    target. Linked to Fate Encumbers Its Prey: it can be used straight after, at
+    any target.'
+  Details: 
+  WindupName: 
   Targeting: 2
   Range: 16
   IsRanged: 1
@@ -96,9 +99,11 @@ MonoBehaviour:
       Important: 0
     HealPerSecond: 0
     StrainPerSecond: 0
+    StrainOnWeakpointBreak: 0
     BreakStun: 0
     HealOnExpire: 0
     HealMissingOnExpire: 0
+    Shield: 0
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -114,41 +119,7 @@ MonoBehaviour:
     KeepsBlock: 0
     Unstoppable: 0
     RedirectsHits: 0
-  SelfStatusesOnHit:
-  - Id: fate_ready
-    Duration: 1.4
-    Modifiers: []
-    ActionModifiers: []
-    Flags: 0
-    ForbidsActions: []
-    AppliesTo: 0
-    Look:
-      Name: 
-      Word: 
-      Color: {r: 0, g: 0, b: 0, a: 0}
-      CountsUp: 0
-      Hidden: 1
-      Important: 0
-    HealPerSecond: 0
-    StrainPerSecond: 0
-    BreakStun: 0
-    HealOnExpire: 0
-    HealMissingOnExpire: 0
-    DodgeBonus: 0
-    BlockBonus: 0
-    IncomingAccuracyBonus: 0
-    DodgeDistanceBonus: 0
-    ActionSpeedMult: 1
-    MoveSpeedMult: 1
-    DamageDealtMult: 1
-    StrainCostMult: 1
-    Rooted: 0
-    Untargetable: 0
-    BreaksOnDamage: 0
-    StunImmune: 0
-    KeepsBlock: 0
-    Unstoppable: 0
-    RedirectsHits: 0
+  SelfStatusesOnHit: []
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -161,15 +132,24 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
-  FollowUps:
-  - {fileID: 11400000, guid: a56eb4811f67a164483ef28a0d333048, type: 2}
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
+  FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  LinkedAbilities:
+  - {fileID: 11400000, guid: a56eb4811f67a164483ef28a0d333048, type: 2}
+  RequiresLink: 0
   CanTranscend: 0
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
+  TranscendCooldown: -1
   ExtraCinematic: 0
   Visuals:
     Kind: 1

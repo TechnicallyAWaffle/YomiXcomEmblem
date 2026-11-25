@@ -18,6 +18,8 @@ MonoBehaviour:
   Roles: 0
   Description: Create a zone that damages enemies inside, more the longer it stays
     up. Casting this again while the zone is up renews it, for 15 strain.
+  Details: 
+  WindupName: 
   Targeting: 4
   Range: 17
   IsRanged: 1
@@ -44,13 +46,13 @@ MonoBehaviour:
   BlockPierce: 0
   StunnedDamageMultiplier: 1
   Shape: 1
-  AreaRadius: 9
+  AreaRadius: 6.5
   LineWidth: 1
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 2
   AuraAtTarget: 1
-  AuraDamagePerSecond: 5
+  AuraDamagePerSecond: 9
   AuraStrainPerSecond: 0
   AuraDamageGrowth: 0.2
   InnatePassive: 0
@@ -87,8 +89,14 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1

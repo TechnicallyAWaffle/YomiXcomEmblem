@@ -46,7 +46,7 @@ namespace TacticsGame.Core
             Vector3 d = a.TargetPos - actor.Position; d.y = 0f;
             float reach = a.Stat(ActionStat.Range);
             if (d.magnitude > reach) d = d.normalized * reach;
-            sim.SlideUnitTo(actor, sim.Paths.ClampDash(actor.Position, actor.Position + d), BattleSimulation.DashDuration);
+            sim.PhaseDashTo(actor, actor.Position + d, BattleSimulation.DashDuration);   // through walls and cover
         }
     }
 

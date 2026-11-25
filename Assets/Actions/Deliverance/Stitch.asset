@@ -17,7 +17,7 @@ MonoBehaviour:
   BehaviorId: stitch
   Roles: 0
   Description: 'A melee attack that melds Deliverance into its target: untargetable
-    and taking no damage, it heals while the target is lifted into the air, then
+    and taking no damage, it heals and sheds strain while the target is lifted into the air, then
     dashes out of them.'
   Targeting: 2
   Range: 2
@@ -107,6 +107,8 @@ MonoBehaviour:
   - Key: lift
     Value: 5
   - Key: heal_per_second
+    Value: 70
+  - Key: strain_relief_per_second
     Value: 70
   - Key: exit_dash
     Value: 5

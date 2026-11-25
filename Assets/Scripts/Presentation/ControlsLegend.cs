@@ -22,7 +22,7 @@ namespace TacticsGame.Presentation
             { "Scroll", "Zoom" },
             { "Z", "Center on the unit giving orders" },
             { "Hover timeline", "Center on that unit" },
-            { "C", "Cinematic camera: key moments / all / off / none" },
+            { "C", "Replay camera: cinematic / none (no cinematic effects)" },
         };
 
         private static readonly string[,] OrderKeys =
@@ -31,6 +31,7 @@ namespace TacticsGame.Presentation
             { "F", "Move" },
             { "Hold Space", "Focus or keep charging (time slows)" },
             { "Left-click", "Pick target / point / dash spot" },
+            { "Hold left-click 1s", "Aim a single-target ability that way (hits the closest in a 90° cone)" },
             { "Shift + order", "Queue several orders" },
             { "Enter", "Confirm the queued plan" },
             { "Backspace", "Undo last queued order" },

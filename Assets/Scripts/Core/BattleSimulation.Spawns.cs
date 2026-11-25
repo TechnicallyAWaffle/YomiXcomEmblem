@@ -96,8 +96,25 @@ namespace TacticsGame.Core
             delayedStrikes.Add(new DelayedStrike { Attack = attack, At = Now + Mathf.Max(0f, delay), FromId = from != null ? from.Id : null, FxKind = fxKind });
         }
 
+        // Something an ability does a moment later (Opening Theorem's bound once its dash arrives): run at At, if Unit is still alive.
+        private class Delayed { public Unit Unit; public float At; public System.Action Act; }
+        private readonly List<Delayed> delayed = new List<Delayed>();
+
+        /// <summary>Run 'act' 'delay' seconds from now, on the simulation's clock, unless 'unit' has died by then.</summary>
+        public void After(Unit unit, float delay, System.Action act)
+        {
+            if (act != null) delayed.Add(new Delayed { Unit = unit, At = Now + Mathf.Max(0f, delay), Act = act });
+        }
+
         private void TickDelayedStrikes()
         {
+            for (int i = 0; i < delayed.Count; i++)
+            {
+                var d = delayed[i];
+                if (Now + 1e-4f < d.At) continue;
+                delayed.RemoveAt(i--);
+                if (d.Unit == null || d.Unit.IsAlive) d.Act();
+            }
             for (int i = delayedStrikes.Count - 1; i >= 0; i--)
             {
                 var d = delayedStrikes[i];
@@ -137,12 +154,34 @@ namespace TacticsGame.Core
         public void DealTickDamage(Unit source, Unit target, float amount, ActionDefinition def)
         {
             if (target == null || !target.IsAlive || amount <= 0f || target.HasFlag(StatusFlags.NegatesDamage)) return;
+            amount -= AbsorbWithShields(target, amount);
+            if (amount <= 1e-4f) return;
             target.Health -= amount;
             if (source != null) target.LastAttackerId = source.Id;
             target.LastHitAction = def;
             target.LastHitTag = null;
             Emit(EventType.Damage, source != null ? source.Id : null, target.Id, new DamageInfo { ActionId = def != null ? def.Id : null, Amount = amount, Impact = ImpactType.Light, RemainingHealth = target.Health });
             Triggers.Fire(new TriggerContext { Type = TriggerType.DamageTaken, Sim = this, Subject = target, Other = source, Amount = amount, Impact = ImpactType.Light, Action = def });
+        }
+
+        /// <summary>
+        /// Shields on 'u' (StatusEffect.Shield) soak up 'amount' of damage, oldest first; one used up ends its status. Returns
+        /// how much they took.
+        /// </summary>
+        public float AbsorbWithShields(Unit u, float amount)
+        {
+            if (u == null || amount <= 0f) return 0f;
+            float took = 0f;
+            List<string> spent = null;
+            foreach (var s in u.Statuses)
+            {
+                if (s.Shield <= 0f || took >= amount) continue;
+                float t = Mathf.Min(s.Shield, amount - took);
+                s.Shield -= t; took += t;
+                if (s.Shield <= 1e-4f) (spent ?? (spent = new List<string>())).Add(s.Id);
+            }
+            if (spent != null) foreach (var id in spent) RemoveStatus(u, id);
+            return took;
         }
 
         /// <summary>Ask the views for a look of an ability's own (AbilityFx): 'kind' names it ("rift", "unmade"...).</summary>

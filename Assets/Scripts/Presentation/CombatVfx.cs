@@ -14,7 +14,7 @@ namespace TacticsGame.Presentation
     ///              unravel and death bursts, interrupt shards, status pops and lasting status rings.
     /// Effects run on scaled time, so they freeze with the world while the player gives orders.
     /// </summary>
-    public class CombatVfx : MonoBehaviour
+    public partial class CombatVfx : MonoBehaviour   // accents (glow, flashes, dust, motes): CombatVfx.Glow.cs
     {
         public PlaybackDirector Director;
         public Camera Camera;
@@ -37,21 +37,25 @@ namespace TacticsGame.Presentation
         private static readonly Color LightColor = new Color(0.55f, 0.9f, 1f);
         private static readonly Color HeavyColor = new Color(1f, 0.55f, 0.15f);
 
-        private class Windup { public ActionDefinition Def; public string ActorId, TargetId; public Vector3 TargetPos; public float Start, Duration; }
+        // Range, Radius: the ability's as its user had them when it started (ActionStartedInfo): what the sim will use.
+        private class Windup { public ActionDefinition Def; public string ActorId, TargetId; public Vector3 TargetPos; public float Start, Duration, Range, Radius; }
+        /// <summary>Per actor: the range and radius of the ability it started last, for its resolve (an instant one has no windup entry).</summary>
+        private readonly Dictionary<string, Vector2> lastReach = new Dictionary<string, Vector2>();
 
         /// <summary>A windup in progress, as the battle timeline shows it.</summary>
-        public struct WindupView { public string ActorId, TargetId; public ActionDefinition Def; public float Start, ResolveAt; }
+        public struct WindupView { public string ActorId, TargetId; public ActionDefinition Def; public float Start, ResolveAt; public Vector3 TargetPos; }
 
         public IEnumerable<WindupView> Windups
         {
-            get { foreach (var w in windups) yield return new WindupView { ActorId = w.ActorId, TargetId = w.TargetId, Def = w.Def, Start = w.Start, ResolveAt = w.Start + w.Duration }; }
+            get { foreach (var w in windups) yield return new WindupView { ActorId = w.ActorId, TargetId = w.TargetId, Def = w.Def, Start = w.Start, ResolveAt = w.Start + w.Duration, TargetPos = w.TargetPos }; }
         }
 
         /// <summary>Treat this unit as hovered (target line, ring and label) even when the mouse isn't over it: the timeline.</summary>
         [System.NonSerialized] public string HoverOverride;
-        private class LineFx { public Vector3[] Points; public Color Color; public float Width, EndWidth, Age, Life; public bool Sweep; }
+        private class LineFx { public Vector3[] Points; public Color Color; public float Width, EndWidth, Age, Life; public bool Sweep; public int Mode = -1; }   // Mode: a VfxKit.Mode stroke (-1: the plain line)
         private class RingFx { public Vector3 Center; public float From, To, Width, Age, Life; public Color Color; public int Segments = 40; }
-        private class TextFx { public Vector3 Pos; public string Text; public Color Color; public float Size, Age, Life; }
+        private class TextFx { public Vector3 Pos; public string Text; public Color Color; public float Size, Age, Life, Weight = 1f; }   // Weight: outline thickness scale (a critical's number is heavier)
+        private static readonly Color CritColor = Palette.Accent;
 
         private readonly Dictionary<string, ActionDefinition> defs = new Dictionary<string, ActionDefinition>();
         private readonly Dictionary<string, float> heights = new Dictionary<string, float>();
@@ -98,6 +102,10 @@ namespace TacticsGame.Presentation
             var mat = MakeParticleMaterial();
             sparks = MakeSystem("Sparks", mat, 1.2f, true);
             puffs = MakeSystem("Puffs", mat, -0.15f, false);
+            SetUpAccents(mat);
+            SetUpInk();
+            var tactical = gameObject.AddComponent<TacticalView>();   // Alt in battle: the see-through view (DrawTactical)
+            tactical.Director = Director;
         }
 
         private void OnEnable()
@@ -118,10 +126,14 @@ namespace TacticsGame.Presentation
         {
             foreach (var v in meldHidden) if (v != null) foreach (var r in Renderers(v)) if (r != null) r.enabled = true;
             meldHidden.Clear(); killzones.Clear();
-            bullets.Clear(); chains.Clear(); splinters.Clear(); windups.Clear(); lines.Clear(); rings.Clear(); texts.Clear(); lastAim.Clear(); slashRun.Clear(); slashAt.Clear();
+            bullets.Clear(); chains.Clear(); splinters.Clear(); windups.Clear(); lines.Clear(); rings.Clear(); texts.Clear(); lastAim.Clear(); lastReach.Clear(); slashRun.Clear(); slashAt.Clear();
             statuses.Clear(); stunned.Clear(); flashes.Clear(); orders.Clear(); charges.Clear(); domes.Clear(); blasts.Clear(); beams.Clear(); summoned.Clear();
             sparks.Clear(); puffs.Clear();
+            ResetAccents();
+            ResetInk();
             defs.Clear(); heights.Clear();
+            corpses.Clear();
+            flying.Clear();
             if (Director == null || Director.Timeline == null || Director.Timeline.InitialState == null) return;
             foreach (var u in Director.Timeline.InitialState.Units)
             {
@@ -196,6 +208,8 @@ namespace TacticsGame.Presentation
         {
             var actor = Director.FindView(evt.ActorId);
             var target = Director.FindView(evt.TargetId);
+            Embellish(evt, actor, target);
+            OnProjectileEvent(evt);
 
             switch (evt.Type)
             {
@@ -205,15 +219,17 @@ namespace TacticsGame.Presentation
                     if (!info.Free) { charges.Remove(evt.ActorId); stunned.Remove(evt.ActorId); }   // a released charge becomes an ordinary action; acting, it isn't stunned
                     if (info.Transcended && actor != null)
                     {
-                        // Transcend: a violet flare, a closing ring and the word over the unit.
+                        // Transcend: a violet flare, a closing ring and the word over the unit; inked, a sigil closing under it.
                         Burst(sparks, Chest(actor), 22, TranscendColor, 3.5f, 0.12f, 0.45f, Vector3.up * 1.5f);
+                        if (Inked) { Sigil(actor.transform.position, 2f, 0.7f, 0.55f, TranscendColor, 200f); Rays(Chest(actor), TranscendColor, 2.2f, 0.35f); }
                         rings.Add(new RingFx { Center = actor.transform.position, From = 1.8f, To = 0.3f, Width = 0.1f, Life = 0.35f, Color = TranscendColor, Segments = 8 });
                         AddText(Head(actor) + Vector3.up * 0.9f, "TRANSCEND", TranscendColor, 20f);
                     }
                     lastAim[evt.ActorId] = info.TargetPos;   // an instant one (Lance of Destiny, released) has no windup entry to look at
+                    lastReach[evt.ActorId] = new Vector2(info.Range, info.Radius);
                     ActionDefinition def;
                     if (actor == null || info.Windup <= 0f || !defs.TryGetValue(info.ActionId, out def)) break;
-                    windups.Add(new Windup { Def = def, ActorId = evt.ActorId, TargetId = evt.TargetId, TargetPos = info.TargetPos, Start = evt.SimTime, Duration = info.Windup });
+                    windups.Add(new Windup { Def = def, ActorId = evt.ActorId, TargetId = evt.TargetId, TargetPos = info.TargetPos, Start = evt.SimTime, Duration = info.Windup, Range = info.Range, Radius = info.Radius });
                     break;
                 }
                 case TacticsGame.Core.EventType.ActionResolved:
@@ -223,7 +239,10 @@ namespace TacticsGame.Presentation
                     if (w != null) windups.Remove(w);
                     ActionDefinition def;
                     Vector3 aimed;
-                    if (actor != null && defs.TryGetValue(id, out def)) PlayResolve(def, actor, target, w != null ? w.TargetPos : def.Targeting == TargetType.Position && lastAim.TryGetValue(evt.ActorId, out aimed) ? aimed : actor.transform.position, CoverHit(evt));
+                    Vector2 reach;
+                    if (w != null) reach = new Vector2(w.Range, w.Radius);
+                    else if (!lastReach.TryGetValue(evt.ActorId ?? "", out reach)) reach = Vector2.zero;
+                    if (actor != null && defs.TryGetValue(id, out def)) PlayResolve(def, actor, target, w != null ? w.TargetPos : def.Targeting == TargetType.Position && lastAim.TryGetValue(evt.ActorId, out aimed) ? aimed : actor.transform.position, CoverHit(evt), reach);
                     break;
                 }
                 case TacticsGame.Core.EventType.ActionInterrupted:
@@ -246,11 +265,20 @@ namespace TacticsGame.Presentation
                     Vector3 away = actor != null ? Flat(target.transform.position - actor.transform.position).normalized : Vector3.zero;
                     ActionDefinition hitBy;
                     Color c = d.ActionId != null && defs.TryGetValue(d.ActionId, out hitBy) && hitBy.Visuals != null && hitBy.Visuals.IsSet ? Color.Lerp(hitBy.Visuals.Color, Color.white, 0.4f) : (heavy ? HeavyColor : LightColor);
-                    Burst(sparks, Chest(target), heavy ? 28 : 12, c, heavy ? 7f : 4.5f, heavy ? 0.16f : 0.1f, 0.35f, away * 0.8f);
+                    Burst(sparks, Chest(target), Inked ? (heavy ? 14 : 6) : (heavy ? 28 : 12), c, heavy ? 7f : 4.5f, heavy ? 0.16f : 0.1f, 0.35f, away * 0.8f);
+                    if (d.Amount >= 0.5f) InkHit(Chest(target), away, HitColor(d.ActionId, heavy ? HeavyColor : InkEdge), heavy, d.Critical);   // ink edges in the ability's own colour
+                    else if (d.BlockedAmount >= 0.5f || d.ShieldedAmount >= 0.5f) Rays(Chest(target) - away * 0.3f, new Color(0.6f, 0.85f, 1f), 1.2f, 0.2f);   // turned aside
+                    if (d.ShieldedAmount > 0.5f && Inked) HaloFlash(Chest(target), 0.5f, 0.75f, 0.3f, new Color(0.7f, 0.9f, 1f));
                     if (heavy) rings.Add(new RingFx { Center = target.transform.position, From = 0.3f, To = 1.8f, Width = 0.1f, Life = 0.3f, Color = HeavyColor });
                     flashes[target] = 0.12f;
                     ActionDefinition hitDef;
-                    if (d.Amount >= 0.5f || d.BlockedAmount >= 0.5f) AddText(Head(target), d.Amount.ToString("0"), heavy ? HeavyColor : Color.white, heavy ? 26f : 19f);
+                    if (d.Critical && (d.Amount >= 0.5f || d.BlockedAmount >= 0.5f))
+                    {
+                        // A critical strike: a bigger, heavier gold number, and CRITICAL over the target.
+                        AddText(Head(target), d.Amount.ToString("0"), CritColor, heavy ? 34f : 28f, 2.4f);
+                        AddText(Head(target) + Vector3.up * 0.6f, "CRITICAL", CritColor, 18f, 1.8f);
+                    }
+                    else if (d.Amount >= 0.5f || d.BlockedAmount >= 0.5f) AddText(Head(target), d.Amount.ToString("0"), heavy ? HeavyColor : Color.white, heavy ? 26f : 19f);
                     else if (defs.TryGetValue(d.ActionId ?? "", out hitDef) && hitDef.StrainOnTarget > 0.5f)
                         AddText(Head(target), "+" + hitDef.StrainOnTarget.ToString("0") + " STRAIN", new Color(0.95f, 0.45f, 0.75f), 17f);   // a hit that only strains (Torrent of Strife)
                     if (d.ActionId == "fall")
@@ -271,6 +299,8 @@ namespace TacticsGame.Presentation
                         Burst(sparks, Chest(target) - away * 0.3f, 8, new Color(0.5f, 0.7f, 1f), 3f, 0.08f, 0.25f, -away);
                         AddText(Head(target) + Vector3.up * 0.35f, "BLOCK " + d.BlockedAmount.ToString("0"), new Color(0.55f, 0.75f, 1f), 14f);
                     }
+                    if (d.ShieldedAmount > 0.5f)
+                        AddText(Head(target) + Vector3.up * (d.BlockedAmount > 0.5f ? 0.65f : 0.35f), "SHIELD " + d.ShieldedAmount.ToString("0"), new Color(0.7f, 0.9f, 1f), 14f);
                     break;
                 }
                 case TacticsGame.Core.EventType.Miss:
@@ -295,13 +325,20 @@ namespace TacticsGame.Presentation
                     break;
                 }
                 case TacticsGame.Core.EventType.Dodge:
-                    if (target != null) AddText(Head(target), "DODGE", new Color(0.4f, 1f, 0.95f), 19f);
+                    if (target == null) break;
+                    AddText(Head(target), "DODGE", new Color(0.4f, 1f, 0.95f), 19f);
+                    if (Inked)
+                    {
+                        // A sway out of the way: a short colour-split smear across the body.
+                        Vector3 across = actor != null ? Vector3.Cross(Vector3.up, Flat(target.transform.position - actor.transform.position)).normalized : target.transform.right;
+                        Smear(target.transform.position - across * 0.5f, target.transform.position + across * 0.5f, 0.3f, 0.16f);
+                    }
                     break;
                 case TacticsGame.Core.EventType.Dash:
                 {
                     if (actor == null) break;
                     var dash = (DashInfo)evt.Payload;
-                    if (dash.Settle) break;   // a small shuffle out of someone's body: no effect
+                    if (dash.Settle || dash.Step) break;   // a small shuffle out of someone's body, or a step in behind a strike: no effect
                     if (dash.Teleport)
                     {
                         // Folded out of one place and into another: an imploding ring where it was, a bursting one where it is.
@@ -310,6 +347,7 @@ namespace TacticsGame.Presentation
                         Burst(sparks, dash.From + Vector3.up * 1f, 16, warp, 2.5f, 0.08f, 0.3f);
                         rings.Add(new RingFx { Center = dash.To, From = 0.1f, To = 1.4f, Width = 0.1f, Life = 0.4f, Color = warp, Segments = 24 });
                         Burst(puffs, dash.To + Vector3.up * 0.8f, 14, WithAlpha(warp, 0.6f), 1.2f, 0.3f, 0.6f, Vector3.up);
+                        if (Inked) { Rays(dash.To + Vector3.up * 1f, warp, 1.8f, 0.25f); VfxKit.Burst(splats, dash.From + Vector3.up * 1f, 1, warp, 0f, 1.1f, 0.3f); }
                         if (!dash.Blink) AddText(dash.To + Vector3.up * (HeightOf(actor) + 0.6f), "WARPED", warp, 16f);   // sent, not its own blink
                         break;
                     }
@@ -318,6 +356,12 @@ namespace TacticsGame.Presentation
                     {
                         AddLine(new[] { dash.From + Vector3.up * 0.8f, dash.To + Vector3.up * 0.8f }, new Color(1f, 0.6f, 0.3f), 0.18f, 0.4f);
                         Burst(puffs, dash.To + Vector3.up * 0.1f, 10, new Color(0.7f, 0.65f, 0.55f, 0.7f), 1.2f, 0.4f, 0.6f);
+                    }
+                    else if (Inked)
+                    {
+                        // Afterimage: a colour-split smear from where it stood to where it goes.
+                        Smear(dash.From, dash.To, 0.4f);
+                        rings.Add(new RingFx { Center = dash.From, From = 0.5f, To = 0.2f, Width = 0.06f, Life = 0.4f, Color = SmearA });
                     }
                     else
                     {
@@ -420,6 +464,48 @@ namespace TacticsGame.Presentation
                         rings.Add(new RingFx { Center = f.Center, From = f.Radius * 0.6f, To = 0.1f, Width = 0.08f, Life = 0.35f, Color = Color.white, Segments = 40 });
                         Burst(puffs, f.Center + Vector3.up * 0.5f, 20, new Color(0.3f, 0.1f, 0.35f, 0.85f), 2f, 0.5f, 0.7f);
                     }
+                    else if (f.Kind == "parry")
+                    {
+                        // A parry turns the hit: white light bursting off the blade, a halo flash, the word.
+                        Vector3 at = actor != null ? Chest(actor) : f.Center + Vector3.up;
+                        Rays(at, Color.white, 2.4f, 0.3f);
+                        if (Inked) HaloFlash(at, 0.35f, 0.9f, 0.3f, new Color(0.9f, 0.95f, 1f));
+                        Burst(sparks, at, 16, new Color(0.9f, 0.95f, 1f), 5f, 0.1f, 0.3f);
+                        if (actor != null) AddText(Head(actor) + Vector3.up * 0.6f, "PARRY", new Color(0.9f, 0.95f, 1f), 20f, 1.6f);
+                    }
+                    else if (f.Kind == "vindication")
+                    {
+                        // Vindication's blink past its NEMESIS: a red streak from where the Duelist stood, rings at both ends.
+                        var c = new Color(0.95f, 0.25f, 0.2f);
+                        AddLine(new[] { f.From + Vector3.up, f.Center + Vector3.up }, c, 0.12f, 0.35f, 0.03f);
+                        AddLine(new[] { f.From + Vector3.up, f.Center + Vector3.up }, Color.white, 0.03f, 0.25f);
+                        rings.Add(new RingFx { Center = f.From, From = 0.3f, To = 1.2f, Width = 0.08f, Life = 0.35f, Color = c, Segments = 3 });
+                        rings.Add(new RingFx { Center = f.Center, From = 1.2f, To = 0.3f, Width = 0.08f, Life = 0.35f, Color = c, Segments = 3 });
+                    }
+                    else if (f.Kind == "quell")
+                    {
+                        // Quell The Uproar: a heavy wave rolling out to its radius, and a second one behind it.
+                        var c = new Color(0.45f, 0.55f, 0.9f);
+                        rings.Add(new RingFx { Center = f.Center, From = 0.5f, To = f.Radius, Width = 0.2f, Life = 0.4f, Color = c, Segments = 48 });
+                        rings.Add(new RingFx { Center = f.Center, From = 0.2f, To = f.Radius * 0.7f, Width = 0.08f, Life = 0.5f, Color = Color.white, Segments = 48 });
+                        Burst(puffs, f.Center + Vector3.up * 0.3f, 16, new Color(0.35f, 0.4f, 0.6f, 0.6f), 3f, 0.4f, 0.5f);
+                    }
+                    else if (f.Kind == "mindmeld")
+                    {
+                        // Mindmeld: a calm thread to the ally, its debuffs lifting off in a ring.
+                        var c = new Color(0.6f, 1f, 0.85f);
+                        if (actor != null && target != null) AddLine(new[] { Chest(actor), Chest(target) }, c, 0.06f, 0.4f, 0.02f);
+                        rings.Add(new RingFx { Center = f.Center, From = 0.4f, To = 1.3f, Width = 0.06f, Life = 0.5f, Color = c, Segments = 36 });
+                    }
+                    else if (f.Kind == "displacement")
+                    {
+                        // Theory Of Displacement: a line between the two units, with rings pulling in (or, Transcended, pushing out).
+                        var c = new Color(0.75f, 0.6f, 1f);
+                        bool apart = f.Radius > 0.5f;
+                        AddLine(new[] { f.From + Vector3.up, f.Center + Vector3.up }, c, 0.05f, 0.35f, 0.02f);
+                        foreach (var p in new[] { f.From, f.Center })
+                            rings.Add(new RingFx { Center = p, From = apart ? 0.3f : 1.4f, To = apart ? 1.4f : 0.3f, Width = 0.07f, Life = 0.35f, Color = c, Segments = 24 });
+                    }
                     else if (f.Kind == "imprint")
                     {
                         // Imprint Upon Itself: a thread from the squad unit to the part, and a ring closing on the part.
@@ -428,6 +514,22 @@ namespace TacticsGame.Presentation
                         AddLine(new[] { from, to }, PerplexityA, 0.1f, 0.45f, 0.03f);
                         AddLine(new[] { from, to }, Color.white, 0.03f, 0.3f);
                         rings.Add(new RingFx { Center = f.Center, From = 1.6f, To = 0.2f, Width = 0.08f, Life = 0.4f, Color = PerplexityB, Segments = 6 });
+                    }
+                    else if (f.Kind == "fissure")
+                    {
+                        // Fissure: the stretch of crack its front just ran along, splitting the ground, with dust thrown up.
+                        var c = new Color(0.55f, 0.38f, 0.22f);
+                        Vector3 a = f.From + Vector3.up * 0.04f, b = f.Center + Vector3.up * 0.04f;
+                        Vector3 side = Vector3.Cross(Vector3.up, Flat(b - a).normalized) * 0.12f;
+                        AddLine(new[] { a, (a + b) / 2f + side, b }, new Color(0.08f, 0.05f, 0.03f), 0.22f, 2.2f);
+                        AddLine(new[] { a, (a + b) / 2f + side, b }, c, 0.08f, 1.4f);
+                        Burst(puffs, b + Vector3.up * 0.2f, 8, new Color(0.6f, 0.48f, 0.34f, 0.75f), 1.6f, 0.45f, 0.6f, Vector3.up * 1.5f);
+                    }
+                    else if (f.Kind == "stomp")
+                    {
+                        var c = new Color(0.7f, 0.55f, 0.35f);
+                        rings.Add(new RingFx { Center = f.Center, From = 0.3f, To = f.Radius, Width = 0.15f, Life = 0.35f, Color = c, Segments = 40 });
+                        Burst(puffs, f.Center + Vector3.up * 0.2f, 14, new Color(0.6f, 0.48f, 0.34f, 0.7f), 2.5f, 0.5f, 0.5f, Vector3.up * 0.6f);
                     }
                     else if (f.Kind == "equipose")
                     {
@@ -583,6 +685,14 @@ namespace TacticsGame.Presentation
                 }
                 case TacticsGame.Core.EventType.Unravel:
                     if (target == null) break;
+                    if (Inked)
+                    {
+                        // Coming apart: a violet ink burst, shards every way, light.
+                        var v = new Color(0.8f, 0.4f, 1f);
+                        VfxKit.Burst(splats, Chest(target), 1, v, 0f, 2.6f, 0.6f);
+                        VfxKit.Burst(shards, Chest(target), 16, v, 8f, 0.22f, 0.55f, Vector3.up * 2f);
+                        Rays(Chest(target), v, 3.2f, 0.4f);
+                    }
                     Burst(sparks, Chest(target), 40, new Color(0.8f, 0.4f, 1f), 8f, 0.18f, 0.6f);
                     Burst(puffs, Chest(target), 16, new Color(0.6f, 0.3f, 0.9f, 0.6f), 1.5f, 0.7f, 0.9f);
                     rings.Add(new RingFx { Center = target.transform.position, From = 0.3f, To = 3f, Width = 0.18f, Life = 0.5f, Color = new Color(0.8f, 0.4f, 1f) });
@@ -666,9 +776,20 @@ namespace TacticsGame.Presentation
                     splinters.Remove(evt.TargetId);
                     orders.Remove(evt.TargetId);
                     stunned.Remove(evt.TargetId);
-                    Burst(sparks, Chest(target), 34, new Color(1f, 0.3f, 0.2f), 6f, 0.15f, 0.6f);
+                    if (Inked)
+                    {
+                        // Down: black ink thrown up and out with crimson edges, and a stain left on the ground.
+                        VfxKit.Burst(shards, Chest(target), 16, InkEdge, 7f, 0.24f, 0.7f, Vector3.up * 3f);
+                        VfxKit.Burst(splats, Chest(target), 1, InkEdge, 0f, 2.2f, 0.5f);
+                        VfxKit.Burst(stains, target.transform.position + Vector3.up * 0.05f, 1, InkEdge, 0f, 2.4f, 3f);
+                        Rays(Chest(target), new Color(1f, 0.35f, 0.25f), 2.6f, 0.35f);
+                    }
+                    Burst(sparks, Chest(target), Inked ? 14 : 34, new Color(1f, 0.3f, 0.2f), 6f, 0.15f, 0.6f);
                     Burst(puffs, target.transform.position + Vector3.up * 0.5f, 22, new Color(0.25f, 0.22f, 0.22f, 0.8f), 1.6f, 0.8f, 1.1f);
-                    AddText(Head(target) + Vector3.up * 0.4f, "DOWN", new Color(1f, 0.35f, 0.3f), 24f);
+                    if (MakinaLooks.Has(target)) AddText(Head(target) + Vector3.up * 0.4f, "BROKEN", new Color(0.7f, 0.85f, 1f), 24f);   // a Makina bursts apart (UnitView.PlayDeath)
+                    else AddText(Head(target) + Vector3.up * 0.4f, "DOWN", new Color(1f, 0.35f, 0.3f), 24f);
+                    if (evt.Payload is DeathInfo && ((DeathInfo)evt.Payload).Team != Team.Player && !MakinaLooks.Has(target))
+                        corpses.Add(new CorpseFx { UnitId = evt.TargetId, At = evt.SimTime + UnitView.CorpseSeconds });   // its body crumbles to dust (UnitView)
                     break;
             }
         }
@@ -693,8 +814,10 @@ namespace TacticsGame.Presentation
         }
 
         /// <summary>blockedAt: the shot was stopped by cover there (MissInfo.HitCover), so it flies into the cover instead.</summary>
-        private void PlayResolve(ActionDefinition def, UnitView actor, UnitView target, Vector3 targetPos, Vector3? blockedAt = null)
+        /// <param name="reach">The user's range (x) and radius (y) for it as it started; 0 falls back to the definition's.</param>
+        private void PlayResolve(ActionDefinition def, UnitView actor, UnitView target, Vector3 targetPos, Vector3? blockedAt = null, Vector2 reach = default(Vector2))
         {
+            float range = RangeOr(reach.x, def), areaRadius = RadiusOr(reach.y, def);
             var s = StyleFor(def);
             Vector3 origin = Chest(actor);
             Vector3 aimAt = blockedAt ?? (target != null ? Chest(target) : targetPos + Vector3.up * 1f);
@@ -709,6 +832,15 @@ namespace TacticsGame.Presentation
                     Vector3 muzzle = origin + dir * 0.5f + Vector3.up * 0.2f;
                     Vector3 end = s.Pierce && blockedAt == null ? aimAt + (aimAt - muzzle).normalized * 6f : aimAt;
                     bool big = s.Width >= 0.09f;
+                    if (Inked)
+                    {
+                        // A brushed streak of light over a dark trail, and a flash of rays at the muzzle.
+                        InkStroke(new[] { muzzle, end }, s.Color, Mathf.Max(0.1f, s.Width * 1.3f), big ? 0.4f : 0.22f);
+                        Rays(muzzle, s.Color, big ? 1.4f : 0.7f, 0.15f);
+                        if (big) AddLine(new[] { muzzle, end }, new Color(0.8f, 0.8f, 0.8f, 0.35f), s.Width * 0.6f, 1.2f);
+                        Burst(sparks, muzzle, big ? 8 : 4, Color.Lerp(s.Color, Color.white, 0.5f), 3f, 0.08f, 0.15f, dir * 1.5f);
+                        break;
+                    }
                     AddLine(new[] { muzzle, end }, s.Color, s.Width, big ? 0.35f : 0.15f, s.Width * 0.3f);
                     if (big) AddLine(new[] { muzzle, end }, new Color(0.8f, 0.8f, 0.8f, 0.35f), s.Width * 0.6f, 1.2f);   // lingering smoke trail
                     Burst(sparks, muzzle, big ? 14 : 6, Color.Lerp(s.Color, Color.white, 0.5f), 3f, 0.08f, 0.15f, dir * 1.5f);
@@ -716,6 +848,14 @@ namespace TacticsGame.Presentation
                 }
                 case VfxKind.Bolt:
                 {
+                    if (Inked)
+                    {
+                        InkStroke(Zigzag(origin + dir * 0.4f, aimAt, 8, 0.3f), s.Color, s.Width * 1.4f, 0.25f);
+                        AddStroke(Zigzag(origin + dir * 0.4f, aimAt, 10, 0.4f), s.Color, s.Width * 0.6f, 0.18f, s.Width * 0.2f, VfxKit.Mode.Glow);
+                        Rays(aimAt, s.Color, 1f, 0.18f);
+                        Burst(sparks, aimAt, 6, s.Color, 4f, 0.08f, 0.25f);
+                        break;
+                    }
                     for (int k = 0; k < 2; k++) AddLine(Zigzag(origin + dir * 0.4f, aimAt, 8, 0.3f), s.Color, s.Width, 0.2f, s.Width * 0.5f);
                     Burst(sparks, aimAt, 10, s.Color, 4f, 0.08f, 0.25f);
                     break;
@@ -736,6 +876,14 @@ namespace TacticsGame.Presentation
                         pts[i] = actor.transform.position + d * radius + Vector3.up * Mathf.Lerp(cut.From, cut.To, k);
                     }
                     Color sc = Color.Lerp(s.Color, Color.white, cut.Brighten);
+                    if (Inked)
+                    {
+                        // An ink crescent with a light edge, flecks of ink flung off its middle along the cut.
+                        InkStroke(pts, sc, s.Width * 1.5f, 0.32f, true);
+                        Vector3 tangent = pts[pts.Length / 2 + 1] - pts[pts.Length / 2 - 1];
+                        VfxKit.Spray(shards, pts[pts.Length / 2], tangent, 25f, 3, sc, 6f, 0.1f, 0.25f);
+                        break;
+                    }
                     AddLine(pts, sc, s.Width, 0.28f, 0.01f, true);
                     if (cut.Brighten > 0f) Burst(sparks, pts[pts.Length / 2], 5, sc, 3f, 0.06f, 0.2f);
                     break;
@@ -744,21 +892,42 @@ namespace TacticsGame.Presentation
                 {
                     // Follows the sim's line: from the caster up or down to the aimed elevation, then level, at chest height.
                     Vector3 feet = actor.transform.position, lift = origin - feet;
-                    float aimDist = Mathf.Min(Flat(targetPos - feet).magnitude, def.Range);
-                    var beam = new[] { origin, LinePoint(def, feet, targetPos, dir, aimDist) + lift, LinePoint(def, feet, targetPos, dir, def.Range) + lift };
+                    float aimDist = Mathf.Min(Flat(targetPos - feet).magnitude, range);
+                    var beam = new[] { origin, LinePoint(def, feet, targetPos, dir, aimDist) + lift, LinePoint(def, feet, targetPos, dir, range) + lift };
                     float w = Mathf.Max(0.2f, def.LineWidth * 0.6f);
-                    AddLine(beam, WithAlpha(s.Color, 0.7f), w, 0.5f, w * 0.6f);
-                    AddLine(beam, Color.white, w * 0.25f, 0.3f, w * 0.15f);
-                    for (float m = 1f; m < def.Range; m += 1.2f)
+                    if (Inked)
+                    {
+                        InkStroke(beam, s.Color, w * 0.6f, 0.5f);
+                        AddStroke(beam, Color.white, w * 0.2f, 0.3f, w * 0.1f, VfxKit.Mode.Glow);
+                        Rays(origin, s.Color, 1.6f, 0.25f);
+                    }
+                    else
+                    {
+                        AddLine(beam, WithAlpha(s.Color, 0.7f), w, 0.5f, w * 0.6f);
+                        AddLine(beam, Color.white, w * 0.25f, 0.3f, w * 0.15f);
+                    }
+                    for (float m = 1f; m < range; m += 1.2f)
                         Burst(puffs, LinePoint(def, feet, targetPos, dir, m) + lift, 2, WithAlpha(s.Color, 0.6f), 0.6f, 0.4f, 0.6f);
                     break;
                 }
                 case VfxKind.Shockwave:
                 {
                     Vector3 center = def.Shape == AreaShape.Circle && def.Targeting != TargetType.Self ? targetPos : (target != null ? target.transform.position : actor.transform.position);
-                    float r = def.AreaRadius > 0f ? def.AreaRadius : 2f;
+                    float r = areaRadius > 0f ? areaRadius : 2f;
                     rings.Add(new RingFx { Center = center, From = 0.2f, To = r, Width = s.Width, Life = 0.45f, Color = s.Color, Segments = 56 });
                     rings.Add(new RingFx { Center = center, From = 0.1f, To = r * 0.6f, Width = s.Width * 0.6f, Life = 0.35f, Color = Color.white, Segments = 40 });
+                    if (Inked)
+                    {
+                        // A bright wave over the painted one, ink thrown out along the ground with it, and a splash where it began.
+                        BrushRing(center, 0.3f, r, 0.4f, Color.Lerp(s.Color, Color.white, 0.3f), VfxKit.Mode.Glow);
+                        for (int i = 0; i < 12; i++)
+                        {
+                            float a = i * Mathf.PI * 2f / 12f + Random.Range(-0.2f, 0.2f);
+                            Vector3 rim = new Vector3(Mathf.Cos(a), 0.15f, Mathf.Sin(a));
+                            VfxKit.Spray(shards, center + Vector3.up * 0.3f, rim, 10f, 1, s.Color, r * 2.2f, 0.22f, 0.4f);
+                        }
+                        VfxKit.Burst(stains, center + Vector3.up * 0.05f, 1, s.Color, 0f, Mathf.Min(r * 1.2f, 4f), 0.9f);
+                    }
                     for (int i = 0; i < 20; i++)
                     {
                         float a = i * Mathf.PI * 2f / 20f;
@@ -769,7 +938,8 @@ namespace TacticsGame.Presentation
                 }
                 case VfxKind.Chain:
                 {
-                    AddLine(Zigzag(origin, aimAt, 16, 0.08f), s.Color, s.Width, 0.5f, s.Width);
+                    if (Inked) InkStroke(Zigzag(origin, aimAt, 16, 0.08f), s.Color, s.Width, 0.5f);
+                    else AddLine(Zigzag(origin, aimAt, 16, 0.08f), s.Color, s.Width, 0.5f, s.Width);
                     Burst(sparks, aimAt, 8, Color.white, 3f, 0.08f, 0.2f);
                     break;
                 }
@@ -777,11 +947,23 @@ namespace TacticsGame.Presentation
                 {
                     var on = target != null ? target : actor;
                     rings.Add(new RingFx { Center = on.transform.position, From = 0.2f, To = 1.4f, Width = 0.08f, Life = 0.5f, Color = s.Color });
+                    if (Inked)
+                    {
+                        // A halo settling over the head, and light rising.
+                        decals.Add(new DecalFx { Tex = VfxKit.Tex.Halo, Mode = VfxKit.Mode.Glow, Pos = Head(on) + Vector3.up * 0.2f, From = 0.7f, To = 0.4f, Life = 0.7f, Color = s.Color });
+                        Burst(sparks, on.transform.position + Vector3.up * 0.3f, 12, s.Color, 0.6f, 0.08f, 0.8f, Vector3.up * 2.5f);
+                    }
                     break;
                 }
                 case VfxKind.Buff:
                     rings.Add(new RingFx { Center = actor.transform.position, From = 0.3f, To = 1.4f, Width = 0.1f, Life = 0.45f, Color = s.Color });
                     Burst(puffs, actor.transform.position + Vector3.up * 0.2f, 14, WithAlpha(s.Color, 0.7f), 0.6f, 0.3f, 0.8f, Vector3.up * 2f);
+                    if (Inked)
+                    {
+                        // A sigil flaring under the unit, light rising off it.
+                        Sigil(actor.transform.position, 0.6f, 1.4f, 0.5f, s.Color, 90f);
+                        Burst(sparks, actor.transform.position + Vector3.up * 0.2f, 10, s.Color, 0.5f, 0.07f, 0.6f, Vector3.up * 3f);
+                    }
                     break;
                 case VfxKind.Lob:
                 {
@@ -792,7 +974,8 @@ namespace TacticsGame.Presentation
                         float t = i / (pts.Length - 1f);
                         pts[i] = Vector3.Lerp(a, b, t) + Vector3.up * (4f * t * (1f - t) * 2f);
                     }
-                    AddLine(pts, s.Color, 0.05f, 0.45f, 0.05f, true);
+                    if (Inked) InkStroke(pts, s.Color, 0.06f, 0.45f, true);
+                    else AddLine(pts, s.Color, 0.05f, 0.45f, 0.05f, true);
                     break;
                 }
             }
@@ -994,7 +1177,22 @@ namespace TacticsGame.Presentation
         private void Update()
         {
             float dt = Time.deltaTime;   // scaled: effects freeze with the world while orders are given
+            if (TacticalView.On)
+            {
+                // The tactical view: no effects (passing ones are dropped), only the targeting arrows and the weakpoints.
+                lines.Clear(); rings.Clear();
+                foreach (var f in flashPool) f.Light.enabled = false;
+                markers.Begin();
+                if (Inked) kit.Begin();
+                DrawTactical();
+                markers.End();
+                if (Inked) kit.End();
+                UpdateTints(dt);
+                return;
+            }
+            TickAccents(dt);
             markers.Begin();
+            if (Inked) kit.Begin();
             DrawSplinters();
             DrawWindups();
             DrawCharges();
@@ -1005,6 +1203,9 @@ namespace TacticsGame.Presentation
             DrawBullets();
             DrawChains();
             DrawKillzones();
+            DrawWeakpoints();
+            DrawCorpses();
+            DrawProjectiles();
 
             for (int i = lines.Count - 1; i >= 0; i--)
             {
@@ -1020,7 +1221,8 @@ namespace TacticsGame.Presentation
                     if (n < pts.Length) { pts = new Vector3[n]; System.Array.Copy(l.Points, pts, n); }
                 }
                 Color c = WithAlpha(l.Color, l.Color.a * (1f - t * t));
-                markers.Line(pts, c, WithAlpha(c, c.a * 0.6f), l.Width * (1f - t * 0.5f), l.EndWidth);
+                if (l.Mode >= 0 && Inked) markers.Stroke(pts, c, WithAlpha(c, c.a * 0.6f), l.Width * (1f - t * 0.5f), l.EndWidth, kit.Material(VfxKit.Tex.Stroke, (VfxKit.Mode)l.Mode));
+                else markers.Line(pts, c, WithAlpha(c, c.a * 0.6f), l.Width * (1f - t * 0.5f), l.EndWidth);
             }
 
             for (int i = rings.Count - 1; i >= 0; i--)
@@ -1030,9 +1232,14 @@ namespace TacticsGame.Presentation
                 if (r.Age >= r.Life) { rings.RemoveAt(i); continue; }
                 float t = r.Age / r.Life;
                 float ease = 1f - (1f - t) * (1f - t);
-                markers.Circle(r.Center, Mathf.Lerp(r.From, r.To, ease), WithAlpha(r.Color, 1f - t), r.Width * (1f - t * 0.5f), r.Segments);
+                float radius = Mathf.Lerp(r.From, r.To, ease);
+                // Round rings are painted brush rings; the shaped ones (a shield's hexagon, a grip's octagon) stay drawn.
+                if (Inked && r.Segments > 8) kit.Decal(VfxKit.Tex.Ring, VfxKit.Mode.Paint, r.Center, radius * 2f / 0.86f, r.Age * 40f + r.Center.x * 37f, WithAlpha(r.Color, 1f - t));
+                else markers.Circle(r.Center, radius, WithAlpha(r.Color, 1f - t), r.Width * (1f - t * 0.5f), r.Segments);
             }
+            DrawInk(dt);
             markers.End();
+            if (Inked) kit.End();
 
             // Combat text fades on real time, so it doesn't hang on screen while the world is held for orders.
             for (int i = texts.Count - 1; i >= 0; i--)
@@ -1149,8 +1356,16 @@ namespace TacticsGame.Presentation
                 var s = StyleFor(def);
                 Color c = def.Impact == ImpactType.Heavy ? HeavyColor : LightColor;
 
-                // Charge ring at the feet fills up to the moment it fires; heavy windups read orange.
-                markers.Circle(actor.transform.position, Mathf.Lerp(0.15f, 0.95f, p), WithAlpha(c, 0.35f + 0.6f * p), 0.03f + 0.05f * p, 32);
+                // Charge ring at the feet fills up to the moment it fires; heavy windups read orange. Inked: a rune circle
+                // that opens and turns faster as it charges, trembling bright at the end.
+                if (Inked)
+                {
+                    bool heavyWindup = def.Impact == ImpactType.Heavy;
+                    float spin = (heavyWindup ? -1f : 1f) * (40f + 260f * p * p) * (now - w.Start);
+                    kit.Decal(VfxKit.Tex.Sigil, VfxKit.Mode.Glow, actor.transform.position, Mathf.Lerp(1.5f, 2.6f, p), spin, WithAlpha(c, 0.35f + 0.6f * p));
+                    if (p > 0.7f) kit.Decal(VfxKit.Tex.Ring, VfxKit.Mode.Glow, actor.transform.position, Mathf.Lerp(3.4f, 2.8f, (p - 0.7f) / 0.3f), -spin, WithAlpha(c, (p - 0.7f) * 3f));
+                }
+                else markers.Circle(actor.transform.position, Mathf.Lerp(0.15f, 0.95f, p), WithAlpha(c, 0.35f + 0.6f * p), 0.03f + 0.05f * p, 32);
 
                 var target = Director.FindView(w.TargetId);
                 if (target != null && target != actor && def.IsRanged)
@@ -1162,11 +1377,21 @@ namespace TacticsGame.Presentation
                 }
 
                 // Ground telegraphs for area attacks: the outline, and a fill that grows to the edge as it charges.
-                if (def.Shape == AreaShape.Circle && def.AreaRadius > 0f)
+                float range = RangeOr(w.Range, def), radius = RadiusOr(w.Radius, def);
+                if (def.Shape == AreaShape.Circle && radius > 0f)
                 {
                     Vector3 center = def.Targeting == TargetType.Self ? actor.transform.position : w.TargetPos;
-                    markers.Circle(center, def.AreaRadius, WithAlpha(s.Color, 0.7f), 0.06f, 48);
-                    markers.Circle(center, def.AreaRadius * p, WithAlpha(s.Color, 0.4f), 0.04f, 48);
+                    if (Inked)
+                    {
+                        // The area: a painted edge, and a sigil filling it out to the edge as it charges.
+                        kit.Decal(VfxKit.Tex.Ring, VfxKit.Mode.Paint, center, radius * 2f / 0.86f, now * 8f, WithAlpha(s.Color, 0.8f));
+                        kit.Decal(VfxKit.Tex.Sigil, VfxKit.Mode.Glow, center, Mathf.Max(0.1f, radius * p) * 2f / 0.95f, -now * 25f, WithAlpha(s.Color, 0.25f + 0.35f * p));
+                    }
+                    else
+                    {
+                        markers.Circle(center, radius, WithAlpha(s.Color, 0.7f), 0.06f, 48);
+                        markers.Circle(center, radius * p, WithAlpha(s.Color, 0.4f), 0.04f, 48);
+                    }
                 }
                 else if (def.Shape == AreaShape.Line)
                 {
@@ -1175,10 +1400,10 @@ namespace TacticsGame.Presentation
                     if (dir.sqrMagnitude < 1e-4f) dir = actor.transform.forward;
                     dir.Normalize();
                     Vector3 side = Vector3.Cross(Vector3.up, dir) * (def.LineWidth / 2f);
-                    float aimDist = Mathf.Min(Flat(w.TargetPos - from).magnitude, def.Range);
-                    Vector3 bend = LinePoint(def, from, w.TargetPos, dir, aimDist), end = LinePoint(def, from, w.TargetPos, dir, def.Range);
+                    float aimDist = Mathf.Min(Flat(w.TargetPos - from).magnitude, range);
+                    Vector3 bend = LinePoint(def, from, w.TargetPos, dir, aimDist), end = LinePoint(def, from, w.TargetPos, dir, range);
                     markers.Polyline(new[] { from - side, bend - side, end - side, end + side, bend + side, from + side, from - side }, WithAlpha(s.Color, 0.7f), 0.05f);
-                    float fill = def.Range * p;
+                    float fill = range * p;
                     markers.Line(fill <= aimDist ? new[] { from, LinePoint(def, from, w.TargetPos, dir, fill) } : new[] { from, bend, LinePoint(def, from, w.TargetPos, dir, fill) },
                         WithAlpha(s.Color, 0.45f), WithAlpha(s.Color, 0.45f), def.LineWidth * 0.8f, def.LineWidth * 0.8f);
                 }
@@ -1189,13 +1414,13 @@ namespace TacticsGame.Presentation
                     Vector3 dir = Flat(w.TargetPos - from);
                     if (dir.sqrMagnitude < 1e-4f) dir = actor.transform.forward;
                     dir.Normalize();
-                    Vector3 side = Vector3.Cross(Vector3.up, dir) * 0.6f, end = from + dir * def.Range;
+                    Vector3 side = Vector3.Cross(Vector3.up, dir) * 0.6f, end = from + dir * range;
                     markers.Polyline(new[] { from - side, end - side, end + side, from + side, from - side }, WithAlpha(s.Color, 0.7f), 0.05f);
-                    markers.Line(new[] { from, from + dir * (def.Range * p) }, WithAlpha(s.Color, 0.45f), WithAlpha(s.Color, 0.45f), 1f, 1f);
+                    markers.Line(new[] { from, from + dir * (range * p) }, WithAlpha(s.Color, 0.45f), WithAlpha(s.Color, 0.45f), 1f, 1f);
                 }
-                else if (def.BehaviorId == "trap" && def.AreaRadius > 0f)
+                else if (def.BehaviorId == "trap" && radius > 0f)
                 {
-                    markers.Circle(w.TargetPos, def.AreaRadius, WithAlpha(s.Color, 0.25f + 0.4f * p), 0.04f, 32);
+                    markers.Circle(w.TargetPos, radius, WithAlpha(s.Color, 0.25f + 0.4f * p), 0.04f, 32);
                 }
             }
         }
@@ -1238,7 +1463,8 @@ namespace TacticsGame.Presentation
                 else if (w.Def.Targeting == TargetType.Position)
                 {
                     markers.Line(new[] { from, w.TargetPos + Vector3.up * 0.2f }, c, c, 0.05f, 0.05f);
-                    markers.Circle(w.TargetPos, w.Def.AreaRadius > 0f ? w.Def.AreaRadius : 0.6f, c, 0.08f, 48);
+                    float wr = RadiusOr(w.Radius, w.Def);
+                    markers.Circle(w.TargetPos, wr > 0f ? wr : 0.6f, c, 0.08f, 48);
                     aimed = "the marked area";
                 }
                 else aimed = "self";
@@ -1312,15 +1538,19 @@ namespace TacticsGame.Presentation
             if (def.Shape == AreaShape.Circle)
             {
                 Vector3 center = Flat(def.Targeting == TargetType.Self ? actor.transform.position : w.TargetPos);
-                return Vector3.Distance(p, center) <= def.AreaRadius + body;
+                return Vector3.Distance(p, center) <= RadiusOr(w.Radius, def) + body;
             }
             Vector3 origin = Flat(actor.transform.position), dir = Flat(w.TargetPos) - origin;
             if (dir.sqrMagnitude < 1e-4f) return false;
             dir.Normalize();
             Vector3 v = p - origin;
             float along = Vector3.Dot(v, dir);
-            return along >= -body && along <= def.Range + body && (v - dir * along).magnitude <= def.LineWidth / 2f + body;
+            return along >= -body && along <= RangeOr(w.Range, def) + body && (v - dir * along).magnitude <= def.LineWidth / 2f + body;
         }
+
+        /// <summary>The range the sim gave (its user's, Etchings and all), or, with none recorded, the ability's own.</summary>
+        private static float RangeOr(float recorded, ActionDefinition def) { return recorded > 0f ? recorded : def.Range; }
+        private static float RadiusOr(float recorded, ActionDefinition def) { return recorded > 0f ? recorded : def.AreaRadius; }
 
         private Team? TeamOf(string unitId)
         {
@@ -1377,6 +1607,7 @@ namespace TacticsGame.Presentation
                     StatusDisplay.Look look;
                     if (!StatusDisplay.TryGet(id, out look) || look.Word == null) continue;
                     if (id == StatusIds.Perplexity) { DrawPerplexity(view, now); continue; }
+                    if (id == StatusIds.Nemesis) { DrawNemesisSigil(view, look.Color, now); continue; }
                     if (id == StatusIds.Marked)
                     {
                         // Spinning diamond over the head.
@@ -1393,9 +1624,11 @@ namespace TacticsGame.Presentation
                     }
                     float pulse = 0.75f + 0.25f * Mathf.Sin(now * 5f + r * 7f);
                     int segments = id == StatusIds.Braced || id == StatusIds.Blocking ? 6 : id == StatusIds.Rooted ? 8 : 36;   // shield hexagon, chain octagon
-                    markers.Circle(feet, r, WithAlpha(look.Color, 0.8f * pulse), 0.05f, segments);
+                    if (Inked && segments > 8) kit.Decal(VfxKit.Tex.Ring, VfxKit.Mode.Paint, feet, r * 2f / 0.86f, now * (r > 0.8f ? -25f : 25f) + r * 90f, WithAlpha(look.Color, 0.8f * pulse));
+                    else markers.Circle(feet, r, WithAlpha(look.Color, 0.8f * pulse), 0.05f, segments);
                     r += 0.15f;
                 }
+                if (Inked) DrawStatusIcons(view, kv.Value, now);
             }
 
             // Stun stars orbiting the head.
@@ -1410,6 +1643,25 @@ namespace TacticsGame.Presentation
                     markers.Circle(c + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * 0.35f, 0.07f, new Color(1f, 0.9f, 0.3f), 0.07f, 6);
                 }
             }
+        }
+
+        /// <summary>Karranos Sigil's mark over a NEMESIS's head: a ring around an inverted triangle cut by a blade, turning
+        /// slowly and facing the camera.</summary>
+        private void DrawNemesisSigil(UnitView view, Color color, float now)
+        {
+            Vector3 c = Head(view) + Vector3.up * 0.55f;
+            var cam = Camera.main;
+            Vector3 right = cam != null ? cam.transform.right : Vector3.right, up = cam != null ? cam.transform.up : Vector3.up;
+            float pulse = 0.85f + 0.15f * Mathf.Sin(now * 4f);
+            float r = 0.3f * pulse, spin = now * 0.8f;
+            System.Func<float, float, Vector3> at = (ang, rad) => c + (right * Mathf.Cos(ang) + up * Mathf.Sin(ang)) * rad;
+            var ring = new Vector3[25];
+            for (int i = 0; i < ring.Length; i++) ring[i] = at(i * Mathf.PI * 2f / 24f, r);
+            markers.Line(ring, color, color, 0.035f, 0.035f);
+            var tri = new Vector3[4];
+            for (int i = 0; i < 4; i++) tri[i] = at(spin - Mathf.PI / 2f + i * Mathf.PI * 2f / 3f, r * 0.82f);   // point down
+            markers.Line(tri, color, color, 0.03f, 0.03f);
+            markers.Line(new[] { c + up * r * 1.25f, c - up * r * 1.25f }, color, color, 0.03f, 0.03f);   // the blade through it
         }
 
         /// <summary>Hit flash (white) and hidden (darkened) as color overrides on the unit's renderers.</summary>
@@ -1428,7 +1680,7 @@ namespace TacticsGame.Presentation
                 HashSet<string> set;
                 bool hidden = statuses.TryGetValue(u.Id, out set) && set.Contains(StatusIds.Hidden);
                 // Melded (Stitch): gone inside its target, so not drawn at all until it comes out.
-                bool melded = set != null && set.Contains(StatusIds.Melded);
+                bool melded = set != null && (set.Contains(StatusIds.Melded) || set.Contains(StatusIds.Voided));   // VOIDED: out of the world altogether
                 if (melded != meldHidden.Contains(view))
                 {
                     foreach (var r in Renderers(view)) if (r != null) r.enabled = !melded;
@@ -1487,6 +1739,7 @@ namespace TacticsGame.Presentation
             if (cam == null) return;
             GUI.depth = 3;   // over the HUD's bars, under the orders panel and its ability popup
             UiScale.Begin();
+            if (TacticalView.On) DrawProjectileEtas(cam);   // the tactical view's one label: each projectile's time to impact
             if (UiDeclutter.On) return;   // Alt: no labels or combat text
             DrawHoverLabel();
             DrawBulletLabels(cam);
@@ -1506,7 +1759,7 @@ namespace TacticsGame.Presentation
                 Vector2 size = textStyle.CalcSize(new GUIContent(t.Text));
                 float w = Mathf.Max(200f, size.x + 16f), h = Mathf.Max(40f, size.y + 8f);
                 var rect = new Rect(sp.x - w / 2f, sp.y - h / 2f, w, h);
-                OutlinedLabel(rect, t.Text, textStyle, WithAlpha(t.Color, alpha), Mathf.Max(1f, textStyle.fontSize / 12f));
+                OutlinedLabel(rect, t.Text, textStyle, WithAlpha(t.Color, alpha), Mathf.Max(1f, textStyle.fontSize / 12f) * t.Weight);
             }
         }
 
@@ -1548,16 +1801,23 @@ namespace TacticsGame.Presentation
         }
         private static Color WithAlpha(Color c, float a) { c.a = a; return c; }
 
+        /// <summary>A line drawn with a VfxKit stroke (brushy grain; Glow adds light, Paint lays colour, Ink erodes).</summary>
+        private void AddStroke(Vector3[] points, Color color, float width, float life, float endWidth, VfxKit.Mode mode, bool sweep = false)
+        {
+            if (!Inked) { AddLine(points, color, width, life, endWidth, sweep); return; }
+            lines.Add(new LineFx { Points = points, Color = color, Width = width, EndWidth = endWidth < 0f ? width : endWidth, Life = life, Sweep = sweep, Mode = (int)mode });
+        }
+
         private void AddLine(Vector3[] points, Color color, float width, float life, float endWidth = -1f, bool sweep = false)
         {
             lines.Add(new LineFx { Points = points, Color = color, Width = width, EndWidth = endWidth < 0f ? width : endWidth, Life = life, Sweep = sweep });
         }
 
-        private void AddText(Vector3 pos, string text, Color color, float size)
+        private void AddText(Vector3 pos, string text, Color color, float size, float weight = 1f)
         {
             // Small jitter so simultaneous numbers on one unit don't stack exactly.
             pos += new Vector3(Random.Range(-0.25f, 0.25f), Random.Range(0f, 0.2f), Random.Range(-0.25f, 0.25f));
-            texts.Add(new TextFx { Pos = pos, Text = text, Color = color, Size = size, Life = TextSeconds });
+            texts.Add(new TextFx { Pos = pos, Text = text, Color = color, Size = size, Life = TextSeconds, Weight = weight });
         }
 
         private static Vector3[] Zigzag(Vector3 a, Vector3 b, int segments, float amplitude)

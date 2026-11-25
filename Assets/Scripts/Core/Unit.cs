@@ -5,8 +5,8 @@ namespace TacticsGame.Core
 {
     /// <summary>
     /// A timed status on a unit (buff, debuff, stance): stat modifiers, ability-number modifiers and on/off rules (Flags),
-    /// plus fields behaviors keep their bookkeeping in. Its modifiers are its own copy, so it can be changed in place (Block
-    /// wears a status's Block bonus down).
+    /// plus fields behaviors keep their bookkeeping in. Its modifiers are its own copy, so it can be changed in place
+    /// (Avidous March retunes its speed).
     /// </summary>
     public class StatusEffect
     {
@@ -18,13 +18,16 @@ namespace TacticsGame.Core
         public StatusFlags Flags;
         public List<string> ForbidsActions; // action ids this unit can't use while it has the status (Wrath: Block, Battle Trance)
         public string TargetId;            // whom a follow-up chain is aimed at (Rapid Slices, Steady Strikes)
+        public bool Held;                   // a FollowupWindow whose clock was stopped by a walk or dash (its timer is re-announced when it runs again)
         public int Stacks;                  // free counter for behaviors (Rapid Slices follow-ups used)
         public ActionDefinition LinkedAction; // the action a stance/reaction fires (Take Aim's Snipe, Retaliate's shot)
         public ActionDefinition FromAction;   // the ability whose SelfStatuses it is (ArmsHits reads its TargetStatusesOnHit); null for others
         public float HealPerSecond;         // heals its holder while it lasts (Regeneration Seal; BattleSimulation.TickHealOverTime)
         public float StrainPerSecond;       // strain its holder gains while it lasts (REDUCTION; BattleSimulation.TickHealOverTime)
+        public float StrainOnWeakpointBreak;   // strain its holder gains for each weakpoint it breaks (negative: sheds it; Clear and Steady)
         public float BreakStun;             // BreaksOnDamage: the enemy whose hit breaks it is stunned this long (Regeneration Seal)
         public float HealOnExpire, HealMissingOnExpire;   // heals its holder when it runs out: a flat amount plus a share of missing health (Unmake The Harm)
+        public float Shield;                // a shield: damage it soaks up before health (what is left of it); used up, the status ends (BattleSimulation.AbsorbWithShields)
 
         public bool Has(StatusFlags flag) { return (Flags & flag) != 0; }
 
@@ -63,11 +66,15 @@ namespace TacticsGame.Core
         public float HealPerSecond;
         [Tooltip("Strain its holder gains per second while it lasts (REDUCTION).")]
         public float StrainPerSecond;
+        [Tooltip("Strain its holder gains for each enemy weakpoint it breaks while it lasts: negative sheds strain (Clear and Steady).")]
+        public float StrainOnWeakpointBreak;
         [Tooltip("With Breaks On Damage: the enemy whose hit breaks it is stunned this long (scaled like its duration).")]
         public float BreakStun;
         [Tooltip("Healing when it runs out (a delayed heal: Unmake The Harm): this much, plus HealMissingOnExpire of its holder's missing health then.")]
         public float HealOnExpire;
         public float HealMissingOnExpire;
+        [Tooltip("A shield of this much health: damage on its holder comes out of it first; used up, the status ends.")]
+        [Min(0f)] public float Shield;
 
         // ---- authoring helpers: new StatusSpec { Id = ..., Duration = 3f }.Add(StatId.Dodge, 0.3f).With(StatusFlags.StunImmune)
         public StatusSpec Add(StatId stat, float value) { Modifiers.Add(Modifier.Add(stat, value)); return this; }
@@ -94,7 +101,7 @@ namespace TacticsGame.Core
                 ActionModifiers = ActionModifiers != null && ActionModifiers.Count > 0 ? new List<ActionModifier>(ActionModifiers) : null,
                 ForbidsActions = ForbidsActions != null && ForbidsActions.Count > 0 ? new List<string>(ForbidsActions) : null,
                 HealPerSecond = HealPerSecond, BreakStun = BreakStun * durationScale, HealOnExpire = HealOnExpire, HealMissingOnExpire = HealMissingOnExpire,
-                StrainPerSecond = StrainPerSecond,
+                StrainPerSecond = StrainPerSecond, StrainOnWeakpointBreak = StrainOnWeakpointBreak, Shield = Shield,
             };
         }
 
@@ -188,6 +195,8 @@ namespace TacticsGame.Core
         public float BaseDodge;           // 0..1
         public float Strain;
         public float MaxStrain = 100f;
+        public bool IsMakina;                // UnitDefinition.Makina: can't move, Block or Dash, Waits without Clear Mind, breaks at max strain
+        public float StrainDrift;            // strain it gains every second, always (UnitDefinition.StrainPerSecond)
         public float StrainRecoveryPerSecond;
         public float StrainRecoveryDelay;
         public float LastStrainGainAt = -999f;   // sim time strain last went up (recovery waits StrainRecoveryDelay after it)
@@ -234,6 +243,8 @@ namespace TacticsGame.Core
         // Dash / shove / pull in progress: the unit slides From -> To over [GlideStart, GlideEnd) and can't start anything.
         public Vector3 GlideFrom, GlideTo;
         public float GlideStart, GlideEnd = -1f;
+        public string GlideFollowId;      // a dash to a unit: its end keeps to this unit as it moves (BattleSimulation.FollowDuringGlide)
+        public Vector3 GlideFollowOffset; // where beside that unit it lands
         // Falling (shoved off a ledge, or knocked out of a jump): the glide above ends in a landing at FallLandAt that
         // deals FallDamage, credited to FallSourceId. -1 = not falling.
         public float FallLandAt = -1f;
@@ -288,6 +299,8 @@ namespace TacticsGame.Core
         public bool IsBoss;                  // UnitDefinition.Boss: while any is in the battle, beating the bosses wins it (reinforcements or not)
         public UnitDefinition Definition;    // what it was made from (a ghost copies its maker's look)
 
+        public List<Weakpoint> Weakpoints = new List<Weakpoint>();   // its open weakpoints (BattleSimulation, Weakpoints.cs)
+        public Vector3 WeakpointBasis = Vector3.forward;             // the side its first one opened on: the others are quarter turns from it
         public HashSet<string> Imprinted = new HashSet<string>();   // ability ids it copied (Imprint Upon Itself): its passives' changes apply to these
         public Dictionary<string, float> Timers = new Dictionary<string, float>();   // passives' own clocks, by id (SEE BEFORE ITSELF's next stack)
         public bool IsGhost;                 // Alio's ghost: gone once its one cast's recovery ends
@@ -369,6 +382,18 @@ namespace TacticsGame.Core
         /// <summary>Transcends its Etchings gave abilities that have none of their own (Body On Strings, Uncloud The Mind, Echo).</summary>
         public Dictionary<string, GrantedTranscend> GrantedTranscends = new Dictionary<string, GrantedTranscend>();
 
+        /// <summary>Follow-ups its Etchings gave abilities that have none of their own (Incessant), by ability id.</summary>
+        public Dictionary<string, GrantedFollowup> GrantedFollowups = new Dictionary<string, GrantedFollowup>();
+
+        /// <summary>Incessant: the recast it will be offered once the ability now running is over (Pending), and the one open
+        /// now (Open, while StatusIds.Incessant lasts). See BattleSimulation.Recasts.cs.</summary>
+        public UnitCommand RecastPending, RecastOpen;
+        /// <summary>Linked abilities open now (ActionDefinition.LinkedAbilities, Related Concepts' partner), by id: usable as long as
+        /// no other ability comes first (BattleSimulation.Recasts.cs). LinkDepth: how many linked uses in a row led here (0: the
+        /// ability that opened them was used fresh).</summary>
+        public List<string> LinkedOpen = new List<string>();
+        public int LinkDepth;
+
         /// <summary>Can it Transcend 'def': the ability's own Transcend, or one an Etching gave it.</summary>
         public bool CanTranscend(ActionDefinition def) { return def != null && (def.CanTranscend || GrantedTranscends.ContainsKey(def.Id)); }
 
@@ -448,24 +473,6 @@ namespace TacticsGame.Core
         /// <summary>The unit's Dash ability (BehaviorId "dash"), or null.</summary>
         public ActionDefinition DashAction() { return Actions.Find(a => a != null && a.BehaviorId == "dash"); }
 
-        /// <summary>Block is shed from temporary status bonuses first (newest first), then the base value. Upgrades' bonuses aren't worn.</summary>
-        public void ReduceBlock(float amount)
-        {
-            for (int i = Statuses.Count - 1; i >= 0 && amount > 0f; i--)
-            {
-                var mods = Statuses[i].Modifiers;
-                if (mods == null || Statuses[i].Has(StatusFlags.KeepsBlock)) continue;
-                for (int j = 0; j < mods.Count && amount > 0f; j++)
-                {
-                    if (mods[j].Stat != StatId.Block || mods[j].Op != ModOp.Add || mods[j].Value <= 0f) continue;
-                    float take = Mathf.Min(mods[j].Value, amount);
-                    mods[j] = Modifier.Add(StatId.Block, mods[j].Value - take);
-                    amount -= take;
-                }
-            }
-            if (amount > 0f) Block = Mathf.Max(0f, Block - amount);
-        }
-
         /// <summary>
         /// A unit for the battle from its definition. 'loadout': the class abilities it brings (null = all of them; the basic
         /// attack, Block and Dash always come). 'upgrades': its permanent improvements: abilities they grant are added, fixed
@@ -491,12 +498,17 @@ namespace TacticsGame.Core
                 }
             // Every unit can always fall back on its basic attack; it goes last so AI tries abilities first.
             if (def.BasicAttack != null && !actions.Contains(def.BasicAttack)) actions.Add(def.BasicAttack);
-            if (def.Universal != null && !actions.Contains(def.Universal)) actions.Add(def.Universal);   // Block
-            if (def.Dash != null && !actions.Contains(def.Dash)) actions.Add(def.Dash);
-            // Follow-up chains come with the ability that opens them (Destiny Closes In -> Fate Encumbers Its Prey -> ...).
+            if (def.Universal != null && !def.Makina && !def.CannotBlock && !actions.Contains(def.Universal)) actions.Add(def.Universal);   // Block (a Makina has none)
+            if (def.Dash != null && !def.Makina && !actions.Contains(def.Dash)) actions.Add(def.Dash);
+            // Follow-up chains and linked abilities come with the ability that opens them (Destiny Closes In -> Fate Encumbers Its Prey -> ...).
             for (int i = 0; i < actions.Count; i++)
-                if (actions[i] != null && actions[i].FollowUps != null)
+            {
+                if (actions[i] == null) continue;
+                if (actions[i].FollowUps != null)
                     foreach (var f in actions[i].FollowUps) if (f != null && !actions.Contains(f)) actions.Add(f);
+                if (actions[i].LinkedAbilities != null)
+                    foreach (var f in actions[i].LinkedAbilities) if (f != null && !actions.Contains(f)) actions.Add(f);
+            }
             actions.RemoveAll(a => a == null);
             if (growth != null && growth.RemovedBehaviors.Count > 0) actions.RemoveAll(a => growth.RemovedBehaviors.Contains(a.BehaviorId));   // Witless: no Block
             float maxHealth = Fixed(unitMods, StatId.MaxHealth, def.MaxHealth);
@@ -506,6 +518,7 @@ namespace TacticsGame.Core
                 DisplayName = def.DisplayName,
                 BasicAttackId = def.BasicAttack != null ? def.BasicAttack.Id : null,
                 Team = team,
+                IsMakina = def.Makina, StrainDrift = def.StrainPerSecond,
                 MaxHealth = maxHealth,
                 Health = maxHealth,
                 BaseDodge = def.BaseDodge,
@@ -530,6 +543,7 @@ namespace TacticsGame.Core
                 Traits = growth != null ? new List<UnitTrait>(growth.Traits) : new List<UnitTrait>(),
                 Etchings = growth != null ? new List<EtchingNote>(growth.Notes) : new List<EtchingNote>(),
                 GrantedTranscends = growth != null ? new Dictionary<string, GrantedTranscend>(growth.Transcends) : new Dictionary<string, GrantedTranscend>(),
+                GrantedFollowups = growth != null ? new Dictionary<string, GrantedFollowup>(growth.Followups) : new Dictionary<string, GrantedFollowup>(),
             };
         }
 
@@ -553,7 +567,7 @@ namespace TacticsGame.Core
                 Position = Position, Actions = Actions, Passives = Passives, AIProfile = AIProfile, AI = AI, AIControlled = AIControlled, IsBoss = IsBoss,
                 Definition = Definition, Imprinted = Imprinted, IsGhost = IsGhost,
                 UpgradeModifiers = UpgradeModifiers, UpgradeActionModifiers = UpgradeActionModifiers, Traits = Traits, Etchings = Etchings,
-                GrantedTranscends = GrantedTranscends,
+                GrantedTranscends = GrantedTranscends, GrantedFollowups = GrantedFollowups,
             };
         }
     }

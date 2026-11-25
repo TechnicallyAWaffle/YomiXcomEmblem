@@ -14,6 +14,7 @@ namespace TacticsGame.Core
         public CommandType Type;
         public ActionDefinition Action;
         public string TargetUnitId;
+        public string SecondTargetId;   // an ability used on two units (ActionBehavior.PicksSecondUnit: Supersede): the other one
         public Vector3 TargetPos;
         public List<Vector3> Waypoints;   // Move: walk through these first, then on to TargetPos (UnitCommand.MoveVia)
         public float WaitSeconds = 0.5f;
@@ -21,6 +22,7 @@ namespace TacticsGame.Core
         public bool Transcend;      // use the ability's Transcended version (ActionDefinition.CanTranscend), for its extra strain
         public bool Aimed;          // ReleaseGrapple: throw toward TargetPos
         public bool NoFocus;        // Wait: a pause, not a Focus (UnitCommand.Idle)
+        public bool FreeAim;        // Action: aimed toward TargetPos with no target; it picks one in a cone as it lands (BattleSimulation.FreeAim.cs)
 
         /// <summary>This order, Transcended (ignored for actions that can't be).</summary>
         public UnitCommand Transcended(bool transcend = true) { Transcend = transcend; return this; }
@@ -35,12 +37,22 @@ namespace TacticsGame.Core
         {
             return new UnitCommand { UnitId = unitId, Type = CommandType.Action, Action = action, TargetUnitId = targetUnitId, WaitForRange = true };
         }
+        /// <summary>A single-target ability aimed toward 'point' instead of at a unit (free aim): it finds its target as it lands.</summary>
+        public static UnitCommand UseActionToward(string unitId, ActionDefinition action, Vector3 point)
+        {
+            return new UnitCommand { UnitId = unitId, Type = CommandType.Action, Action = action, TargetPos = point, FreeAim = true };
+        }
         public static UnitCommand UseActionAt(string unitId, ActionDefinition action, Vector3 pos)
         {
             return new UnitCommand { UnitId = unitId, Type = CommandType.Action, Action = action, TargetPos = pos };
         }
         /// <summary>A unit and a point (ActionDefinition.DestinationRange: Wrinkles of Reality sends 'targetUnitId' to 'destination').
         /// Out of range, it is queued like any ranged order.</summary>
+        /// <summary>An ability used on two units (Supersede's swap).</summary>
+        public static UnitCommand UseActionOnTwo(string unitId, ActionDefinition action, string firstUnitId, string secondUnitId)
+        {
+            return new UnitCommand { UnitId = unitId, Type = CommandType.Action, Action = action, TargetUnitId = firstUnitId, SecondTargetId = secondUnitId, WaitForRange = true };
+        }
         public static UnitCommand UseActionOn(string unitId, ActionDefinition action, string targetUnitId, Vector3 destination)
         {
             return new UnitCommand { UnitId = unitId, Type = CommandType.Action, Action = action, TargetUnitId = targetUnitId, TargetPos = destination, WaitForRange = true };

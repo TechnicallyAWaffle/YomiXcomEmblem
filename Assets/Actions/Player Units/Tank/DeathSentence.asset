@@ -94,4 +94,9 @@ MonoBehaviour:
     Value: 4
   - Key: air_fall_damage
     Value: 2
+  WeakpointsOnTarget: 4
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   DataVersion: 15

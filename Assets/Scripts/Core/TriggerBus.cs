@@ -4,7 +4,9 @@ using System.Collections.Generic;
 namespace TacticsGame.Core
 {
     // StrainSpent: an ability's strain cost was paid (Amount). Unraveled: Subject Unraveled (Other: whose hit did it; Amount: its stun).
-    public enum TriggerType { ActionStarted, ActionResolved, DamageTaken, Dodged, Killed, Stunned, UnitReady, StrainSpent, Unraveled }
+    // Countered: a counter stance (StatusFlags.Counters) met an attack in place of a dodge (Subject: its holder; Other: the attacker).
+    // WeakpointsBroken: Subject broke Amount of Other's weakpoints (a hit, or Pressure Points).
+    public enum TriggerType { ActionStarted, ActionResolved, DamageTaken, Dodged, Killed, Stunned, UnitReady, StrainSpent, Unraveled, Countered, WeakpointsBroken }
 
     public class TriggerContext
     {

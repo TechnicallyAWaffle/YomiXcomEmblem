@@ -1,0 +1,76 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
+  m_Name: Strategist
+  m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
+  DisplayName: Strategist
+  MaxHealth: 90
+  BaseDodge: 0.1
+  BaseBlock: 0
+  MaxStrain: 75
+  StrainRecoveryPerSecond: 6
+  StrainRecoveryDelay: 0.5
+  MaxEnergy: 0
+  StartingEnergy: 0
+  ActionSpeed: 1
+  MoveSpeed: 4
+  DashDistance: 3
+  EyeHeight: 1.6
+  BodyHeight: 1.8
+  BodyRadius: 0.4
+  BasicAttack: {fileID: 11400000, guid: 754c68e13e66b2044bac1a9266681f57, type: 2}
+  Makina: 0
+  StrainPerSecond: 0
+  Description: "Wielding an artifact stolen from the grave of The Ogem Makina Prima,
+    the Strategist molds and bends reality into inextricable mazes of madness. They
+    specialize in controlling effects that displace and confound, setting up allies
+    for plays while impeding enemies. \r\n\r\nWhen the situation calls for a heavier
+    hand, the Strategist can construct their various Makina onto the battlefield,
+    geometric nightmares that tear apart enemies at the behest of their creator\u2019s
+    guiding hand. "
+  Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
+  Actions:
+  - {fileID: 11400000, guid: 3673932d60832cb4bba7a81f2761c797, type: 2}
+  - {fileID: 11400000, guid: a27cfc69b4a99db43a2ce9990faec829, type: 2}
+  - {fileID: 11400000, guid: dbfed8674d1c766428833be60fac4f14, type: 2}
+  - {fileID: 11400000, guid: 5e02e71cf8ebdd649a4d33a1fd316ac0, type: 2}
+  - {fileID: 11400000, guid: 6531b482ee4ef474ca83bfccbbd0f18a, type: 2}
+  - {fileID: 11400000, guid: a7ab9457c7512714c9096a54c8199aa1, type: 2}
+  - {fileID: 11400000, guid: 224a9986618eae048b37d1922d79a673, type: 2}
+  - {fileID: 11400000, guid: 26d3507ec8c5da54b9b774cb3eaac774, type: 2}
+  - {fileID: 11400000, guid: ea14498474f19304cbe4e0afc19cfccd, type: 2}
+  - {fileID: 11400000, guid: 546e7edb723ed434694456987a67bcaf, type: 2}
+  - {fileID: 11400000, guid: d6807f8089af46d45bc8ae95a7b4adaf, type: 2}
+  - {fileID: 11400000, guid: 692e0b3768277ed4f9c2b9138d9920e5, type: 2}
+  - {fileID: 11400000, guid: 3bfd2e5447764e0bbae757a5ddf01ca6, type: 2}
+  - {fileID: 11400000, guid: 1775eb73f1884729adbab1feb319d5ce, type: 2}
+  Passives:
+  - conscience_flows_into_a_shell
+  AIProfile: 
+  AI: {fileID: 0}
+  Boss: 0
+  ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Model: {fileID: 919132149155446097, guid: 02d193023ce8e144d80d60676cf3e665, type: 3}
+  ModelAnimations: {fileID: 9100000, guid: 74bf782a84064b544b9f6761e58e8cd5, type: 2}
+  ModelEtchings: {fileID: 0}
+  Icon: {fileID: 0}
+  GrantedActions:
+  - termouls_monolith
+  - karraerms_hedron
+  - schalys_convextion
+  - gift_of_thought
+  - monge_amperes_perfection
+  - mindmeld
+  - theory_of_displacement
+  DataVersion: 15

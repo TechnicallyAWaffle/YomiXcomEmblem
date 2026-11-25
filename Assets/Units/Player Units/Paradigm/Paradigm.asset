@@ -1,0 +1,88 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
+  m_Name: Paradigm
+  m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
+  DisplayName: Paradigm Caster
+  MaxHealth: 75
+  BaseDodge: 0.1
+  BaseBlock: 0
+  MaxStrain: 130
+  StrainRecoveryPerSecond: 4
+  StrainRecoveryDelay: 0
+  MaxEnergy: 0
+  StartingEnergy: 0
+  ActionSpeed: 1
+  MoveSpeed: 5.5
+  DashDistance: 3
+  EyeHeight: 1.6
+  BodyHeight: 1.8
+  BodyRadius: 0.4
+  BasicAttack: {fileID: 11400000, guid: 51067cd2ab680b24992275c305dd8739, type: 2}
+  Makina: 0
+  StrainPerSecond: 0
+  Description: 'Neither an inch of their skin is left unblemished, nor a corner of
+    their mind latent. The Paradigm User nestles themselves into the fabric of the
+    universe and tears at their cognition to unleash catastrophic power upon foes
+    from afar.
+
+
+
+    However, such potent understanding of reality provides insight
+    into weaving together the unravelings of damage and destruction. As such the
+    Paradigm Caster is also an expert in mending damage and a myriad of other supportive
+    effects.
+
+'
+  Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
+  Actions:
+  - {fileID: 11400000, guid: 69ee16896e24f8d4e99f6a9870d832d8, type: 2}
+  - {fileID: 11400000, guid: db087f16b3a1a104db6f6dcbeb5bb34c, type: 2}
+  - {fileID: 11400000, guid: 30a0c3cddcb90c84c9088162dc75e1ef, type: 2}
+  - {fileID: 11400000, guid: c93b494478ef8914a85508738f3b1f15, type: 2}
+  - {fileID: 11400000, guid: 636cd06b6273b214c8c359b59e9ec314, type: 2}
+  - {fileID: 11400000, guid: 9097ce0cdffdf3c47989fd1ba7cc81ac, type: 2}
+  - {fileID: 11400000, guid: e372d47123abfb544ad97c14b028b967, type: 2}
+  - {fileID: 11400000, guid: 6926aa57d45a1d24fa447fecbafcf2aa, type: 2}
+  - {fileID: 11400000, guid: 111f74f594fb58e4b9f6e311e260f3f4, type: 2}
+  - {fileID: 11400000, guid: 7179662d8b21d8644b817cfb476f538d, type: 2}
+  - {fileID: 11400000, guid: b46093a9b498ff1439151b8cb3158052, type: 2}
+  - {fileID: 11400000, guid: 7904612fa8ace5048b871a5a2812f391, type: 2}
+  - {fileID: 11400000, guid: ab86c53f26e675e469554d84fbab632b, type: 2}
+  - {fileID: 11400000, guid: fe9a08a0bb8da994b8ab4c3d47294b59, type: 2}
+  - {fileID: 11400000, guid: c6b0c744386be3644a61d261acf6a1c5, type: 2}
+  - {fileID: 11400000, guid: 68025a0293196b745a8f5ac620822522, type: 2}
+  - {fileID: 11400000, guid: 6ccc81c39058bb042b090858c17b2688, type: 2}
+  Passives: []
+  AIProfile: 
+  AI: {fileID: 0}
+  Boss: 0
+  ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Model: {fileID: 919132149155446097, guid: e1f5929b01e8bfd4597c1ba3f7350005, type: 3}
+  ModelAnimations: {fileID: 9100000, guid: 05ad9aa589f1b58468fe5070767ac9b9, type: 2}
+  ModelEtchings: {fileID: 2800000, guid: fd20ee0c8e0059647983afa1984a419c, type: 3}
+  Icon: {fileID: 0}
+  GrantedActions:
+  - regeneration_seal
+  - true_inversion
+  - trammels
+  - minutes_turn_to_centuries
+  - recollections_of_self
+  - unmake_the_harm
+  - withering_end
+  - madness
+  - splinters
+  - baneful_domain
+  - mindshatter
+  DataVersion: 15

@@ -25,6 +25,10 @@ namespace TacticsGame.Core
         Combo = 1 << 12,      // only after another ability, best on a stunned target (Ravage Follow-up)
         Rush = 1 << 13,       // a charge that drags enemies along (Charge)
         Chain = 1 << 14,      // gets better used again and again (Flowing Death)
+        Volley = 1 << 15,     // fires projectiles that find enemies by themselves (Needlestorm)
+        Bulwark = 1 << 16,    // a self guard that lasts a while and lets the user keep going: a shield (Carapace)
+        Reel = 1 << 17,       // drags an enemy in to the user (Captivate)
+        Signal = 1 << 18,     // a pack leader's call: marks a target for the pack to hunt (Howling Lament)
     }
 
     public static class AbilityRoles

@@ -47,6 +47,59 @@ namespace TacticsGame.Core
             HoldGrapple(unit);
         }
 
+        /// <summary>
+        /// Grasp and Impel's hold: 'unit' holds 'ally' (no stun: it is locked out of acting instead, HeldState.Locked) for up
+        /// to 'seconds', carrying it in front of itself once it arrives (a pull may still be bringing it in), and can only
+        /// move or throw it meanwhile, asked for orders every GrappleHeadbuttSeconds (no headbutts: its behavior has none).
+        /// The throw is its behavior's GrappleThrow ability. Out of time, it throws as a grab does.
+        /// </summary>
+        public void StartHold(Unit unit, Unit ally, ActionDefinition def, float seconds)
+        {
+            if (!unit.IsAlive || !ally.IsAlive || unit.Grapple != null || ally == unit || ally.IsLifted || ally.FallLandAt >= 0f) return;
+            if (ally.HeldById != null) ReleaseHeld(ally);
+            if (ally.Grapple != null) EndGrapple(ally);
+            if (ally.Phase == UnitPhase.Windup || ally.Phase == UnitPhase.Charging) Interrupt(ally, "grasped", false);
+            if (ally.Phase == UnitPhase.Channeling) EndChannel(ally, "grasped", false);
+            if (ally.Phase == UnitPhase.Moving) HaltWalk(ally);
+            ClearChase(ally); ClearQueued(ally, null);
+            Vector3 facing = ally.Position - unit.Position; facing.y = 0f;
+            unit.AddState(new GrappleState
+            {
+                TargetId = ally.Id, Definition = def, NextHeadbuttAt = Now + GrappleHeadbuttSeconds, EndsAt = Now + Mathf.Max(TickLength, seconds),
+                Facing = facing.sqrMagnitude > 1e-6f ? facing.normalized : Vector3.forward,
+            });
+            ally.AddState(new HeldState { HolderId = unit.Id, Locked = true });
+            ally.Phase = UnitPhase.Recovery;   // it does nothing while held
+            ally.PhaseEndsAt = float.MaxValue;
+            ally.Waiting = false;
+            ApplyStatus(unit, new StatusEffect { Id = StatusIds.Grappling, SourceId = unit.Id, ExpiresAt = float.MaxValue }, unit);
+            ApplyStatus(ally, new StatusEffect { Id = StatusIds.Grasped, SourceId = unit.Id, ExpiresAt = float.MaxValue }, unit);
+            Emit(EventType.Carry, unit.Id, ally.Id, new CarryInfo { Carrying = true, Offset = CarryOffset(unit, ally), Position = ally.Position });
+            HoldGrapple(unit);
+        }
+
+        /// <summary>What the unit holding someone would throw them with (its behavior's GrappleThrow), or null.</summary>
+        public ActionDefinition ThrowActionOf(Unit unit)
+        {
+            var g = unit != null ? unit.Grapple : null;
+            return g != null ? ActionBehaviors.Get(g.Definition.BehaviorId).GrappleThrow(g.Definition) : null;
+        }
+
+        /// <summary>How far a throw by 'unit' sends who it holds: a throw ability's Range, else GrappleThrowDistance.</summary>
+        public float ThrowReach(Unit unit)
+        {
+            var g = unit != null ? unit.Grapple : null;
+            var t = ThrowActionOf(unit);
+            return g != null && t != null && t != g.Definition ? unit.ActionStat(t, ActionStat.Range) : GrappleThrowDistance;
+        }
+
+        /// <summary>Does the unit holding someone headbutt them while it holds (Subjugate), rather than just hold (Grasp)?</summary>
+        public bool HoldHeadbutts(Unit unit)
+        {
+            var g = unit != null ? unit.Grapple : null;
+            return g != null && ActionBehaviors.Get(g.Definition.BehaviorId).GrappleHeadbutt(g.Definition) != null;
+        }
+
         /// <summary>Keep holding: stand and headbutt, asked for orders again right after the next headbutt.</summary>
         private void HoldGrapple(Unit unit)
         {
@@ -73,8 +126,9 @@ namespace TacticsGame.Core
             g.Throwing = true;
             g.AwaitingThrow = false;
             unit.Waiting = false;
-            var def = g.Definition;
-            float speed = unit.EffectiveActionSpeed(), windup = GrappleThrowWindup / speed;
+            // The throw: the grab itself again (Subjugate), or an ability of its own (Grasp and Impel's Impel), with its windup.
+            var def = ActionBehaviors.Get(g.Definition.BehaviorId).GrappleThrow(g.Definition) ?? g.Definition;
+            float speed = unit.EffectiveActionSpeed(), windup = (def != g.Definition ? unit.ActionStat(def, ActionStat.Windup) : GrappleThrowWindup) / speed;
             var inst = new ActionInstance
             {
                 Actor = unit, Definition = def, Behavior = ActionBehaviors.Get(def.BehaviorId), TargetUnitId = held.Id, TargetPos = held.Position,
@@ -83,8 +137,9 @@ namespace TacticsGame.Core
             unit.ActiveAction = inst;
             unit.Phase = UnitPhase.Windup;
             unit.PhaseEndsAt = inst.ResolveAt;
-            ApplyStun(held, windup + DisplaceDuration, unit, true);
-            Emit(EventType.ActionStarted, unit.Id, held.Id, new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = unit.ActionStat(def, ActionStat.Recovery) / speed, TargetPos = held.Position });
+            if (held.Team != unit.Team) ApplyStun(held, windup + DisplaceDuration, unit, true);   // an ally held is locked out already
+            Emit(EventType.ActionStarted, unit.Id, held.Id, new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = unit.ActionStat(def, ActionStat.Recovery) / speed, TargetPos = held.Position,
+                Range = unit.RangeOf(def), Radius = unit.ActionStat(def, ActionStat.AreaRadius) });
             Triggers.Fire(new TriggerContext { Type = TriggerType.ActionStarted, Sim = this, Subject = unit, Action = def });
         }
 
@@ -99,8 +154,11 @@ namespace TacticsGame.Core
             var held = GetUnit(g.TargetId);
             if (held != null)
             {
+                var hs = held.GetState<HeldState>();
+                if (hs != null && hs.Locked && held.IsAlive && held.Phase == UnitPhase.Recovery && held.PhaseEndsAt >= float.MaxValue * 0.5f) held.PhaseEndsAt = Now;   // free to act again
                 held.RemoveState<HeldState>();
-                RemoveStatus(held, StatusIds.Grappled);
+                if (held.HasStatus(StatusIds.Grappled)) RemoveStatus(held, StatusIds.Grappled);
+                if (held.HasStatus(StatusIds.Grasped)) RemoveStatus(held, StatusIds.Grasped);
                 Emit(EventType.Carry, unit.Id, held.Id, new CarryInfo { Carrying = false, Position = held.Position });
             }
             if (!g.Throwing && unit.IsAlive && unit.Phase == UnitPhase.Recovery) EndRecoveryNow(unit);
@@ -145,7 +203,7 @@ namespace TacticsGame.Core
                     Vector3 d = u.Move.Path[u.Move.NextIndex] - u.Position; d.y = 0f;
                     if (d.sqrMagnitude > 1e-4f) g.Facing = d.normalized;   // carried in front, the way it walks
                 }
-                PlaceHeld(u, held);
+                if (!IsGliding(held)) PlaceHeld(u, held);   // one still being pulled in is carried once it arrives
                 if (g.Throwing) continue;
                 if (g.AwaitingThrow)
                 {
@@ -170,7 +228,8 @@ namespace TacticsGame.Core
                 if (Now + 1e-4f >= g.NextHeadbuttAt)
                 {
                     g.NextHeadbuttAt += GrappleHeadbuttSeconds;
-                    if (g.Definition.LinkedAction != null) QueueFreeAction(u, g.Definition.LinkedAction, held.Id, 0f);
+                    var headbutt = ActionBehaviors.Get(g.Definition.BehaviorId).GrappleHeadbutt(g.Definition);
+                    if (headbutt != null) QueueFreeAction(u, headbutt, held.Id, 0f);
                 }
             }
         }

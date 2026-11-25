@@ -112,15 +112,20 @@ namespace TacticsGame.Core
             var hit = new HitContext { Source = atk.Source, Definition = atk.Definition, Effect = atk, Target = GetUnit(atk.TargetId) };
             if (hit.Target == null || hit.Target.Phase == UnitPhase.Dead) return;
             if (!ReachTarget(hit)) return;
-            if (!RollToHit(hit)) return;
-            if (!RollDodge(hit, snapshot)) return;
-            DealDamage(hit);
-            GainOnHit(hit);
-            if (hit.Target.Health <= 0f) return;   // a dead unit needs no reactions or stun
-            RunHitRules(HitStage.Landed, hit);
-            ReactToHit(hit);
-            StunFromHit(hit);
-            if (atk.OnLanded != null && hit.Target.IsAlive) atk.OnLanded(this, hit.Target);
+            try
+            {
+                if (!RollToHit(hit)) return;
+                if (!RollDodge(hit, snapshot)) return;
+                DealDamage(hit);
+                if (atk.AfterHit != null) atk.AfterHit(this, hit);
+                GainOnHit(hit);
+                if (hit.Target.Health <= 0f) return;   // a dead unit needs no reactions or stun
+                RunHitRules(HitStage.Landed, hit);
+                ReactToHit(hit);
+                StunFromHit(hit);
+                if (atk.OnLanded != null && hit.Target.IsAlive) atk.OnLanded(this, hit.Target);
+            }
+            finally { RunHitRules(HitStage.Resolved, hit); }
         }
 
         /// <summary>The attacker's SelfStatusesOnHit, now that the hit has landed (a block doesn't stop them; a dodge would have).</summary>
@@ -132,6 +137,7 @@ namespace TacticsGame.Core
             {
                 var s = spec.Create(Now, src.Id, def.LinkedAction, src.DurationScale(def));
                 s.TargetId = hit.Target.Id;   // whom it was earned on (RequiredStatusOnTarget follow-ups go at them)
+                MarkFollowupWindow(src, s);
                 ApplyStatus(src, s, src);
             }
         }
@@ -202,6 +208,9 @@ namespace TacticsGame.Core
             CombatSnapshot snap;
             if (!snapshot.TryGetValue(hit.Target.Id, out snap)) snap = new CombatSnapshot { Dodge = hit.Target.EffectiveDodge(), Block = hit.Target.EffectiveBlock() };
             hit.Dodge = snap.Dodge; hit.Block = snap.Block;
+            bool takesIt;
+            if (MeetsWithCounter(hit, out takesIt)) return false;   // a counter stance comes first: it evades the hit
+            if (takesIt) return true;                                // or takes it itself, no dodge rolled
             if (hit.Effect.Unerring) return true;   // can't be dodged
             bool forced = PlayersAlwaysDodge && hit.Target.Team == Team.Player;   // the tutorial's dodge lesson
             if (rng.NextDouble() >= snap.Dodge && !forced) return true;
@@ -209,23 +218,51 @@ namespace TacticsGame.Core
             return false;
         }
 
-        /// <summary>Damage through block (and its wear), strain and Unravel, the Damage event, and fragile statuses breaking.</summary>
+        /// <summary>
+        /// A counter stance (StatusFlags.Counters) takes priority over a dodge: an attack on its holder never rolls dodge.
+        /// A stance that also NegatesDamage takes the hit itself (Parry: it lands for nothing, and the parry answers the
+        /// damage taken): 'takesIt', and the hit goes on with no dodge roll. Any other evades it as its counter begins
+        /// (Mesmerize): the attack misses ("countered") and TriggerType.Countered fires; returns true.
+        /// </summary>
+        private bool MeetsWithCounter(HitContext hit, out bool takesIt)
+        {
+            takesIt = false;
+            var target = hit.Target; var src = hit.Source;
+            var stance = target.Statuses.Find(s => s.Has(StatusFlags.Counters));
+            if (stance == null || src == null || src == target || src.Team == target.Team) return false;
+            if (stance.Has(StatusFlags.NegatesDamage)) { hit.Dodge = 0f; takesIt = true; return false; }
+            Emit(EventType.Miss, src.Id, target.Id, new MissInfo { Reason = "countered", ActionId = hit.Definition.Id });
+            Triggers.Fire(new TriggerContext { Type = TriggerType.Countered, Sim = this, Subject = target, Other = src, Action = hit.Definition });
+            return true;
+        }
+
+        /// <summary>Damage through block (hits don't wear it down), shields, strain and Unravel, the Damage event, and fragile statuses breaking.</summary>
         private void DealDamage(HitContext hit)
         {
             var src = hit.Source; var target = hit.Target; var def = hit.Definition; var atk = hit.Effect;
             // A Transcended Block (NegatesDamage) stops all of it, pierce or not: no damage, no strain, no wear on block.
             hit.Negated = target.HasFlag(StatusFlags.NegatesDamage);
             RunHitRules(HitStage.Damage, hit);
+            BreakWeakpointsOnHit(hit);
+            // A critical strike: CritDamage more. No roll at all for an ability that can't crit, so other battles' draws don't move.
+            float crit = atk.CritChance >= 0f ? atk.CritChance : CritChanceFor(src, def, false);
+            if (crit > 0f && !hit.Negated && rng.NextDouble() < crit)
+            {
+                hit.Critical = true;
+                hit.DamageMultiplier *= 1f + Mathf.Max(0f, src.ActionStat(def, ActionStat.CritDamage));
+            }
             float missing = def.MissingHealthDamage > 0f ? def.MissingHealthDamage * Mathf.Max(0f, target.MaxHealth - target.Health) : 0f;   // Witness To The End
             hit.Raw = (src.ActionStat(def, ActionStat.Damage) + missing) * atk.DamageMultiplier * hit.DamageMultiplier;
             float effectiveBlock = hit.Negated ? 1f : Mathf.Clamp01(hit.Block * (1f - Mathf.Clamp01(src.ActionStat(def, ActionStat.BlockPierce) + atk.BlockPierceBonus)));
             hit.Dealt = hit.Raw * (1f - effectiveBlock);
             float dealt = hit.Dealt; DevAdjustDamage(src, target, ref dealt); hit.Dealt = dealt;
+            EtchingTraits.Dissipate(this, target, hit.Raw - hit.Dealt);   // what Block stopped (Dissipation)
+            hit.Shielded = AbsorbWithShields(target, hit.Dealt);
+            hit.Dealt -= hit.Shielded;
             target.Health -= hit.Dealt;
             target.LastAttackerId = src.Id;
             target.LastHitAction = def;
             target.LastHitTag = atk.Tag;
-            if (hit.Block > 0f && !hit.Negated) target.ReduceBlock(hit.Impact == ImpactType.Heavy ? HeavyBlockBreak : LightBlockBreak);
 
             // Strain and Unravel (checked against strain BEFORE this hit adds to it). Nothing is immune to Unravel: not Block,
             // not a Transcended Block that stops the damage, not Unstoppable.
@@ -235,8 +272,8 @@ namespace TacticsGame.Core
 
             Emit(EventType.Damage, src.Id, target.Id, new DamageInfo
             {
-                ActionId = def.Id, Amount = hit.Dealt, BlockedAmount = hit.Raw - hit.Dealt, Impact = hit.Impact,
-                RemainingHealth = target.Health, CausedUnravel = hit.Unravel,
+                ActionId = def.Id, Amount = hit.Dealt, BlockedAmount = hit.Raw - hit.Dealt - hit.Shielded, ShieldedAmount = hit.Shielded, Impact = hit.Impact,
+                RemainingHealth = target.Health, CausedUnravel = hit.Unravel, Critical = hit.Critical, WeakpointsBroken = hit.WeakpointsBroken,
             });
             Triggers.Fire(new TriggerContext { Type = TriggerType.DamageTaken, Sim = this, Subject = target, Other = src, Amount = hit.Dealt, Impact = hit.Impact, Action = def });
 
@@ -259,16 +296,24 @@ namespace TacticsGame.Core
             var src = hit.Source; var target = hit.Target; var def = hit.Definition; var atk = hit.Effect;
             BreakJump(target, src);   // any hit that lands knocks a jumping unit out of the air
             foreach (var s in target.States.ToArray()) s.OnStruck(this, hit);   // damage knocks a hovering unit down (ControlState.OnStruck)
-            foreach (var spec in def.TargetStatusesOnHit) if (spec.AppliesToUnit(src, target)) ApplyStatus(target, spec.Create(Now, src.Id, null, src.DurationScale(def)), src);
+            // A status that strikes when it runs out (RUPTURED) carries the ability's LinkedAction: the blow it lands then.
+            if (!atk.NoStatuses) foreach (var spec in def.TargetStatusesOnHit) if (spec.AppliesToUnit(src, target)) ApplyStatus(target, spec.Create(Now, src.Id, spec.Has(StatusFlags.StrikesOnExpire) ? def.LinkedAction : null, src.DurationScale(def)), src);
             if (def.RandomStatusesOnHit != null && def.RandomStatusesOnHit.Count > 0)   // one of these, at random (Joyous Dance)
             {
                 var pick = def.RandomStatusesOnHit[Mathf.Min(def.RandomStatusesOnHit.Count - 1, (int)(rng.NextDouble() * def.RandomStatusesOnHit.Count))];
                 if (pick != null && pick.AppliesToUnit(src, target)) ApplyStatus(target, pick.Create(Now, src.Id, null, src.DurationScale(def)), src);
             }
             if (def.Displace == DisplaceMode.TowardSource || def.Displace == DisplaceMode.AwayFromSource) DisplaceUnit(target, src, def);
-            hit.StunFor = src.ActionStat(def, ActionStat.StunDuration) * atk.StunMultiplier;
+            hit.StunFor = src.ActionStat(def, ActionStat.StunDuration) * atk.StunMultiplier * (1f + WeakpointBonus * hit.WeakpointsBroken);
+            // Weakpoints the hit opens: the ability's own (when its hits carry them), what its user's Etchings add (on enemies:
+            // Gaps In Their Mind), and a granted Transcend's (Unwind Their Self).
+            int own = ActionBehaviors.Get(def.BehaviorId).WeakpointsOnHit(def) ? def.WeakpointsOnTarget : 0;
+            int etched = target.Team != src.Team ? Mathf.Max(0, Mathf.RoundToInt(src.ActionStat(def, ActionStat.Weakpoints)) - def.WeakpointsOnTarget) : 0;
+            if (own + etched > 0) AddTargetWeakpoints(src, target, def, own + etched);
+            if (atk.ExtraWeakpoints > 0 && target.Team != src.Team && target != src) AddWeakpoints(target, atk.ExtraWeakpoints, target.Position - src.Position, atk.ExtraWeakpointSeconds, src);
             bool willStun = hit.WillStun;
             if (atk.HasPush) Relocate(target, atk.PushTo, DisplaceDuration, true, src);
+            else if (!MovesWhatItHits(def)) GuardKnockback(hit);
             // Any damage breaks a charge or a channel, and a Heavy one a windup, unless the unit is Unstoppable (Unravel, below, still does).
             bool unstoppable = target.IsUnstoppable;
             if (target.Phase == UnitPhase.Charging && !unstoppable) Interrupt(target, "charge broken", !willStun);
@@ -276,6 +321,41 @@ namespace TacticsGame.Core
             if (target.Phase == UnitPhase.Windup && target.ActiveAction != null && !unstoppable &&
                 (hit.Impact == ImpactType.Heavy || target.ActiveAction.Definition.InterruptedByDamage))
                 Interrupt(target, hit.Impact == ImpactType.Heavy ? "heavy impact" : "damage", !willStun);
+            if (hit.Shattered) Shatter(target);   // its last weakpoint broke: nothing it gave itself holds what it was doing
+        }
+
+        /// <summary>Does 'def' move what it hits by itself (a pull, a knockback, a line push)? Its own move is all a Block gets.</summary>
+        private static bool MovesWhatItHits(ActionDefinition def)
+        {
+            if ((def.Displace == DisplaceMode.TowardSource || def.Displace == DisplaceMode.AwayFromSource) && def.DisplaceDistance > 0f) return true;
+            var behavior = ActionBehaviors.Get(def.BehaviorId);
+            return behavior != null && behavior.MovesTargets(def);
+        }
+
+        /// <summary>
+        /// A hit on a raised Block (StatusIds.Blocking) shoves its holder straight away from the attacker,
+        /// BlockKnockbackPerDamage metres per point of the hit's damage before block. A Transcended Block stands firm
+        /// (ResistsKnockback, in Relocate), as does an Unstoppable unit.
+        /// </summary>
+        private void GuardKnockback(HitContext hit)
+        {
+            var target = hit.Target; var src = hit.Source;
+            if (src == null || src == target || hit.Raw <= 0f || !target.HasStatus(StatusIds.Blocking)) return;
+            Vector3 away = target.Position - src.Position; away.y = 0f;
+            if (away.sqrMagnitude < 1e-6f) return;
+            float distance = hit.Raw * BlockKnockbackPerDamage;
+            if (distance < 0.05f) return;
+            Relocate(target, target.Position + away.normalized * distance, DisplaceDuration, true, src);
+        }
+
+        /// <summary>'u''s chance to strike critically with 'def': the ability's CritChance (Eye For Weakness), and when it was
+        /// Transcended through a granted CritChance Transcend, at least that grant's crit_chance.</summary>
+        public float CritChanceFor(Unit u, ActionDefinition def, bool transcended)
+        {
+            if (u == null || def == null) return 0f;
+            float chance = u.ActionStat(def, ActionStat.CritChance);
+            if (transcended && u.GrantOf(def) == TranscendGrant.CritChance) chance = Mathf.Max(chance, u.GrantParam(def, "crit_chance", 0.5f));
+            return Mathf.Clamp01(chance);
         }
 
         /// <summary>The hit's stun, or an Unravel in its place.</summary>
@@ -355,7 +435,7 @@ namespace TacticsGame.Core
             u.ResumeAction = null;
             if (r == null) return false;
             var def = r.Definition;
-            var cmd = new UnitCommand { UnitId = u.Id, Type = CommandType.Action, Action = def, TargetUnitId = r.TargetUnitId, TargetPos = r.TargetPos }
+            var cmd = new UnitCommand { UnitId = u.Id, Type = CommandType.Action, Action = def, TargetUnitId = r.TargetUnitId, TargetPos = r.TargetPos, SecondTargetId = r.SecondTargetId }
                 .Transcended(r.Transcended);
             string reason;
             bool ok = CanUse(u, def, GetUnit(r.TargetUnitId), out reason, false);   // already paid for: skip resource checks

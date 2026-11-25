@@ -14,7 +14,7 @@ namespace TacticsGame.Core
         StrainRecovery,     // fixed: upgrades only (strain shed per second)
         StrainRecoveryDelay,// fixed: upgrades only
         Dodge,              // 0..1
-        Block,              // 0..1; a status's Add is worn down by hits unless it KeepsBlock
+        Block,              // 0..1 (hits never wear it down)
         ActionSpeed,        // scales windups and recoveries; a status's also scales walking
         MoveSpeed,
         DashDistance,
@@ -38,6 +38,9 @@ namespace TacticsGame.Core
         Damage, Windup, Recovery, Cooldown, Range, StunDuration, Accuracy, StrainOnSelf, StrainOnTarget,
         Heal, AreaRadius, BlockPierce, DisplaceDistance, HealthCost, EnergyCost, Duration,
         TranscendStrain,   // the extra strain Transcending it costs (its own, or a granted one's): Stepweaver's Dash
+        CritChance,        // its chance (0..1) to strike critically; 0 on every ability until something adds to it (Eye For Weakness)
+        CritDamage,        // how much more a critical strike deals (0.75: +75%)
+        Weakpoints,        // weakpoints its hits open on enemies (the ability's WeakpointsOnTarget, plus what Etchings add: Gaps In Their Mind)
     }
 
     public enum ModOp { Add, Multiply }
@@ -51,7 +54,7 @@ namespace TacticsGame.Core
         Untargetable = 1 << 1,    // enemies can't target or hit it (Marking Shot's stealth)
         BreaksOnDamage = 1 << 2,  // removed the moment the unit takes damage
         StunImmune = 1 << 3,      // stuns don't land (Block); Unravel always does
-        KeepsBlock = 1 << 4,      // its Block isn't worn down by hits (Brace)
+        KeepsBlock = 1 << 4,      // no effect any more: hits never wear Block down (kept so assets that set it still load)
         NegatesDamage = 1 << 5,   // hits that land deal no damage and no strain (Transcended Block)
         RedirectsHits = 1 << 6,   // projectiles and single-target melee hits on it go to whoever applied the status (Sanctity)
         Unstoppable = 1 << 7,     // no stun lands and nothing interrupts it, Unravel aside; nothing else moves it (BattleSimulation.CanDisplace) (Subjugate's windup)
@@ -62,6 +65,11 @@ namespace TacticsGame.Core
         Maddened = 1 << 12,           // out of its side's control: it keeps using its basic attack on the nearest enemy, or the one the status lends it without one (MADNESS; MaddenedAI)
         ArmsHits = 1 << 13,           // its holder's hits put the TargetStatusesOnHit of the ability that gave it on what they hit (Crippling Pursuit's rounds)
         NoDash = 1 << 14,             // it can't use dashes (abilities whose behavior Dashes: the Dash, Phantom Strike...); dodges still dash (CRIPPLED)
+        ResistsKnockback = 1 << 15,   // nothing shoves it away from where the shove came from; pulls still move it (Transcended Block; BattleSimulation.Relocate)
+        FollowupWindow = 1 << 16,     // a follow-up's window (a chain, an opener's mark): its clock stands still while its holder walks or dashes (BattleSimulation.ExpireTimers)
+        EndsOnFocus = 1 << 17,        // gone the moment its holder Focuses (Scepter Of Tyranny's stage: Focus starts it over)
+        StrikesOnExpire = 1 << 19,    // when it runs out, the ability that put it there lands its LinkedAction on its holder (RUPTURED: Delayed Crush; BattleSimulation.ExpireTimers)
+        Counters = 1 << 18,           // a counter stance: attacks on its holder skip the dodge roll, so the counter meets them (Parry, Mesmerize; BattleSimulation.RollDodge)
     }
 
     /// <summary>A change to one unit stat: added to it, or multiplying it.</summary>
@@ -145,6 +153,7 @@ namespace TacticsGame.Core
                 case ActionStat.EnergyCost: return def.EnergyCost;
                 case ActionStat.Duration: return LongestDuration(def);
                 case ActionStat.TranscendStrain: return def.CanTranscend ? def.TranscendStrain : 0f;
+                case ActionStat.Weakpoints: return def.WeakpointsOnTarget;
             }
             return 0f;
         }
@@ -165,6 +174,7 @@ namespace TacticsGame.Core
         /// </summary>
         public static bool Has(ActionDefinition def, ActionStat stat)
         {
+            if (def != null && stat == ActionStat.Weakpoints) return def.Damage > 0f;   // any ability that hits for damage can be made to open them
             if (def == null || Base(def, stat) <= 0f) return false;
             switch (stat)
             {

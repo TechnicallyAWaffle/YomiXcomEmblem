@@ -103,4 +103,9 @@ MonoBehaviour:
     Value: 2
   - Key: min_distance
     Value: 4
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 2
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   DataVersion: 15

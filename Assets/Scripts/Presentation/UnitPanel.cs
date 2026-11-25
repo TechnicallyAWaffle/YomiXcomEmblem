@@ -129,11 +129,12 @@ namespace TacticsGame.Presentation
             float inner = width - 2f * Pad;
             var rows = new List<KeyValuePair<string, string>>();
             if (unit.Etchings != null)
-                foreach (var n in unit.Etchings)
+                foreach (var s in EtchingStacks.Of(unit.Etchings))   // copies of one Etching: listed once, "x2"
                 {
+                    var n = s.Key;
                     string on = null;
                     if (!string.IsNullOrEmpty(n.ActionId)) { var a = unit.Actions.Find(x => x.Id == n.ActionId); on = a != null ? a.DisplayName : n.ActionId; }
-                    rows.Add(new KeyValuePair<string, string>(n.Name + (on != null ? "  on " + on : ""), n.Description));
+                    rows.Add(new KeyValuePair<string, string>(n.Name + EtchingStacks.Times(s.Value) + (on != null ? "  on " + on : ""), n.Description));
                 }
             string head = unit.DisplayName + ": Etchings";
             float h = Pad * 2f + popupTitle.CalcHeight(new GUIContent(head), inner) + 4f;

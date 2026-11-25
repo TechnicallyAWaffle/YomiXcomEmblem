@@ -64,16 +64,28 @@ namespace TacticsGame.Presentation
         /// <summary>A free line in world space with no ground offset (tracers, slashes, beams), tapering from start to end.</summary>
         public void Line(IList<Vector3> points, Color start, Color end, float startWidth, float endWidth)
         {
+            Stroke(points, start, end, startWidth, endWidth, null, false);
+        }
+
+        /// <summary>
+        /// A free line drawn with 'mat' (a VfxKit material: a brushy stroke, ink or glow; null: the plain one). tile: the
+        /// texture repeats along the line once per its width, so strokes keep their grain however long they are; otherwise
+        /// it is stretched over the whole line once.
+        /// </summary>
+        public void Stroke(IList<Vector3> points, Color start, Color end, float startWidth, float endWidth, Material mat, bool tile = true)
+        {
             if (points == null || points.Count < 2) return;
-            var line = Next(start, startWidth);
+            var line = Next(start, startWidth, mat);
             line.loop = false;
             line.endColor = end;
             line.endWidth = endWidth;
+            line.textureMode = mat != null && tile ? LineTextureMode.Tile : LineTextureMode.Stretch;
+            if (mat != null && tile) line.textureScale = new Vector2(1f / Mathf.Max(0.05f, Mathf.Max(startWidth, endWidth) * 4f), 1f);
             line.positionCount = points.Count;
             for (int i = 0; i < points.Count; i++) line.SetPosition(i, points[i]);
         }
 
-        private LineRenderer Next(Color color, float width)
+        private LineRenderer Next(Color color, float width, Material mat = null)
         {
             if (used == pool.Count)
             {
@@ -87,6 +99,9 @@ namespace TacticsGame.Presentation
             }
             var l = pool[used++];
             l.enabled = true;
+            var want = mat != null ? mat : material;
+            if (l.sharedMaterial != want) l.sharedMaterial = want;
+            if (mat == null) { l.textureMode = LineTextureMode.Stretch; l.textureScale = Vector2.one; }
             l.widthMultiplier = 1f;
             l.startWidth = l.endWidth = width;
             l.startColor = l.endColor = color;

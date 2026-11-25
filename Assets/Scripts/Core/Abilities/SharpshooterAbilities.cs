@@ -16,6 +16,7 @@ namespace TacticsGame.Core
 
         public override bool OnWindupTick(BattleSimulation sim, ActionInstance a)
         {
+            if (a.FreeAimed) return true;   // aimed freely: no target to keep in sight (it needs sight of the one it finds as it lands)
             var target = sim.GetUnit(a.TargetUnitId);
             if (target == null || !target.IsAlive || !sim.IsTargetableBy(target, a.Actor)) return false;
             return a.Definition.PiercesTerrain || sim.Visibility.HasLineOfSight(a.Actor, target);

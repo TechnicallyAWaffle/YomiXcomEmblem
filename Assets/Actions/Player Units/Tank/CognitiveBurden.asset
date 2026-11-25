@@ -92,4 +92,9 @@ MonoBehaviour:
     Value: 50
   - Key: seconds
     Value: 3
+  WeakpointsOnTarget: 1
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   DataVersion: 15

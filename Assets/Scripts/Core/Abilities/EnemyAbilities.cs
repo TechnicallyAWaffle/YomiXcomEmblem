@@ -118,6 +118,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class ChargeBehavior : ActionBehavior
     {
+        public override bool MovesTargets(ActionDefinition def) { return true; }
+
         public override AbilityRole DefaultRoles(ActionDefinition def) { return base.DefaultRoles(def) | AbilityRole.Rush; }
 
         public override bool MovesUser { get { return true; } }   // not while airborne
@@ -152,7 +154,7 @@ namespace TacticsGame.Core
             Vector3 start = actor.Position;
             Vector3 dir = aim - start; dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
-            float run = Along(sim.Paths.ClampDash(start, start + dir * actor.ActionStat(def, ActionStat.Range)) - start, dir);
+            float run = Along(sim.PhaseLanding(start, start + dir * actor.ActionStat(def, ActionStat.Range)) - start, dir);   // the rush passes walls; who it carries doesn't
 
             // Who is in the way (the charger's width), nearest first.
             var along = new List<float>();
@@ -199,7 +201,7 @@ namespace TacticsGame.Core
             var actor = a.Actor;
             var plan = PlanCharge(sim, actor, a.Definition, a.TargetPos);
             for (int i = plan.Caught.Count - 1; i >= 0; i--) sim.PushUnit(plan.Caught[i], plan.CaughtEnds[i], plan.Seconds, actor);   // the front one first
-            sim.SlideUnitTo(actor, plan.End, plan.Seconds);
+            sim.SlideUnitTo(actor, plan.End, plan.Seconds, plan.End);
             if (!plan.Walled) return;
             foreach (var t in plan.Caught)
                 effects.Add(new AttackEffect

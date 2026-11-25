@@ -103,7 +103,7 @@ namespace TacticsGame.Core
         private void StartInnateAuras(Unit u)
         {
             foreach (var def in u.Actions)
-                if (def != null && def.InnatePassive) StartAura(u, def, InnateSeconds, false);
+                if (def != null && def.InnatePassive && def.AreaRadius > 0f) StartAura(u, def, InnateSeconds, false);   // one with no dome acts through OnInnateTick
         }
 
         /// <summary>How long an innate dome lasts: the whole battle (it comes down with its unit).</summary>
@@ -168,7 +168,7 @@ namespace TacticsGame.Core
         {
             foreach (var u in State.Units)
             {
-                if (u == a.Source) continue;
+                if (u == a.Source && !a.Anchored) continue;   // a dome leaves its own unit out; a zone on the ground doesn't (Counterpoise)
                 bool inside = u.IsAlive && InDome(a.Where, a.Source.ActionStat(a.Definition, ActionStat.AreaRadius), a.Definition.AreaHeight, u);
                 if (inside == a.Inside.Contains(u.Id)) continue;
                 if (!inside)

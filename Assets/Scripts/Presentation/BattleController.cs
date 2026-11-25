@@ -27,10 +27,8 @@ namespace TacticsGame.Presentation
         /// <summary>Freedom's Embrace (a living unit with the freedoms_embrace passive): how far the order clock has run, 0..1,
         /// while the world is held for orders (0 otherwise). The screen distortion follows it.</summary>
         public float EmbraceProgress { get; private set; }
-        /// <summary>Phase two (unbound_time): time creeps on while orders are given. CreepProgress: how far the creep has
-        /// ramped up this time, 0..1.</summary>
+        /// <summary>Phase two (unbound_time): time creeps on while orders are given, at Sim.DecisionCreepRate.</summary>
         public bool TimeUnbound { get; private set; }
-        public float CreepProgress { get; private set; }
         public event System.Action<BattleOutcome> OnBattleFinished;
         /// <summary>A battle's simulation was just made, before it runs a single tick (a tutorial sets its rules here).</summary>
         public event System.Action<BattleSimulation> OnSimCreated;
@@ -62,6 +60,7 @@ namespace TacticsGame.Presentation
             var summons = GetComponent<SummonViews>();
             if (summons == null) summons = gameObject.AddComponent<SummonViews>();
             summons.Bind(Director, Context);   // views for units that join mid-battle; before Load, so a reset clears them
+            UiDeclutter.Set(false);   // every battle starts in the normal view, never the tactical one (Alt) left on from before
             Director.Load(Sim.Timeline, Context.Registry);
             foreach (var view in Context.Registry.Values) view.Director = Director;
             StartCoroutine(BattleLoop());
@@ -102,7 +101,7 @@ namespace TacticsGame.Presentation
                 bool done = false;
                 Input.RequestDecisions(Sim, seg.Decisions, () => done = true);
                 yield return HoldForOrders(seg, () => done);
-                EmbraceProgress = 0f; CreepProgress = 0f;
+                EmbraceProgress = 0f;
                 if (!done) Input.CancelDecisions();   // ended from outside (the dev menu), or taken by Freedom's Embrace: the next segment plays on
             }
 
@@ -115,18 +114,16 @@ namespace TacticsGame.Presentation
         /// The world held for orders until they are in. With Freedom's Embrace on the field the hold has a real-time clock
         /// (Sim.FreedomsEmbraceSeconds), carried over from the last hold when the orders since were
         /// only moves that ran under Sim.FreedomsEmbraceResetAfter: when it runs out, the orders are dropped and the boss takes the moment
-        /// (UnleashFreedomsEmbrace). With time unbound (phase two) it isn't held at all: it creeps on at Sim.DecisionCreepRate,
-        /// played as it goes, while every decision is an order (a dodge's direction still holds it).
+        /// (UnleashFreedomsEmbrace). With time unbound (phase two) it isn't held at all: it creeps on at Sim.DecisionCreepRate
+        /// (a flat share of normal speed), played as it goes, while every decision is an order (a dodge's direction still holds it).
         /// </summary>
         private IEnumerator HoldForOrders(SimSegmentResult seg, System.Func<bool> done)
         {
-            float held = 0f;   // this hold's real seconds (the creep ramps over them)
             bool canCreep = seg.Decisions != null && seg.Decisions.TrueForAll(d => d.Kind == DecisionKind.Action);
             while (!done() && Sim.Outcome == BattleOutcome.InProgress)
             {
                 yield return null;
                 if (Director.Paused) continue;   // a tutorial popup being read stops every clock
-                held += Time.unscaledDeltaTime;
                 var embrace = Sim.FreedomsEmbraceHolder();
                 if (embrace != null) embraceClock += Time.unscaledDeltaTime;
                 EmbraceProgress = embrace != null ? Mathf.Clamp01(embraceClock / Mathf.Max(0.1f, Sim.FreedomsEmbraceSeconds)) : 0f;
@@ -139,8 +136,7 @@ namespace TacticsGame.Presentation
                 TimeUnbound = Sim.DecisionCreepActive;
                 if (TimeUnbound && canCreep)
                 {
-                    float rate = Sim.DecisionCreepRate(held);
-                    CreepProgress = Mathf.Clamp01(held / Mathf.Max(0.01f, Sim.DecisionCreepRamp));
+                    float rate = Sim.DecisionCreepRate;
                     Sim.CreepWhileDeciding(Time.unscaledDeltaTime * rate);
                     Director.CreepTo(Sim.Now, rate);
                 }

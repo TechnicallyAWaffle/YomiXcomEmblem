@@ -24,7 +24,8 @@ namespace TacticsGame.Presentation
     }
 
     /// <summary>
-    /// A saved battle map: the ground's size, its cover and raised ground, and where each team starts. Built into the
+    /// A saved battle map: the ground's size, its cover and raised ground (boxes, and optionally a freeform Blockout with its
+    /// sampled Heights), and where each team starts. Built into the
     /// scene by MapLoader (in the editor by the Map Builder window, at runtime when the pre-battle screen picks it).
     /// Create one with Tools > Combat Test > Map Builder, or Assets > Create > Tactics > Map Template.
     /// </summary>
@@ -40,6 +41,11 @@ namespace TacticsGame.Presentation
         public List<Vector3> PlayerSpawns = new List<Vector3>();
         [Tooltip("Enemy start points, in order. Enemies past the last one are lined up in rows behind the first.")]
         public List<Vector3> EnemySpawns = new List<Vector3>();
+        [Header("Blockout (Map Builder: Convert Blockout)")]
+        [Tooltip("Freeform level geometry built into the map as it is: its Climbable part can be stood and climbed on, its Cover part (BlockoutCover) only blocks sight and walking. Made from a ProBuilder blockout by the Map Builder.")]
+        public GameObject Blockout;
+        [Tooltip("How high the blockout's climbable surfaces stand, sampled on a grid: the ground the simulation walks on.")]
+        public HeightGrid Heights = new HeightGrid();
 
         public List<Vector3> Spawns(Team team) { return team == Team.Player ? PlayerSpawns : EnemySpawns; }
 

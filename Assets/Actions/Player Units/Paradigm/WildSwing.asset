@@ -16,9 +16,9 @@ MonoBehaviour:
   DisplayName: Wild Swing
   BehaviorId: basic_attack
   Roles: 0
-  Description: A weak, inaccurate melee swing, lent by MADNESS to a unit with no basic attack.
+  Description: A wild, mindless swing
   Targeting: 2
-  Range: 1.8
+  Range: 2
   IsRanged: 0
   CannotTargetSelf: 0
   DestinationRange: 0
@@ -32,10 +32,10 @@ MonoBehaviour:
   RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 0
-  Damage: 5
-  BaseAccuracy: 0.6
-  StunDuration: 0
-  StrainOnTarget: 3
+  Damage: 17
+  BaseAccuracy: 0.75
+  StunDuration: 0.2
+  StrainOnTarget: 5
   StrainOnSelf: 0
   HealthCost: 0
   UnravelsOverMaxStrain: 0
@@ -51,6 +51,7 @@ MonoBehaviour:
   AuraAtTarget: 0
   AuraDamagePerSecond: 0
   AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
   InnatePassive: 0
   SummonUnit: {fileID: 0}
   SummonUnits: []

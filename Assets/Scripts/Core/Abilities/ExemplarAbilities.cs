@@ -47,8 +47,7 @@ namespace TacticsGame.Core
             if (target == null || actor.IsRooted) return;
             Vector3 away = actor.Position - target.Position; away.y = 0f;
             away = away.sqrMagnitude > 1e-6f ? away.normalized : Vector3.back;
-            Vector3 to = sim.Paths.ClampDash(actor.Position, actor.Position + away * Param(a.Definition, "retreat"));
-            sim.SlideUnitTo(actor, sim.Terrain.OnGround(to), Mathf.Max(BattleSimulation.TickLength, Param(a.Definition, "retreat_seconds")));
+            sim.PhaseDashTo(actor, actor.Position + away * Param(a.Definition, "retreat"), Mathf.Max(BattleSimulation.TickLength, Param(a.Definition, "retreat_seconds")));   // through walls and cover
         }
 
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)

@@ -88,4 +88,9 @@ MonoBehaviour:
   Params:
   - Key: recoil
     Value: 5
+  WeakpointsOnTarget: 1
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   DataVersion: 15

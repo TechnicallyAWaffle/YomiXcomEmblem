@@ -27,8 +27,6 @@ namespace TacticsGame.Core
         public const float ChaseRepathSeconds = 0.3f;   // a melee chase re-plans its path toward the target this often
         /// <summary>Longest a melee chase runs, or a queued ranged ability waits, for its out-of-range target before giving up.</summary>
         public float MaxRangeWait = 10f;
-        public const float LightBlockBreak = 0.10f;
-        public const float HeavyBlockBreak = 0.25f;
         public const float RangeTolerance = 1.15f;
 
         public readonly BattleState State;
@@ -61,10 +59,6 @@ namespace TacticsGame.Core
         private int deployCounter;
         private int trapCounter;
 
-        /// <summary>Strain a unit gains for having its walk cancelled: base + perSecond * seconds of walking that were left.</summary>
-        public float MoveCancelStrainBase = 2f;
-        public float MoveCancelStrainPerSecond = 6f;
-
         // Elevation (see TerrainMap). A fall: shoved off a ledge, or hit out of a jump. The unit is stunned until it lands
         // plus FallLandingSeconds, and takes FallDamageBase + FallDamagePerMeter * the height it fell.
         public float FallGravity = 12f;            // m/s^2: how long a fall takes (gentler than real gravity, so it reads)
@@ -91,6 +85,9 @@ namespace TacticsGame.Core
         // Transcend (UnitCommand.Transcend). The strain price is per ability (ActionDefinition.TranscendStrain).
         /// <summary>A Heavy hit that lands on a (plain) Block puts Block on cooldown this long.</summary>
         public float HeavyBlockCooldown = 1f;
+        /// <summary>A hit on a raised Block knocks its holder back this many metres per point of the hit's damage, before block
+        /// (GuardKnockback): a 15-damage blow, 1.5m.</summary>
+        public float BlockKnockbackPerDamage = 0.1f;
         /// <summary>Windup of a stance's reaction shot (Take Aim's snipe at the first enemy to act).</summary>
         public float ReactionWindup = 0.1f;
         /// <summary>Strain shed on every dodge by a unit with the strain_relief_on_dodge passive (the Fighter).</summary>
@@ -199,8 +196,8 @@ namespace TacticsGame.Core
         }
 
         /// <summary>
-        /// Can this player unit's walk be cancelled right now, and what would it cost? Allowed only while the sim is
-        /// paused on a friendly unit's turn. The cost is strain on the cancelled unit, growing with the walking time left.
+        /// Can this player unit's walk be cancelled right now? Allowed only while the sim is paused on a friendly unit's turn.
+        /// It costs nothing ('strainCost' is always 0, kept for callers that show a cost).
         /// </summary>
         public bool CanCancelMove(string unitId, out float strainCost, out string reason)
         {
@@ -210,35 +207,19 @@ namespace TacticsGame.Core
             if (u.Phase != UnitPhase.Moving || u.Move == null) { reason = "not moving"; return false; }
             if (u.IsJumping) { reason = "mid-jump"; return false; }
             if (!playerTurnOpen) { reason = "only on a friendly unit's turn"; return false; }
-            strainCost = MoveCancelStrainBase + MoveCancelStrainPerSecond * RemainingMoveSeconds(u);
             return true;
         }
 
-        /// <summary>Stops the unit where it stands (it becomes ready for new orders) and charges the strain. Clears its queue by default.</summary>
+        /// <summary>Stops the unit where it stands (it becomes ready for new orders), for free. Clears its queue by default.</summary>
         public bool CancelMove(string unitId, bool clearQueue = true)
         {
             float cost; string reason;
             if (!CanCancelMove(unitId, out cost, out reason)) return false;
             var u = GetUnit(unitId);
-            AddStrain(u, cost);
             if (clearQueue) queues.Remove(unitId);
             EndMove(u);
             if (MoveCancelled != null) MoveCancelled(u);
             return true;
-        }
-
-        private float RemainingMoveSeconds(Unit u)
-        {
-            float length = 0f;
-            Vector3 from = u.Position;
-            var rest = new List<Vector3> { from };
-            for (int i = u.Move.NextIndex; i < u.Move.Path.Count; i++)
-            {
-                length += FlatDistance(from, u.Move.Path[i]);
-                from = u.Move.Path[i];
-                rest.Add(from);
-            }
-            return length / Mathf.Max(0.01f, u.Move.Speed) + Terrain.JumpSecondsAlong(rest);
         }
 
         public void SubmitDodgeDash(string unitId, int direction8)
@@ -267,7 +248,9 @@ namespace TacticsGame.Core
         {
             if (!unit.IsAlive || unit.IsRooted) return;
             Vector3 to = DashDestination(unit, point, transcended);
-            if ((to - unit.Position).sqrMagnitude > 1e-4f) Relocate(unit, to, transcended ? TranscendDashSeconds : DashDuration, false);
+            if ((to - unit.Position).sqrMagnitude <= 1e-4f) return;
+            if (transcended && EtchingTraits.DashBlinks(unit)) { TeleportUnit(unit, to, unit); return; }   // Acceleration Bypass: a blink
+            Relocate(unit, to, (transcended ? TranscendDashSeconds : DashDuration) / EtchingTraits.DashSpeedup(unit), false);
         }
 
         /// <summary>How far the unit's Dash (and its dodge dashes) reach: its dash distance, with the Dash ability's Range
@@ -363,8 +346,9 @@ namespace TacticsGame.Core
             reason = null;
             float readyAt;
             var behavior = ActionBehaviors.Get(def.BehaviorId);
-            if (actor.CooldownReadyAt.TryGetValue(def.Id, out readyAt) && readyAt > Now && !behavior.IgnoresCooldown(this, actor, def, targetId)) { reason = "cooldown"; return false; }
+            if (actor.CooldownReadyAt.TryGetValue(def.Id, out readyAt) && readyAt > Now && !behavior.IgnoresCooldown(this, actor, def, targetId) && !RecastOpenFor(actor, def)) { reason = "cooldown"; return false; }
             if (def.HealthCost > 0f && actor.Health <= actor.ActionStat(def, ActionStat.HealthCost) + 1e-4f) { reason = "not enough health"; return false; }
+            if (def.RequiresLink && !LinkedOpenFor(actor, def)) { reason = "only straight after the ability linking to it"; return false; }
             var required = def.RequiredStatuses();
             if (required.Length > 0 && !System.Array.Exists(required, actor.HasStatus)) { reason = "needs " + string.Join(" or ", required); return false; }
             // Tied to a target (RequiredStatusOnTarget): only at the unit the opener hit. With no target given, the button shows it ready.
@@ -384,7 +368,8 @@ namespace TacticsGame.Core
         /// scaled by the actor's statuses (Wrath makes it free).</summary>
         public float StrainCostOf(Unit actor, ActionDefinition def, string targetId = null, bool transcend = false)
         {
-            float cost = ActionBehaviors.Get(def.BehaviorId).StrainCost(this, actor, def, targetId) + (transcend && actor.CanTranscend(def) ? actor.TranscendStrainOf(def) : 0f);
+            float cost = ActionBehaviors.Get(def.BehaviorId).StrainCost(this, actor, def, targetId) + (transcend && actor.CanTranscend(def) ? actor.TranscendStrainOf(def) : 0f)
+                         + RecastStrainOf(actor, def);   // Incessant's recast
             return cost > 0f ? cost * actor.StrainCostMult() : cost;
         }
 
@@ -515,7 +500,7 @@ namespace TacticsGame.Core
             };
             freeActions.Add(inst);
             Emit(EventType.ActionStarted, actor.Id, targetId,
-                new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = 0f, Free = true });
+                new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = 0f, Free = true, Range = actor.RangeOf(def), Radius = actor.ActionStat(def, ActionStat.AreaRadius) });
             return inst;
         }
     }

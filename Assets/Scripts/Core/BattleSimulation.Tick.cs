@@ -16,12 +16,16 @@ namespace TacticsGame.Core
             TickLifts();
             TickAerialSlams();
             AdvanceGlides();
+            TickSweeps();     // after glides: a thrown unit's front is where it has flown to
             AdvanceMovement();
             TickGrapples();   // after movement, so the held unit is carried to where the grappler walked
             TickTethers();    // after everyone has moved: chains pulled past their length snap
+            TickEmitters();     // volleys and streams firing (BattleSimulation.Projectiles.cs)
+            TickProjectiles();  // after everyone has moved: what flies meets the bodies where they are now
             TickOutOfRangeOrders();
             TickCharges();
             TickAuras();
+            TickInnatePassives();   // always-on abilities that act every tick (Imperfect Apotheosis)
             TickChannels();
             CheckTraps();
             TickWindups();
@@ -34,8 +38,13 @@ namespace TacticsGame.Core
             TickDrops();   // reinforcements arriving (EnemyEntry.ArriveAfter)
             TickReinforcementWaves();   // endless random reinforcements (StartReinforcementWaves)
             TickMelds();   // Stitch
+            TickWeakpoints();
+            TickVoids();     // VOIDED units coming back, Cross Beyond Thresholds' mark
+            TickCompelled(); // Beckon's walks running out
+            TickMakina();    // a Makina at max strain breaks
             TickSettled();   // what waits for a unit to land (Close The Loop on a dodger)
             TickParts();     // Deliverance's parts: SEE BEFORE ITSELF, EQUIPOSE at max strain, Wex's aura
+            TickWatchers();  // AIs that keep watch between decisions (a pack noticing an opening)
             AddSpawns();
             EtchingTraits.Tick(this);
         }
@@ -75,6 +84,9 @@ namespace TacticsGame.Core
         /// TerrainMap.StepHeight the unit stops a body's width short of the edge and jumps it (StartJump), landing a
         /// body's width past it; the walk resumes once it lands.
         /// </summary>
+        /// <summary>How far from a floating platform's edge a unit jumps up onto it.</summary>
+        public const float ClimbReach = 1.5f;
+
         private void WalkStep(Unit u)
         {
             float remaining = u.Move.Speed * TickLength;
@@ -88,6 +100,15 @@ namespace TacticsGame.Core
                 d /= dist;
                 float step = Mathf.Min(dist, remaining);
                 float ground = Terrain.HeightAt(pos);
+                // A corner up on a floating platform (a route onto one, TerrainPaths): walking would pass under it, so once
+                // beside it the unit jumps up onto it.
+                if (next.y > ground + TerrainMap.StepHeight && next.y > Terrain.HeightAt(TerrainMap.Level(next, ground)) + TerrainMap.StepHeight
+                    && dist <= ClimbReach)
+                {
+                    u.Move.NextIndex++;
+                    StartJump(u, TerrainMap.Level(pos, ground), Terrain.OnGround(next));
+                    return;
+                }
                 // Look a body radius ahead (within this leg), so the unit takes off before its body meets the ledge.
                 float reach = step + Mathf.Min(u.BodyRadius, dist - step);
                 float edge = Terrain.FirstEdge(pos, pos + d * reach, ground);
@@ -152,7 +173,8 @@ namespace TacticsGame.Core
             foreach (var u in State.Units)
             {
                 if (u.Phase != UnitPhase.Windup || u.ActiveAction == null || !u.IsAlive) continue;
-                if (!u.ActiveAction.Behavior.OnWindupTick(this, u.ActiveAction)) Interrupt(u, "condition lost");
+                if (!u.ActiveAction.Behavior.OnWindupTick(this, u.ActiveAction)) { Interrupt(u, "condition lost"); continue; }
+                StepIntoMelee(u.ActiveAction);   // its target moved: follow
             }
             foreach (var f in freeActions.ToArray())
             {
@@ -180,14 +202,31 @@ namespace TacticsGame.Core
             foreach (var a in due)
             {
                 int first = effects.Count;
-                a.Behavior.OnResolve(this, a, effects);
+                // Freely aimed: its target is whoever is in its cone now; with nobody there it does nothing (but still recovers).
+                bool lands = !a.FreeAimed || ResolveFreeAim(a);
+                if (lands) a.Behavior.OnResolve(this, a, effects);
+                if (lands && a.Definition.WeakpointsOnTarget > 0 && !a.Behavior.WeakpointsOnHit(a.Definition)) AddTargetWeakpoints(a.Actor, GetUnit(a.TargetUnitId), a.Definition);
                 // The actor's damage statuses (Wrath) count as of now: baked in before anything below can take them away.
                 float dealt = a.Actor.DamageDealtMult();
                 for (int i = first; i < effects.Count; i++)
                 {
                     var atk = effects[i] as AttackEffect;
                     if (atk != null && atk.Source == a.Actor) atk.DamageMultiplier *= dealt;
+                    if (atk != null && atk.Source == a.Actor && atk.CritChance < 0f && atk.Definition == a.Definition)
+                        atk.CritChance = CritChanceFor(a.Actor, a.Definition, a.Transcended);   // Transcended or not, as it was used
+                    if (atk != null && atk.Source == a.Actor && atk.Definition == a.Definition && a.Transcended)
+                    {
+                        // A Transcend an Etching gave it, for weakpoints: carried on each of its hits.
+                        var grant = a.Actor.GrantOf(a.Definition);
+                        if (grant == TranscendGrant.BreakWeakpoints) atk.BreakWeakpoints = Mathf.RoundToInt(a.Actor.GrantParam(a.Definition, "breaks", 2f));
+                        if (grant == TranscendGrant.ExposeWeakpoints)
+                        {
+                            atk.ExtraWeakpoints = Mathf.RoundToInt(a.Actor.GrantParam(a.Definition, "count", 4f));
+                            atk.ExtraWeakpointSeconds = a.Actor.GrantParam(a.Definition, "seconds", 3f);
+                        }
+                    }
                 }
+                HoldHitsForArrival(a, effects, first);
                 if (!a.IsFree) ClearWindupStatuses(a);
                 if (a.Definition.ConsumesRequiredStatus && a.Definition.ConsumeOnResolve)
                     foreach (var id in a.Definition.RequiredStatuses()) RemoveStatus(a.Actor, id);
@@ -197,6 +236,7 @@ namespace TacticsGame.Core
                 if (a.Definition.EnergyGain > 0f) AddEnergy(a.Actor, a.Definition.EnergyGain);
                 float recovery = a.IsFree || a.NoRecovery ? 0f : a.Stat(ActionStat.Recovery) * a.RecoveryScale / a.Actor.EffectiveActionSpeed();
                 Emit(EventType.ActionResolved, a.Actor.Id, a.TargetUnitId, new ActionResolvedInfo { ActionId = a.Definition.Id, Recovery = recovery });
+                if (!a.IsFree && !a.Behavior.KeepsQueuedOrder) OpenLinks(a);   // what it links to is open now
                 if (!a.IsFree)
                 {
                     a.Actor.ActiveAction = null;
@@ -216,6 +256,44 @@ namespace TacticsGame.Core
                 if (a.UnravelsActor) UnravelUnit(a.Actor, a.Actor);
                 if (a.Actor.HoverEndsAfterAction) EndHover(a.Actor, false, null);
             }
+        }
+
+        /// <summary>
+        /// An ability that moves its user as it lands (a dash, a crash from the air: ActionBehavior.MovesUser) hits when the
+        /// user gets there, not as it sets off: each of its hits (effects from 'first' on) is held back until the user's
+        /// glide reaches that target, measured along the glide (a target beside the end: when it arrives), and then lands
+        /// as a fresh hit (ScheduleStrike: the target's dodge as it is then). Behaviors that time their own hits opt out
+        /// (ActionBehavior.HitsOnArrival).
+        /// </summary>
+        private void HoldHitsForArrival(ActionInstance a, List<SimEffect> effects, int first)
+        {
+            var u = a.Actor;
+            if (!a.Behavior.MovesUser || !a.Behavior.HitsOnArrival(a.Definition) || !IsGliding(u)) return;
+            float left = u.GlideEnd - Now;
+            if (left < TickLength * 0.5f) return;
+            Vector3 from = u.GlideFrom, path = u.GlideTo - u.GlideFrom;
+            float len2 = path.sqrMagnitude;
+            for (int i = effects.Count - 1; i >= first; i--)
+            {
+                var atk = effects[i] as AttackEffect;
+                if (atk == null || atk.Source != u) continue;
+                var t = GetUnit(atk.TargetId);
+                float k = t != null && len2 > 1e-4f ? Mathf.Clamp01(Vector3.Dot(t.Position - from, path) / len2) : 1f;
+                float delay = left * k;
+                if (delay < TickLength * 0.5f) continue;   // reached as it sets off: lands now
+                effects.RemoveAt(i);
+                ScheduleStrike(atk, delay);
+            }
+        }
+
+        /// <summary>When 'u' (gliding) gets where it is going: 'act' then (now if it isn't moving). For a behavior's effects
+        /// that belong to the arrival (Crash Down's shockwave).</summary>
+        public void OnArrival(Unit u, System.Action act)
+        {
+            if (act == null) return;
+            float left = IsGliding(u) ? u.GlideEnd - Now : 0f;
+            if (left < TickLength * 0.5f) act();
+            else After(u, left, act);
         }
 
         private void ProcessDeaths()
@@ -241,7 +319,7 @@ namespace TacticsGame.Core
                 u.FallLandAt = -1f;
                 pendingDashes.RemoveAll(d => d.UnitId == u.Id);
                 queues.Remove(u.Id);
-                Emit(EventType.Death, u.LastAttackerId, u.Id);
+                Emit(EventType.Death, u.LastAttackerId, u.Id, new DeathInfo { Team = u.Team });
                 Triggers.Fire(new TriggerContext { Type = TriggerType.Killed, Sim = this, Subject = u, Other = GetUnit(u.LastAttackerId), Action = u.LastHitAction, Tag = u.LastHitTag });
             }
 
@@ -263,8 +341,16 @@ namespace TacticsGame.Core
             foreach (var u in State.Units)
             {
                 if (!u.IsAlive) continue;
+                bool repositioning = u.Phase == UnitPhase.Moving || u.GlideEnd >= 0f;
                 for (int i = u.Statuses.Count - 1; i >= 0; i--)
                 {
+                    var window = u.Statuses[i];
+                    // A follow-up's window doesn't run while its holder walks or dashes: it picks up where it left off.
+                    if (window.Has(StatusFlags.FollowupWindow) && window.ExpiresAt < UntimedStatus)
+                    {
+                        if (repositioning) { window.ExpiresAt += TickLength; window.Held = true; continue; }
+                        if (window.Held) { window.Held = false; RefreshStatusTimer(u, window, u); }
+                    }
                     if (u.Statuses[i].ExpiresAt > Now) continue;
                     float oldAction = u.EffectiveActionSpeed(), oldMove = u.EffectiveMoveSpeed();
                     var expired = u.Statuses[i];
@@ -272,6 +358,12 @@ namespace TacticsGame.Core
                     u.Statuses.RemoveAt(i);
                     HandleSpeedChange(u, oldAction, oldMove);
                     if (expired.Has(StatusFlags.UnravelsOnExpire)) { UnravelUnit(u, GetUnit(expired.SourceId)); i = Mathf.Min(i, u.Statuses.Count); }
+                    if (expired.Has(StatusFlags.StrikesOnExpire) && expired.LinkedAction != null && u.IsAlive)
+                    {
+                        // RUPTURED (Delayed Crush): the blow it was holding back lands now, from whoever put it there.
+                        StrikeNow(new AttackEffect { Source = GetUnit(expired.SourceId), TargetId = u.Id, Definition = expired.LinkedAction, IgnoreRange = true, IgnoreCover = true, Unerring = true }, true);   // even if the Tank has fallen since
+                        i = Mathf.Min(i, u.Statuses.Count);
+                    }
                     if (expired.HealOnExpire > 0f || expired.HealMissingOnExpire > 0f) HealOnExpiry(u, expired);
                 }
                 bool locked = u.Phase == UnitPhase.Recovery || u.Phase == UnitPhase.Stunned;

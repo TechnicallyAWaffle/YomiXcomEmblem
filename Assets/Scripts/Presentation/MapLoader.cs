@@ -55,9 +55,18 @@ namespace TacticsGame.Presentation
 
             int layer = LayerMask.NameToLayer(EnvironmentLayer);
             foreach (var piece in map.Pieces) CreatePiece(root, piece, layer);
+            if (map.Blockout != null) CreateBlockout(root, map.Blockout, layer);
             for (int i = 0; i < map.PlayerSpawns.Count; i++) CreateSpawn(root, Team.Player, i, map.PlayerSpawns[i]);
             for (int i = 0; i < map.EnemySpawns.Count; i++) CreateSpawn(root, Team.Enemy, i, map.EnemySpawns[i]);
+            ApplyGround(map);
+            return root;
+        }
 
+        /// <summary>Size the ground plane and the camera's bounds to the map's GroundSize (centred on the origin). The Map
+        /// Builder's Resize applies a new size this way, leaving the pieces as they are.</summary>
+        public void ApplyGround(MapTemplate map)
+        {
+            if (map == null) return;
             if (Ground != null)
             {
                 Ground.position = Vector3.zero;
@@ -69,7 +78,6 @@ namespace TacticsGame.Presentation
                 rig.BoundsMax = map.GroundSize / 2f;
                 rig.BoundsMin = -rig.BoundsMax;
             }
-            return root;
         }
 
         /// <summary>Remove the map pieces and spawns (not the ground).</summary>
@@ -113,6 +121,27 @@ namespace TacticsGame.Presentation
             return go;
         }
 
+        /// <summary>
+        /// A map's blockout, as it was built: on the Environment layer (it blocks sight, and dashes and shoves stop at it);
+        /// its cover parts (BlockoutCover) are cut out of the navmesh, while its climbable parts are left out of the bake like
+        /// raised ground, the simulation taking their height from the map's Heights.
+        /// </summary>
+        public GameObject CreateBlockout(Transform root, GameObject prefab, int layer = -1)
+        {
+            if (layer < 0) layer = LayerMask.NameToLayer(EnvironmentLayer);
+            var go = Instantiate(prefab, root, false);
+            go.name = prefab.name;
+            foreach (var t in go.GetComponentsInChildren<Transform>(true)) if (layer >= 0) t.gameObject.layer = layer;
+            foreach (var cover in go.GetComponentsInChildren<BlockoutCover>(true))
+            {
+                var modifier = cover.gameObject.GetComponent<NavMeshModifier>();
+                if (modifier == null) modifier = cover.gameObject.AddComponent<NavMeshModifier>();
+                modifier.overrideArea = true;
+                modifier.area = NavMesh.GetAreaFromName("Not Walkable");
+            }
+            return go;
+        }
+
         public GameObject CreateSpawn(Transform root, Team team, int index, Vector3 position)
         {
             var go = new GameObject((team == Team.Player ? "PlayerSpawn_" : "EnemySpawn_") + (index + 1));
@@ -136,6 +165,7 @@ namespace TacticsGame.Presentation
             into.EnemySpawns.Clear();
             var root = transform.Find(RootName);
             if (root == null) return;
+            // The blockout (and its heights) stay as they are: only boxes and spawns are read back from the scene.
             foreach (var tag in root.GetComponentsInChildren<MapPieceTag>())
             {
                 var t = tag.transform;

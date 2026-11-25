@@ -3,8 +3,9 @@ using UnityEngine;
 
 namespace TacticsGame.Core
 {
-    /// <summary>What an Etching goes on: the whole unit, or one ability the player picks for it.</summary>
-    public enum EtchingScope { Unit, OneAbility }
+    /// <summary>What an Etching goes on: the whole unit, one ability the player picks for it, or two (Related Concepts links
+    /// them). New values go at the end: assets store the number.</summary>
+    public enum EtchingScope { Unit, OneAbility, TwoAbilities }
 
     /// <summary>
     /// A Transcend an Etching gives one ability that has none of its own (EtchingDefinition.Grant): hold its key, pay the
@@ -12,9 +13,13 @@ namespace TacticsGame.Core
     /// NoRecovery: no recovery after it (Uncloud The Mind). NoCooldown: it doesn't go on cooldown (Echo).
     /// DodgeOnCast: 'dodge' (0.75) more Dodge for 'seconds' (2) from when it starts (Flow State).
     /// QuickWindup: its windup x 'windup_mult' (0.25) and its recovery x 'recovery_mult' (1.25) (Quickness And Lethargy).
+    /// CritChance: its chance to strike critically is at least 'crit_chance' (0.5) (Eye For Weakness; BattleSimulation.CritChanceFor).
+    /// BreakWeakpoints: each hit breaks up to 'breaks' (2) of the target's weakpoints from any side (Brute Force).
+    /// ExposeWeakpoints: each hit opens 'count' (4) weakpoints on an enemy for 'seconds' (3) (Unwind Their Self).
+    /// ShieldOnCast: a shield of 'shield' (40) health for 'seconds' (1.5) from when it starts (Guarded Approach; StatusIds.Shielded).
     /// Their numbers are the Etching's Params. New values go at the end: assets store the number.
     /// </summary>
-    public enum TranscendGrant { None, UnstoppableWindup, NoRecovery, NoCooldown, DodgeOnCast, QuickWindup }
+    public enum TranscendGrant { None, UnstoppableWindup, NoRecovery, NoCooldown, DodgeOnCast, QuickWindup, CritChance, BreakWeakpoints, ExposeWeakpoints, ShieldOnCast }
 
     /// <summary>A granted Transcend on one ability of a unit in battle: what it does, its extra strain, and its numbers
     /// (the Etching's Params).</summary>
@@ -22,6 +27,32 @@ namespace TacticsGame.Core
     public struct GrantedTranscend
     {
         public TranscendGrant Kind; public float Strain; public List<BehaviorParam> Params;
+
+        public float Param(string key, float fallback)
+        {
+            if (Params != null) foreach (var p in Params) if (p.Key == key) return p.Value;
+            return fallback;
+        }
+    }
+
+    /// <summary>
+    /// A follow-up an Etching gives one ability that has none of its own (EtchingDefinition.GrantsFollowup).
+    /// Recast (Incessant): once the ability is over (the unit is ready again), for 'window' (1.5s) it can be cast again,
+    /// on the same target or point, for its strain plus the grant's Strain (25), ignoring its cooldown; the recast opens no
+    /// window of its own.
+    /// Linked (Related Concepts, on two abilities): once one of them lands, the other (PartnerId) is a linked ability: used
+    /// straight after it (no time limit; walking and dashing aside), it winds up and recovers 'speed' (0.5) as long, and
+    /// opens nothing back.
+    /// See BattleSimulation.Recasts.cs. New values go at the end: assets store the number.
+    /// </summary>
+    public enum FollowupGrant { None, Recast, Linked }
+
+    /// <summary>A granted follow-up on one ability of a unit in battle: what it is, its extra strain, its numbers.</summary>
+    [System.Serializable]
+    public struct GrantedFollowup
+    {
+        public FollowupGrant Kind; public float Strain; public List<BehaviorParam> Params;
+        public string PartnerId;   // Linked: the other ability of the pair
 
         public float Param(string key, float fallback)
         {
@@ -59,6 +90,9 @@ namespace TacticsGame.Core
         [Tooltip("One Ability: gives that ability a Transcend (it must have none of its own), for GrantStrain extra strain.")]
         public TranscendGrant Grant = TranscendGrant.None;
         public float GrantStrain = 15f;
+        [Tooltip("One Ability: gives that ability a follow-up (it must have none of its own), for FollowupStrain extra strain. Its numbers are Params.")]
+        public FollowupGrant GrantsFollowup = FollowupGrant.None;
+        public float FollowupStrain = 25f;
         [Tooltip("One Ability: changes used instead of Action Modifiers when the ability has none of the numbers they change (Imprinted Memory: no strain cost, so it sheds strain instead).")]
         public List<ActionModifier> FallbackActionModifiers = new List<ActionModifier>();
         [Tooltip("Abilities the unit loses, by behavior id (Witless: block; Dance Between Their Rage: dash).")]
@@ -67,13 +101,22 @@ namespace TacticsGame.Core
         /// <summary>One Ability: can it go on 'a'? (The ability has at least one of the numbers it changes.)</summary>
         public bool CanEtch(ActionDefinition a)
         {
-            if (Scope != EtchingScope.OneAbility || a == null) return false;
+            if (Scope == EtchingScope.Unit || a == null) return false;
+            if (GrantsFollowup == FollowupGrant.Linked) return CanLink(a);
+            if (GrantsFollowup != FollowupGrant.None)
+            {
+                if (!CanGetFollowup(a)) return false;
+                if (Grant == TranscendGrant.None) return true;
+            }
             if (Grant != TranscendGrant.None)   // a Transcend only for one that has none, and that has what it changes
             {
                 if (a.CanTranscend) return false;
                 switch (Grant)
                 {
                     case TranscendGrant.DodgeOnCast: return true;   // anything can be cast
+                    case TranscendGrant.ShieldOnCast: return true;   // anything can be cast
+                    case TranscendGrant.CritChance: return a.Damage > 0f;   // only what deals damage can strike critically
+                    case TranscendGrant.BreakWeakpoints: case TranscendGrant.ExposeWeakpoints: return a.Damage > 0f;   // through its hits
                     case TranscendGrant.UnstoppableWindup: case TranscendGrant.QuickWindup: return Stats.Has(a, ActionStat.Windup);
                     case TranscendGrant.NoRecovery: return Stats.Has(a, ActionStat.Recovery);
                     default: return Stats.Has(a, ActionStat.Cooldown);
@@ -82,6 +125,26 @@ namespace TacticsGame.Core
             if (FallbackActionModifiers != null && FallbackActionModifiers.Count > 0) return true;   // something for any ability
             foreach (var m in ActionModifiers) if (Stats.Has(a, m.Stat)) return true;
             return false;
+        }
+
+        /// <summary>
+        /// Can 'a' be given a follow-up: it has none of its own (it opens no chain, isn't re-cast by Space, doesn't chain, isn't
+        /// itself a stage that needs another to open it, and isn't always on), and it has a cooldown for the recast to skip.
+        /// </summary>
+        public static bool CanGetFollowup(ActionDefinition a)
+        {
+            if (a == null || a.InnatePassive || a.IsFollowup || a.ChainFollowups > 0 || a.IsCharge) return false;   // a charge is paid as it starts charging
+            if (a.FollowUps != null && a.FollowUps.Exists(f => f != null)) return false;
+            if (a.RequiresLink || (a.LinkedAbilities != null && a.LinkedAbilities.Exists(f => f != null))) return false;   // links of its own
+            if (a.RequiredStatuses().Length > 0) return false;
+            return Stats.Has(a, ActionStat.Cooldown);
+        }
+
+        /// <summary>Can 'a' be one of a linked pair (Related Concepts): anything used now, with a windup to shorten (not always on,
+        /// not charged, not a follow-up stage another ability opens).</summary>
+        public static bool CanLink(ActionDefinition a)
+        {
+            return a != null && !a.InnatePassive && !a.IsCharge && !a.RequiresLink && a.RequiredStatuses().Length == 0;
         }
 
         /// <summary>One Ability: the changes it makes to 'a': its Action Modifiers if 'a' has a number they change, else the fallback.</summary>
@@ -97,6 +160,8 @@ namespace TacticsGame.Core
         public EtchingDefinition Mult(StatId stat, float value) { UnitModifiers.Add(Modifier.Mult(stat, value)); return this; }
         public EtchingDefinition MultAbility(ActionStat stat, float value) { ActionModifiers.Add(new ActionModifier("", stat, ModOp.Multiply, value)); return this; }
         public EtchingDefinition MultAbility(string actionId, ActionStat stat, float value) { ActionModifiers.Add(new ActionModifier(actionId, stat, ModOp.Multiply, value)); return this; }
+        public EtchingDefinition AddAbility(ActionStat stat, float value) { ActionModifiers.Add(new ActionModifier("", stat, ModOp.Add, value)); return this; }
+        public EtchingDefinition AddAbility(string actionId, ActionStat stat, float value) { ActionModifiers.Add(new ActionModifier(actionId, stat, ModOp.Add, value)); return this; }
         public EtchingDefinition GrantsTranscend(TranscendGrant kind, float strain, params BehaviorParam[] ps) { Grant = kind; GrantStrain = strain; Params.AddRange(ps); return this; }
         public EtchingDefinition WithTrait(string trait, params BehaviorParam[] ps) { Trait = trait; Params.AddRange(ps); return this; }
 
@@ -105,6 +170,12 @@ namespace TacticsGame.Core
 
         /// <summary>The Transcend it gives the ability it is on (Grant, GrantStrain, and its Params for the numbers).</summary>
         public GrantedTranscend GrantFor() { return new GrantedTranscend { Kind = Grant, Strain = GrantStrain, Params = Params }; }
+
+        public EtchingDefinition GrantsFollowupOf(FollowupGrant kind, float strain, params BehaviorParam[] ps) { GrantsFollowup = kind; FollowupStrain = strain; Params.AddRange(ps); return this; }
+
+        /// <summary>The follow-up it gives the ability it is on (GrantsFollowup, FollowupStrain, and its Params).</summary>
+        /// <param name="partnerId">Linked: the other ability of the pair.</param>
+        public GrantedFollowup FollowupFor(string partnerId = null) { return new GrantedFollowup { Kind = GrantsFollowup, Strain = FollowupStrain, Params = Params, PartnerId = partnerId }; }
     }
 
     /// <summary>An Etching a member took (and, for a One Ability one, the ability it is on).</summary>
@@ -113,7 +184,9 @@ namespace TacticsGame.Core
     {
         public string Id;
         public string ActionId;   // One Ability: the ability's id; else empty
+        public string SecondActionId;   // Two Abilities: the other ability's id; else empty
         public bool GrantsTranscend;   // it gave that ability a Transcend (no other Etching may give it one)
+        public bool GrantsFollowup;    // it gave that ability a follow-up (no other Etching may give it one)
     }
 
     /// <summary>One copy of an Etching's Trait on a unit in battle, with that Etching's numbers.</summary>
@@ -127,6 +200,42 @@ namespace TacticsGame.Core
             if (Params != null) foreach (var p in Params) if (p.Key == key) return p.Value;
             return fallback;
         }
+    }
+
+    /// <summary>
+    /// Copies of the same Etching, listed once with how many there are (the screens show "x2", "x3"): the same Etching on
+    /// the same ability (or abilities) counts as one entry. First-seen order is kept.
+    /// </summary>
+    public static class EtchingStacks
+    {
+        public static List<KeyValuePair<EtchingNote, int>> Of(IEnumerable<EtchingNote> notes)
+        {
+            var list = new List<KeyValuePair<EtchingNote, int>>();
+            if (notes == null) return list;
+            foreach (var n in notes)
+            {
+                int i = list.FindIndex(p => p.Key.Name == n.Name && (p.Key.ActionId ?? "") == (n.ActionId ?? ""));
+                if (i >= 0) list[i] = new KeyValuePair<EtchingNote, int>(list[i].Key, list[i].Value + 1);
+                else list.Add(new KeyValuePair<EtchingNote, int>(n, 1));
+            }
+            return list;
+        }
+
+        public static List<KeyValuePair<EtchingPick, int>> Of(IEnumerable<EtchingPick> picks)
+        {
+            var list = new List<KeyValuePair<EtchingPick, int>>();
+            if (picks == null) return list;
+            foreach (var p in picks)
+            {
+                int i = list.FindIndex(q => q.Key.Id == p.Id && (q.Key.ActionId ?? "") == (p.ActionId ?? "") && (q.Key.SecondActionId ?? "") == (p.SecondActionId ?? ""));
+                if (i >= 0) list[i] = new KeyValuePair<EtchingPick, int>(list[i].Key, list[i].Value + 1);
+                else list.Add(new KeyValuePair<EtchingPick, int>(p, 1));
+            }
+            return list;
+        }
+
+        /// <summary>The count's tag after a name: "  x2" for two or more copies, nothing for one.</summary>
+        public static string Times(int count) { return count > 1 ? "  x" + count : ""; }
     }
 
     /// <summary>An Etching on a unit, for the screen (the ability popup lists the ones on that ability).</summary>
@@ -145,6 +254,7 @@ namespace TacticsGame.Core
         public List<UnitTrait> Traits = new List<UnitTrait>();
         public List<EtchingNote> Notes = new List<EtchingNote>();
         public Dictionary<string, GrantedTranscend> Transcends = new Dictionary<string, GrantedTranscend>();   // by ability id
+        public Dictionary<string, GrantedFollowup> Followups = new Dictionary<string, GrantedFollowup>();     // by ability id
         public List<string> RemovedBehaviors = new List<string>();
     }
 
@@ -177,6 +287,12 @@ namespace TacticsGame.Core
     ///                  with the walk. Copies add up.
     ///   instinct_overtakes_methods (Instinct Overtakes Methods): a dodge always dashes straight at the unit's own target
     ///                  (what it is winding up at or chasing, else whoever it dodged), to arm's length; no choosing.
+    ///   dissipation (Dissipation): damage the unit's Block stops sheds that much strain ('share' 1 of it; copies add up).
+    ///   acceleration_bypass (Acceleration Bypass): its Dash is 'speed' (0.5: +50%) faster (copies add up); Transcended, an
+    ///                  instant blink there instead.
+    ///   steady_center (Steady Center): it sheds 'per_second' (5) strain a second, always (copies add up).
+    ///   clarity_from_aggravation (Clarity From Aggravation): damage taken sheds 'strain' (2) every 'every' (0.1s) for
+    ///                  'seconds' (1) (ClarityStatus, restarted by each hit; copies add up).
     ///   lucid_dreams (Lucid Dreams): in Clear Mind, every 'every' (0.25s) its cooldowns tick 'cut' (0.1s, copies add up)
     ///                  further.
     /// </summary>
@@ -187,6 +303,11 @@ namespace TacticsGame.Core
         public const string AvidousMarch = "avidous_march", MarchStatus = "avidous_march";
         public const string InstinctOvertakesMethods = "instinct_overtakes_methods";
         public const string LucidDreams = "lucid_dreams";
+        public const string Dissipation = "dissipation";
+        public const string AccelerationBypass = "acceleration_bypass";
+        public const string SteadyCenter = "steady_center";
+        public const string ClarityFromAggravation = "clarity_from_aggravation";
+        public const string SightBeyondSight = "sight_beyond_sight";
         public const string FlowStateStatus = "flow_state";
         public const string DesecratedStatus = "desecrated";
         public const string ClosingWindup = "closing_windup";
@@ -205,9 +326,11 @@ namespace TacticsGame.Core
         {
             sim.Triggers.Subscribe(TriggerType.StrainSpent, ctx => AddCompiled(sim, ctx.Subject));
             sim.Triggers.Subscribe(TriggerType.UnitReady, ctx => GrantRevenge(sim, ctx.Subject));
+            sim.Triggers.Subscribe(TriggerType.UnitReady, ctx => sim.OpenRecast(ctx.Subject));   // Incessant (BattleSimulation.Recasts.cs)
             sim.Triggers.Subscribe(TriggerType.Killed, ctx => Cannibalize(sim, ctx.Other));
             sim.Triggers.Subscribe(TriggerType.Dodged, ctx => SlipAway(sim, ctx.Subject));
             sim.Triggers.Subscribe(TriggerType.DamageTaken, ctx => Fracture(sim, ctx.Subject, ctx.Amount));
+            sim.Triggers.Subscribe(TriggerType.DamageTaken, ctx => Aggravate(sim, ctx.Subject, ctx.Amount));
         }
 
         /// <summary>Every tick: the traits that run over time (Repetition Is Strength, Avidous March, Lucid Dreams).</summary>
@@ -216,6 +339,104 @@ namespace TacticsGame.Core
             TickMomentum(sim);
             TickMarch(sim);
             TickLucidDreams(sim);
+            TickSight(sim);
+            TickSteadyCenter(sim);
+            TickClarity(sim);
+        }
+
+        // ---- Steady Center, Clarity From Aggravation, Dissipation, Acceleration Bypass
+
+        /// <summary>What every copy of trait 'id' on 'u' adds up to for 'key' (0 without it).</summary>
+        private static float Sum(Unit u, string id, string key, float fallback)
+        {
+            float total = 0f;
+            foreach (var t in u.Traits) if (t.Id == id) total += t.Param(key, fallback);
+            return total;
+        }
+
+        private const string ClarityNext = "clarity_next", ClarityLeft = "clarity_left";
+
+        /// <summary>Clarity From Aggravation's clock: each 'every' that comes round, 'strain' (every copy's) comes off.</summary>
+        private static void TickClarity(BattleSimulation sim)
+        {
+            foreach (var u in sim.State.Units)
+            {
+                float left, next;
+                if (u.Traits.Count == 0 || !u.Timers.TryGetValue(ClarityLeft, out left) || left <= 0f) continue;
+                if (!u.IsAlive) { u.Timers.Remove(ClarityLeft); continue; }
+                if (!u.Timers.TryGetValue(ClarityNext, out next) || sim.Now + 1e-4f < next) continue;
+                var first = First(u, ClarityFromAggravation);
+                float every = Mathf.Max(BattleSimulation.TickLength, first != null ? first.Param("every", 0.1f) : 0.1f);
+                float shed = Sum(u, ClarityFromAggravation, "strain", 2f);
+                if (shed > 0f && u.Strain > 0f) sim.AddStrain(u, -Mathf.Min(shed, u.Strain));
+                u.Timers[ClarityLeft] = left - 1f;
+                u.Timers[ClarityNext] = next + every;
+            }
+        }
+
+        private static void TickSteadyCenter(BattleSimulation sim)
+        {
+            if (!sim.IsStep(BattleSimulation.StrainRecoveryTicks)) return;
+            float step = BattleSimulation.StrainRecoveryTicks * BattleSimulation.TickLength;
+            foreach (var u in sim.State.Units)
+            {
+                if (!u.IsAlive || u.Traits.Count == 0 || u.Strain <= 0f) continue;
+                float shed = Sum(u, SteadyCenter, "per_second", 5f) * step;
+                if (shed > 0f) sim.AddStrain(u, -Mathf.Min(shed, u.Strain));
+            }
+        }
+
+        /// <summary>Clarity From Aggravation: a hit that hurt starts (or restarts) the strain shedding.</summary>
+        private static void Aggravate(BattleSimulation sim, Unit u, float dealt)
+        {
+            if (u == null || !u.IsAlive || u.Traits.Count == 0 || dealt <= 0f) return;
+            var first = First(u, ClarityFromAggravation);
+            if (first == null) return;
+            // Its own clock: 'strain' every 'every' for 'seconds', counted out (the status only shows it), restarted by each hit.
+            float every = Mathf.Max(BattleSimulation.TickLength, first.Param("every", 0.1f)), seconds = Mathf.Max(every, first.Param("seconds", 1f));
+            u.Timers[ClarityNext] = sim.Now + every;
+            u.Timers[ClarityLeft] = Mathf.Round(seconds / every);
+            sim.ApplyStatus(u, new StatusEffect { Id = StatusIds.Clarity, SourceId = u.Id, ExpiresAt = sim.Now + seconds + BattleSimulation.TickLength }, u);
+        }
+
+        /// <summary>Dissipation: 'blocked' damage its Block stopped sheds that much strain.</summary>
+        public static void Dissipate(BattleSimulation sim, Unit u, float blocked)
+        {
+            if (u == null || !u.IsAlive || u.Traits.Count == 0 || blocked <= 0f) return;
+            float share = Sum(u, Dissipation, "share", 1f);
+            if (share > 0f) sim.AddStrain(u, -Mathf.Min(blocked * share, u.Strain));
+        }
+
+        /// <summary>Acceleration Bypass: what a Dash's time is divided by (1 without it).</summary>
+        public static float DashSpeedup(Unit u) { return u.Traits.Count == 0 ? 1f : 1f + Mathf.Max(0f, Sum(u, AccelerationBypass, "speed", 0.5f)); }
+
+        /// <summary>Acceleration Bypass: is a Transcended Dash an instant blink?</summary>
+        public static bool DashBlinks(Unit u) { return u.Traits.Count > 0 && First(u, AccelerationBypass) != null; }
+
+        // ---- Sight Beyond Sight
+
+        /// <summary>Sight Beyond Sight: every 'every' (1.5s) the nearest enemy within 'range' (10m) gets a weakpoint (one per
+        /// copy), opened on its far side from the unit.</summary>
+        private static void TickSight(BattleSimulation sim)
+        {
+            foreach (var u in sim.State.Units.ToArray())
+            {
+                if (u.Traits.Count == 0 || !u.IsAlive) continue;
+                var first = First(u, SightBeyondSight);
+                if (first == null) continue;
+                int every = Mathf.Max(1, Mathf.RoundToInt(first.Param("every", 1.5f) / BattleSimulation.TickLength));
+                if (!sim.IsStep(every)) continue;
+                int count = 0;
+                foreach (var t in u.Traits) if (t.Id == SightBeyondSight) count++;
+                float range = first.Param("range", 10f);
+                Unit near = null; float best = range;
+                foreach (var e in sim.EnemiesOf(u))
+                {
+                    Vector3 d = e.Position - u.Position; d.y = 0f;
+                    if (d.magnitude <= best) { best = d.magnitude; near = e; }
+                }
+                if (near != null) sim.AddWeakpoints(near, count, near.Position - u.Position, 0f, u);
+            }
         }
 
         // ---- Untethered To Sanity, Desecrate Your Being

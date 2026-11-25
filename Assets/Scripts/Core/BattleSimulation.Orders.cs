@@ -57,6 +57,8 @@ namespace TacticsGame.Core
                 if (creeping && unit.PlayerOrdered) continue;   // waiting on the player
                 if (unit.IsGhost && unit.Phase == UnitPhase.Ready && !IsGliding(unit)) { Vanish(unit); continue; }   // Alio's ghost: its one cast is done
                 if (!unit.IsAlive || IsGliding(unit)) continue;   // nothing new mid-dash
+                var heldBy = unit.GetState<HeldState>();
+                if (heldBy != null && heldBy.Locked) continue;   // held by Grasp: it acts again once thrown or let go
                 // A redirectable channel (Soulseeker) waiting on its next target: the player picks it (a Redirect decision).
                 if (unit.Phase == UnitPhase.Channeling && unit.RedirectPending)
                 {
@@ -78,6 +80,8 @@ namespace TacticsGame.Core
                     if (mt == null || !mt.IsAlive) EndMesmer(unit);
                 }
 
+                if (!charging && TryCompel(unit)) continue;   // Beckoned: it walks where it was called, not where it would go
+
                 UnitCommand cmd = null;
                 bool isPlayer = unit.PlayerOrdered;   // an AI-played summon on the squad's side decides for itself, and so does a Maddened unit
                 if (isPlayer)
@@ -97,6 +101,7 @@ namespace TacticsGame.Core
                 else
                 {
                     cmd = (unit.AIControlled && unit.Team == Team.Player ? AllyAI : EnemyAI).Decide(this, unit) ?? (charging ? UnitCommand.ContinueCharge(unit.Id, 0.25f) : UnitCommand.Idle(unit.Id, 0.5f));
+                    cmd = FlankWeakpoint(unit, cmd) ?? cmd;   // a weakpoint on its target, on another side: dash round to it first
                 }
 
                 if (cmd == null)
@@ -166,7 +171,7 @@ namespace TacticsGame.Core
                     return false;
 
                 case CommandType.Wait:
-                    unit.LastActionId = null;   // a wait or a move breaks a follow-up chain
+                    unit.LastActionId = null;   // a wait breaks a follow-up chain (a move or a dash doesn't)
                     if (cmd.NoFocus) StartIdle(unit, cmd.WaitSeconds);
                     else StartWait(unit, cmd.WaitSeconds);
                     return true;
@@ -174,9 +179,9 @@ namespace TacticsGame.Core
                 case CommandType.Move:
                 {
                     if (unit.IsRooted) { reason = "immobilized"; return false; }
+                    if (unit.IsMakina) { reason = "a Makina can't move"; return false; }
                     var path = new List<Vector3>();
                     if (!PlanMove(unit, cmd, path)) { reason = "no path"; return false; }
-                    unit.LastActionId = null;
                     EtchingTraits.BeginMarch(this, unit);   // a new walk: Avidous March's burst (before it starts, so it walks at that speed)
                     StartMove(unit, path);
                     return true;
@@ -185,6 +190,17 @@ namespace TacticsGame.Core
                 case CommandType.Action:
                 {
                     if (cmd.Action == null) { reason = "no action"; return false; }
+                    cmd = AsRecast(unit, cmd);   // Incessant's recast: checked at the first cast's target
+                    if (cmd.FreeAim)
+                    {
+                        // Aimed toward a point: no target to check now; it finds one as it lands (BattleSimulation.FreeAim.cs).
+                        if (!CanFreeAim(cmd.Action)) { reason = "can't be aimed freely"; return false; }
+                        if (!CanAfford(unit, cmd.Action, out reason, null, cmd.Transcend)) return false;
+                        var aimed = ActionBehaviors.Get(cmd.Action.BehaviorId);
+                        if (!aimed.CanStart(this, unit, cmd, out reason)) return false;
+                        StartAction(unit, cmd, aimed);
+                        return true;
+                    }
                     if (cmd.Action.IsCharge)
                     {
                         // Targeting happens at release, so only resources and the behavior's own rules are checked now.
@@ -205,9 +221,9 @@ namespace TacticsGame.Core
                     // Point-targeted actions must land in range; a line only takes its direction from the point.
                     if (cmd.Action.Targeting == TargetType.Position && cmd.Action.Shape != AreaShape.Line &&
                         Vector3.Distance(unit.Position, cmd.TargetPos) > unit.ActionStat(cmd.Action, ActionStat.Range)) { reason = "out of range"; return false; }
-                    // A unit and a point: the point must be within DestinationRange of the unit.
-                    if (cmd.Action.DestinationRange > 0f && FlatDistance(target.Position, cmd.TargetPos) > cmd.Action.DestinationRange + 1e-3f) { reason = "destination out of range"; return false; }
                     var behavior = ActionBehaviors.Get(cmd.Action.BehaviorId);
+                    // A unit and a point (when this use of it takes one): the point must be within DestinationRange of the unit.
+                    if (behavior.PicksDestination(this, unit, cmd.Action) && FlatDistance(target.Position, cmd.TargetPos) > cmd.Action.DestinationRange + 1e-3f) { reason = "destination out of range"; return false; }
                     if (!behavior.CanStart(this, unit, cmd, out reason)) return false;
                     StartAction(unit, cmd, behavior);
                     return true;
@@ -241,7 +257,9 @@ namespace TacticsGame.Core
         private void StartWait(Unit unit, float seconds)
         {
             if (unit.Grapple != null) { HoldGrapple(unit); return; }   // no focusing with someone in your grip
-            if (unit.FocusSince < 0f)
+            for (int i = unit.Statuses.Count - 1; i >= 0; i--)
+                if (i < unit.Statuses.Count && unit.Statuses[i].Has(StatusFlags.EndsOnFocus)) RemoveStatus(unit, unit.Statuses[i].Id);   // Focusing starts a staged follow-up over
+            if (unit.FocusSince < 0f && !unit.IsMakina && (unit.Definition == null || !unit.Definition.CannotFocus))   // a Makina (or a unit that can't Focus) only waits: no Clear Mind
             {
                 unit.FocusSince = Now;
                 ApplyStatus(unit, new StatusEffect { Id = StatusIds.Focusing, SourceId = unit.Id, ExpiresAt = Now + FocusDelayOf(unit) }, unit);
