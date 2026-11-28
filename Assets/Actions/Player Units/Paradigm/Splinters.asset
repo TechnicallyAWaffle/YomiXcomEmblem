@@ -19,6 +19,8 @@ MonoBehaviour:
   Description: Lodge a splinter in reality in an enemy. If they become UNRAVELED,
     each splinter shatters, damaging and stunning the target for each splinter consumed.
   Details: 
+  TipOverrides: []
+  WindupName: 
   Targeting: 2
   Range: 16
   IsRanged: 1
@@ -34,17 +36,22 @@ MonoBehaviour:
   RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 0
+  WindupDisplay: 0
   Damage: 5
   BaseAccuracy: 1
   StunDuration: 0.1
   StrainOnTarget: 15
   StrainOnSelf: 5
   HealthCost: 0
+  HysteriaOnUse: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
   BlockPierce: 0
   StunnedDamageMultiplier: 1
+  DivergedVersion: {fileID: 0}
+  Form: 0
   Shape: 0
+  ConeAngle: 90
   AreaRadius: 0
   LineWidth: 1
   AreaHeight: 0
@@ -99,15 +106,28 @@ MonoBehaviour:
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  ProjectileSpeed: 7
+  ProjectileAcceleration: 16
+  ProjectileMaxSpeed: 26
+  ProjectileRadius: 0.3
+  ProjectileLifetime: 4
+  ProjectileHoming: 2
+  ProjectileHomingDelay: 0.25
+  ProjectileTurnRate: 200
+  ProjectileTurnGrowth: 500
+  LinkedAbilities: []
+  RequiresLink: 0
   CanTranscend: 0
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
+  TranscendCooldown: -1
   ExtraCinematic: 0
   Visuals:
     Kind: 2
     Color: {r: 0.85, g: 0.75, b: 1, a: 1}
     Width: 0.035
     Pierce: 0
+    Orb: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
   Params:
@@ -115,4 +135,4 @@ MonoBehaviour:
     Value: 15
   - Key: unravel_stun
     Value: 0.2
-  DataVersion: 15
+  DataVersion: 16

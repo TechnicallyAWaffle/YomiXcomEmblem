@@ -44,6 +44,7 @@ namespace TacticsGame.Core
             Vector3 entranceAim = ahead > 0f ? spot + dir * Mathf.Max(1f, (aim - actor.Position).magnitude) : aim;
             sim.SpawnUnit(def.SummonUnit, actor.Team, spot, actor, null, m =>
             {
+                sim.InheritEtchings(actor, def, m);   // before its entrance, so that already has them
                 if (act != null) sim.StartEntrance(m, act, entranceAim);
             });
             sim.EmitFx(actor, null, "makina", def, spot);

@@ -69,7 +69,8 @@ namespace TacticsGame.Core
     /// <summary>
     /// Monarch: keeps its distance throwing its ranged strike (BasicEnemyAI's ranged play), but closes in to fire its beam
     /// (Incineration) whenever that is ready, and calls its summons (Horde of Memories) when enemies are about. Once it is up
-    /// in the air for good (Ascension) it can't move: it beams, summons or throws at whatever it can reach.
+    /// in the air (an ability's flight) it can't move: it beams, summons or throws at whatever it can reach. Ascended, it
+    /// flies about up there too: toward its target for the beam, or into throwing range.
     /// </summary>
     public class MonarchAI : KitAI
     {
@@ -93,12 +94,15 @@ namespace TacticsGame.Core
             if (Ready(sim, unit, beam))
             {
                 if (Reach(sim, unit, beam, target)) return UnitCommand.UseAction(unit.Id, beam, target.Id);
-                if (!aloft) return Approach(sim, unit, target, unit.ActionStat(beam, ActionStat.Range) * 0.8f);
+                if (!aloft || unit.CanFly) return Approach(sim, unit, target, unit.ActionStat(beam, ActionStat.Range) * 0.8f);
             }
             if (aloft)
             {
                 ActionDefinition shot; Unit at;
-                if (BestShot(sim, unit, unit.Position, out shot, out at) > 0f) return UnitCommand.UseAction(unit.Id, shot, at.Id);
+                if (BestShot(sim, unit, unit.Position, out shot, out at, d => !ActionBehaviors.Get(d.BehaviorId).MovesUser) > 0f) return UnitCommand.UseAction(unit.Id, shot, at.Id);
+                // Flying about (Ascension): over to where its throw reaches the nearest enemy; else it holds up there.
+                var thrown = unit.Actions.Find(d => d.Id == unit.BasicAttackId);
+                if (unit.CanFly && thrown != null) return Approach(sim, unit, target, unit.ActionStat(thrown, ActionStat.Range) * 0.8f);
                 return UnitCommand.Idle(unit.Id, 0.3f);
             }
             return DecideRanged(sim, unit);

@@ -57,207 +57,20 @@ MonoBehaviour:
     - {fileID: 11400000, guid: f0502229add7462f8ecccf64b65ab607, type: 2}
     - {fileID: 11400000, guid: 93b5b1652bcb5a14f9b22fbe7479534a, type: 2}
     RandomCount: 4
-  DefaultAbilityCost: 2
-  AbilityCosts:
-  - Ability: {fileID: 11400000, guid: ed447ec3502aa394ea725969066ad9ac, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: e79c27fd67d2ac148b4b5e5c8a38c6ab, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 8aa261cb29640e24e9fcf974f6f309b0, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 804269327a3dc114caac234d2c14f839, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 992fdcefa6a270e4a9b45a54fdff68d7, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: d53286b3cd683b94a893056620996001, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: a4f4773e49e3ea44481848ca112f8fa6, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 96c0392ca5dad4f4aafab48f5a26b021, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 8a94c10ea8430dd4fb371a848fa41435, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 75bf72b01ddd8b742992a083ad15700c, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: b39804455d66a104c8314500ee330270, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: d758801727242194dbd6f99521bfcbb0, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: d6136dcc489e5284d8b3f71bedbb9e13, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 3e38bc8d895694b418649d7a6fa26929, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 21b5f4e1b93dd154e8c4d5db83dedcd6, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: c61c8afcd9c12a243866e184ae07dd91, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 470fadec892047c4c9cd8241a05bd965, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: d02dafc6b2de1bd4a82420ff33e94c39, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: b6ec1bbfd8c979249b653c9bf64dbd25, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 8d503594631c6304eab71912f968b659, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 054e55497b7ae0f498e94895d8fad8f5, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: be7126f513a662f4aa3e4698e74ddd43, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: f2ff342cf93c51f4fbb36989923d3d5b, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: d7ebf1ba5a75e72409928babfabda946, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 024417c845c21fb42be7c79f4a2b2127, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 89c425610acc93343802068419dad0d2, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 5f766a43f40a66e4c95aab556b2e1338, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 70b2a9303d8007d41bb3dbbb028c9be2, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 5527f3bda48cdbe46b9023f9efc0e39e, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 9f7e7ad6405913b49bea20ca49f60764, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: fc2e8dbe4b319b74f979ffcbe10844cc, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: c525e06230308c04e9197d70d385aab0, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 69ee16896e24f8d4e99f6a9870d832d8, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: db087f16b3a1a104db6f6dcbeb5bb34c, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 30a0c3cddcb90c84c9088162dc75e1ef, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: c93b494478ef8914a85508738f3b1f15, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 636cd06b6273b214c8c359b59e9ec314, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 224a9986618eae048b37d1922d79a673, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 5e02e71cf8ebdd649a4d33a1fd316ac0, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 9097ce0cdffdf3c47989fd1ba7cc81ac, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: e372d47123abfb544ad97c14b028b967, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 40a540221bfae974f84cfb17a13acdd7, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 10f76dd7dc6987f4f9bc9f6ddae414eb, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: ec929a2d16adf37409c4ef47739ea136, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 34f4c2068097208499830a3cbcb7a5ed, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: e9efe18f06677ef41a088738ea4e41fd, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: fa680acf924e31144a146c6f3e408445, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 6926aa57d45a1d24fa447fecbafcf2aa, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 111f74f594fb58e4b9f6e311e260f3f4, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 7597eb904873ed744b92d1f6c8ec6dff, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 78710ca59070a3643a73d66811114661, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: ab774ac40e9c7594db3c51a7d50a5948, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 1b3d807d3d608424893e521bdd9914fd, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 7179662d8b21d8644b817cfb476f538d, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: b46093a9b498ff1439151b8cb3158052, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 7216a5687a8f6dc48a4356a68e6e6846, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: b4b3b7360d8423e43a153e2a3390c5d9, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 3261866804ef5ec4fbbb11693dc815bb, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 7904612fa8ace5048b871a5a2812f391, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: ab86c53f26e675e469554d84fbab632b, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 472f9240083db6745894df677cd0c311, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 0a2bcded824a85047943725a1b92634c, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 6a5cd362e29d8a44ba42e04bff36afbe, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 4896568d5c4cf5e488bf13c2e39ae88f, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 8121f2e9a05ee924fb9e09f328249ffb, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: fe9a08a0bb8da994b8ab4c3d47294b59, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: a7ab9457c7512714c9096a54c8199aa1, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: c6b0c744386be3644a61d261acf6a1c5, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 68025a0293196b745a8f5ac620822522, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 6ccc81c39058bb042b090858c17b2688, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 3673932d60832cb4bba7a81f2761c797, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: a27cfc69b4a99db43a2ce9990faec829, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: dbfed8674d1c766428833be60fac4f14, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 6531b482ee4ef474ca83bfccbbd0f18a, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 901ba825873633249bef04fc68f6bec9, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: cfd2dc0701e7555489514b264caab8ff, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 286d782ecb37208418211d7ac48e2974, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 789b922f559e46a4cbc6c2bd16c844df, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 93b5b1652bcb5a14f9b22fbe7479534a, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: c591dfab2c79dd04dbc454547295289a, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 17374347c9a31194fb97d86d135088d3, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 26d3507ec8c5da54b9b774cb3eaac774, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: ea14498474f19304cbe4e0afc19cfccd, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: f46db74b56d4d70459e400df17589ead, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 7b6e58f8e4670e04691a98be9d25c297, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 6dca0900e9001bd44b13a3d660511ddd, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 674b9629372a50843ad1532b0ff37f02, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 546e7edb723ed434694456987a67bcaf, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: cfdfb3c2d43ce6146bec2a32dc3a2c82, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: d6807f8089af46d45bc8ae95a7b4adaf, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 692e0b3768277ed4f9c2b9138d9920e5, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: 3594b28f95c58604b8d65d5cb95d4363, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: ef9b06f4a571c4942943e83511a95a3c, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: ea5718a007f2d9d4bbc4c5175878acca, type: 2}
-    Cost: 3
-  - Ability: {fileID: 11400000, guid: b31e08c7580375f4ebc2c364c4dbbe81, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: f0502229add7462f8ecccf64b65ab607, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 5631706492ab4edca6cef54c9cc66a2b, type: 2}
-    Cost: 2
-  - Ability: {fileID: 11400000, guid: 3bfd2e5447764e0bbae757a5ddf01ca6, type: 2}
-    Cost: 1
-  - Ability: {fileID: 11400000, guid: 1775eb73f1884729adbab1feb319d5ce, type: 2}
-    Cost: 2
-  AbilitiesOffered: 5
+  - Class: {fileID: 11400000, guid: eeaf58f7643545b45a845f6f3d7dc2a1, type: 2}
+    DefaultAbilities:
+    - {fileID: 11400000, guid: 9b289d88f06c9544a8ca2718a0ee18a2, type: 2}
+    - {fileID: 11400000, guid: 236e76375925345499d427ca4f50f220, type: 2}
+    - {fileID: 11400000, guid: 7bf3efc89ad91994faba669b6d88b63e, type: 2}
+    RandomCount: 0
+  StartingGrasp: 0
+  OverburdenStrainShare: 0.1
+  DestroyHoldSeconds: 2
+  DestroyGraspLoss: 10
+  AbilitiesOffered: 6
+  AbilityGrasp: 10
+  AbilityGraspStep: 10
+  StartersRaisePrice: 0
   Etchings:
   - Id: minds_reach
     Name: The Mind's Reach Grows
@@ -276,7 +89,6 @@ MonoBehaviour:
       Value: 1.3
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -295,7 +107,6 @@ MonoBehaviour:
     Params:
     - Key: max_bonus
       Value: 0.5
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -317,7 +128,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -339,7 +149,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -362,7 +171,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -387,7 +195,6 @@ MonoBehaviour:
       Value: 0.1
     - Key: max_reduction
       Value: 0.5
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -407,7 +214,6 @@ MonoBehaviour:
       Value: 0.6
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -427,7 +233,6 @@ MonoBehaviour:
       Value: 1.3
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -456,7 +261,6 @@ MonoBehaviour:
       Value: 1.5
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -481,23 +285,6 @@ MonoBehaviour:
       Value: 1.5
     Trait: 
     Params: []
-    AbilityPoints: 0
-    Grant: 0
-    GrantStrain: 15
-    GrantsFollowup: 0
-    FollowupStrain: 25
-    FallbackActionModifiers: []
-    RemovesBehaviors: []
-  - Id: symbols_of_memory
-    Name: Symbols of Memory
-    Description: Gain 2 ability points.
-    Weight: 1
-    Scope: 0
-    UnitModifiers: []
-    ActionModifiers: []
-    Trait: 
-    Params: []
-    AbilityPoints: 2
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -517,7 +304,6 @@ MonoBehaviour:
       Value: 0.6
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -537,7 +323,6 @@ MonoBehaviour:
       Value: 0.5
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -561,7 +346,6 @@ MonoBehaviour:
       Value: 1
     - Key: windup_mult
       Value: 0.25
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -582,7 +366,6 @@ MonoBehaviour:
       Value: 0.6
     - Key: per_copy
       Value: 0.2
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -600,7 +383,6 @@ MonoBehaviour:
     Params:
     - Key: bonus
       Value: 0.3
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -618,7 +400,6 @@ MonoBehaviour:
     Params:
     - Key: relief
       Value: 50
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -637,7 +418,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -656,7 +436,6 @@ MonoBehaviour:
     Params:
     - Key: chance
       Value: 0.75
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -673,7 +452,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 1
     GrantStrain: 10
     GrantsFollowup: 0
@@ -690,7 +468,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 2
     GrantStrain: 15
     GrantsFollowup: 0
@@ -715,7 +492,6 @@ MonoBehaviour:
       Value: 0.3
     - Key: max_seconds
       Value: 8
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -736,7 +512,6 @@ MonoBehaviour:
       Value: 0.6
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -759,7 +534,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -779,7 +553,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -797,7 +570,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 3
     GrantStrain: 30
     GrantsFollowup: 0
@@ -822,7 +594,6 @@ MonoBehaviour:
       Value: 1
     - Key: once_per_battle
       Value: 1
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -843,7 +614,6 @@ MonoBehaviour:
       Value: 0.75
     - Key: seconds
       Value: 2
-    AbilityPoints: 0
     Grant: 4
     GrantStrain: 10
     GrantsFollowup: 0
@@ -865,7 +635,6 @@ MonoBehaviour:
     Params:
     - Key: stun_mult
       Value: 0.25
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -886,7 +655,6 @@ MonoBehaviour:
       Value: 0.25
     - Key: recovery_mult
       Value: 1.25
-    AbilityPoints: 0
     Grant: 5
     GrantStrain: 25
     GrantsFollowup: 0
@@ -917,7 +685,6 @@ MonoBehaviour:
       Value: 0.5
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -940,7 +707,6 @@ MonoBehaviour:
       Value: 0.25
     - Key: seconds
       Value: 0.75
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -962,7 +728,6 @@ MonoBehaviour:
       Value: 0.35
     - Key: damage_bonus
       Value: 0.5
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -982,7 +747,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: instinct_overtakes_methods
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -1003,7 +767,6 @@ MonoBehaviour:
       Value: 0.25
     - Key: cut
       Value: 0.1
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -1031,7 +794,6 @@ MonoBehaviour:
     Params:
     - Key: crit_chance
       Value: 0.5
-    AbilityPoints: 0
     Grant: 6
     GrantStrain: 10
     GrantsFollowup: 0
@@ -1052,7 +814,6 @@ MonoBehaviour:
       Value: 1
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -1072,7 +833,6 @@ MonoBehaviour:
     Params:
     - Key: breaks
       Value: 2
-    AbilityPoints: 0
     Grant: 7
     GrantStrain: 10
     GrantsFollowup: 0
@@ -1094,7 +854,6 @@ MonoBehaviour:
       Value: 4
     - Key: seconds
       Value: 3
-    AbilityPoints: 0
     Grant: 8
     GrantStrain: 30
     GrantsFollowup: 0
@@ -1115,7 +874,6 @@ MonoBehaviour:
       Value: 1.5
     - Key: range
       Value: 10
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -1134,7 +892,6 @@ MonoBehaviour:
     Params:
     - Key: window
       Value: 1.5
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 1
@@ -1143,9 +900,8 @@ MonoBehaviour:
     RemovesBehaviors: []
   - Id: related_concepts
     Name: Related Concepts
-    Description: Etch into two abilities to link them. When one lands, the other
-      becomes a linked ability: used straight after it (walking and dashing aside),
-      it has 50% shorter windup and recovery.
+    Description: Etch into two abilities to link them. When one lands, the other's
+      windup and recovery are reduced by 50%.
     Weight: 1
     Scope: 2
     UnitModifiers: []
@@ -1154,7 +910,6 @@ MonoBehaviour:
     Params:
     - Key: speed
       Value: 0.5
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 2
@@ -1163,8 +918,8 @@ MonoBehaviour:
     RemovesBehaviors: []
   - Id: dissipation
     Name: Dissipation
-    Description: Blocking costs +10 strain. Damage your Block stops reduces your
-      strain by as much.
+    Description: Blocking costs +15 strain. Your strain is reduced equal to damage
+      blocked.
     Weight: 1
     Scope: 0
     UnitModifiers: []
@@ -1172,12 +927,11 @@ MonoBehaviour:
     - ActionId: block
       Stat: 7
       Op: 0
-      Value: 10
+      Value: 15
     Trait: dissipation
     Params:
     - Key: share
       Value: 1
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -1195,7 +949,6 @@ MonoBehaviour:
     Params:
     - Key: speed
       Value: 0.5
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -1213,7 +966,6 @@ MonoBehaviour:
     Params:
     - Key: per_second
       Value: 5
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -1222,8 +974,7 @@ MonoBehaviour:
     RemovesBehaviors: []
   - Id: clarity_from_aggravation
     Name: Clarity From Aggravation
-    Description: Taking damage makes you recover 2 strain every 0.1 seconds for 1
-      second.
+    Description: Taking damage makes you recover 10 strain per second for 1 second.
     Weight: 1
     Scope: 0
     UnitModifiers: []
@@ -1231,12 +982,11 @@ MonoBehaviour:
     Trait: clarity_from_aggravation
     Params:
     - Key: strain
-      Value: 2
+      Value: 1
     - Key: every
       Value: 0.1
     - Key: seconds
       Value: 1
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -1255,7 +1005,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -1274,7 +1023,6 @@ MonoBehaviour:
     ActionModifiers: []
     Trait: 
     Params: []
-    AbilityPoints: 0
     Grant: 0
     GrantStrain: 15
     GrantsFollowup: 0
@@ -1295,12 +1043,65 @@ MonoBehaviour:
       Value: 40
     - Key: seconds
       Value: 1.5
-    AbilityPoints: 0
     Grant: 9
     GrantStrain: 10
     GrantsFollowup: 0
     FollowupStrain: 25
     FallbackActionModifiers: []
     RemovesBehaviors: []
-  EtchingsOffered: 4
-  EtchingsTaken: 1
+  EtchingsOffered: 3
+  EtchingGrasp: 20
+  FormStats:
+  - Stat: 0
+    Name: Health
+    BaseFloor: 0
+  - Stat: 1
+    Name: Max Strain
+    BaseFloor: 0
+  - Stat: 2
+    Name: Strain Recovery
+    BaseFloor: 0
+  - Stat: 7
+    Name: Movement Speed
+    BaseFloor: 0
+  - Stat: 8
+    Name: Dash Distance
+    BaseFloor: 0
+  - Stat: 6
+    Name: Compute
+    BaseFloor: 0
+  Rituals:
+  - Id: graft
+    Name: Graft
+    Description: Raises the stat by a random 10-30% of its base value.
+    Kind: 0
+    MinShare: 0.1
+    MaxShare: 0.3
+    GraspCost: 20
+    GraspBonus: 0
+  - Id: weave
+    Name: Weave
+    Description: Raises the stat by 50% of its base value.
+    Kind: 0
+    MinShare: 0.5
+    MaxShare: 0.5
+    GraspCost: 50
+    GraspBonus: 0
+  - Id: amputate
+    Name: Amputate
+    Description: Lowers the stat by 30% of its base value. Raises maximum Grasp by
+      20.
+    Kind: 1
+    MinShare: 0.3
+    MaxShare: 0.3
+    GraspCost: 0
+    GraspBonus: 20
+  - Id: perpetuate
+    Name: Perpetuate
+    Description: Resets the stat to its base value and locks it there permanently.
+      No other effect can override this.
+    Kind: 2
+    MinShare: 0.1
+    MaxShare: 0.3
+    GraspCost: 100
+    GraspBonus: 0

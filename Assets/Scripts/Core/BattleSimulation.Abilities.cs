@@ -11,8 +11,9 @@ namespace TacticsGame.Core
 
         /// <summary>
         /// A charge ability (ActionDefinition.IsCharge): pay its costs and start charging. From here the unit can only keep
-        /// charging (ContinueCharge) or release it (ReleaseCharge, which picks the target); it is asked at once and then every
-        /// time its ContinueCharge runs out. Charging drains the definition's per-second resources and breaks on any damage.
+        /// charging (ContinueCharge), walk on charging (a Move, at ChargeMoveSpeedMultiplier of its speed, until the walk ends)
+        /// or release it (ReleaseCharge, which picks the target); it is asked at once and then every time its ContinueCharge
+        /// or walk runs out. Charging drains the definition's per-second resources and breaks on any damage.
         /// </summary>
         private void StartCharge(Unit unit, UnitCommand cmd, ActionBehavior behavior)
         {
@@ -61,11 +62,11 @@ namespace TacticsGame.Core
             return true;
         }
 
-        /// <summary>Charging units drain their charge resources (in StrainRecoveryTicks steps, like strain recovery).</summary>
+        /// <summary>Charging units drain their charge resources (in RateTicks steps, like strain recovery).</summary>
         private void TickCharges()
         {
-            if (tick % StrainRecoveryTicks != 0) return;
-            float step = StrainRecoveryTicks * TickLength;
+            if (tick % RateTicks != 0) return;
+            float step = RateTicks * TickLength;
             foreach (var u in State.Units)
             {
                 if (!u.IsAlive || u.Phase != UnitPhase.Charging || u.ActiveAction == null) continue;

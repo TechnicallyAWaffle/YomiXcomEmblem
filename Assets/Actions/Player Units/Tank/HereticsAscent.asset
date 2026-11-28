@@ -18,6 +18,9 @@ MonoBehaviour:
   Roles: 0
   Description: Grab a target and rise into the air before slamming them into the
     ground.
+  Details: 
+  TipOverrides: []
+  WindupName: 
   Targeting: 2
   Range: 5
   IsRanged: 0
@@ -33,17 +36,22 @@ MonoBehaviour:
   RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 1
+  WindupDisplay: 0
   Damage: 0
   BaseAccuracy: 1
   StunDuration: 0.5
   StrainOnTarget: 10
   StrainOnSelf: 0
   HealthCost: 0
+  HysteriaOnUse: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
   BlockPierce: 0
   StunnedDamageMultiplier: 1
+  DivergedVersion: {fileID: 0}
+  Form: 0
   Shape: 0
+  ConeAngle: 90
   AreaRadius: 0
   LineWidth: 1
   AreaHeight: 0
@@ -94,19 +102,33 @@ MonoBehaviour:
   BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  ProjectileSpeed: 7
+  ProjectileAcceleration: 16
+  ProjectileMaxSpeed: 26
+  ProjectileRadius: 0.3
+  ProjectileLifetime: 4
+  ProjectileHoming: 2
+  ProjectileHomingDelay: 0.25
+  ProjectileTurnRate: 200
+  ProjectileTurnGrowth: 500
+  LinkedAbilities: []
+  RequiresLink: 0
   CanTranscend: 0
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
+  TranscendCooldown: -1
   ExtraCinematic: 0
   Visuals:
     Kind: 3
     Color: {r: 0.85, g: 0.45, b: 0.3, a: 1}
     Width: 0.22
     Pierce: 0
+    Orb: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
   Params: []
-  DataVersion: 15
+  DataVersion: 16

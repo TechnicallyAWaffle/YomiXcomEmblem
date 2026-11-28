@@ -10,11 +10,12 @@ namespace TacticsGame.Core
     public static class Passives
     {
         public const string StrainReliefOnDodge = "strain_relief_on_dodge";   // Fighter: shed strain whenever you dodge (BattleSimulation.DodgeStrainRelief)
-        public const string Ascension = "ascension";   // Monarch: below AscensionHealth, shakes off stuns, is Unstoppable for good and takes to the air
+        public const string Ascension = "ascension";   // Monarch: below AscensionHealth, shakes off stuns and takes to the air, Unstoppable, for AscensionSeconds
         public const string KarranosSigil = "karranos_sigil";   // Duelist: breaking a weakpoint makes that enemy its NEMESIS (see AttachKarranosSigil)
 
-        /// <summary>Ascension: the share of max health it triggers below, and how high it flies.</summary>
-        public static float AscensionHealth = 0.3f, AscensionHeight = 8f;
+        /// <summary>Ascension: the share of max health it triggers below, how high it flies, and how long it stays up there
+        /// (Unstoppable, flying about) before it glides back down.</summary>
+        public static float AscensionHealth = 0.3f, AscensionHeight = 8f, AscensionSeconds = 2.5f;
 
         /// <summary>Karranos Sigil: how long NEMESIS lasts, and how much more damage the Duelist deals its NEMESIS.</summary>
         public static float NemesisSeconds = 5f, NemesisDamageBonus = 0.3f;
@@ -91,19 +92,22 @@ namespace TacticsGame.Core
     public partial class BattleSimulation
     {
         /// <summary>
-        /// The Monarch's Ascension: every stun on it is gone at once (a lift or a fall too), it is Unstoppable for the rest
-        /// of the battle (so nothing knocks it out of the air), and it flies Passives.AscensionHeight up and stays there.
+        /// The Monarch's Ascension, once a battle: every stun on it is gone at once (a lift or a fall too), and it flies
+        /// Passives.AscensionHeight up for Passives.AscensionSeconds, Unstoppable meanwhile (so nothing knocks it out of the
+        /// air). Up there it flies about (moves are flights) and its abilities don't bring it down; then it glides down.
+        /// The Ascended status stays as the mark that it has happened.
         /// </summary>
         internal void Ascend(Unit u)
         {
+            float until = Now + Passives.AscensionSeconds;
             ApplyStatus(u, new StatusEffect { Id = StatusIds.Ascended, SourceId = u.Id, ExpiresAt = float.MaxValue }, u);
-            ApplyStatus(u, new StatusEffect { Id = StatusIds.Unstoppable, SourceId = u.Id, ExpiresAt = float.MaxValue, Flags = StatusFlags.Unstoppable }, u);
+            ApplyStatus(u, new StatusEffect { Id = StatusIds.Unstoppable, SourceId = u.Id, ExpiresAt = until, Flags = StatusFlags.Unstoppable }, u);
             if (u.HeldById != null) ReleaseHeld(u);
             u.RemoveState<LiftState>();   // lifts and hovers alike
             if (u.FallLandAt >= 0f || u.GlideEnd >= 0f) { u.FallLandAt = -1f; u.GlideEnd = -1f; }
             if (u.Phase == UnitPhase.Stunned) u.PhaseEndsAt = Now;   // free at the end of this tick
             Vector3 ground = Terrain.OnGround(u.Position);
-            HoverUnit(u, ground + Vector3.up * Passives.AscensionHeight, float.MaxValue, null, 0f, 0f, true);
+            HoverUnit(u, ground + Vector3.up * Passives.AscensionHeight, until, null, 0f, 0f, true, true);
         }
     }
 }

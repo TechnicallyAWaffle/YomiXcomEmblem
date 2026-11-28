@@ -27,6 +27,7 @@ namespace TacticsGame.Presentation
 
         // Scripted motion along a path, a pure function of playback time.
         private List<Vector3> motionPath;
+        private bool motionFlies;   // the walk is a flight: it keeps the path's heights
         private float motionSpeed;
         private float motionStart;
         private float motionLength;
@@ -92,9 +93,11 @@ namespace TacticsGame.Presentation
         }
 
         /// <summary>Walk the path at 'speed' (m/s over the ground, like the sim), feet on the terrain.</summary>
-        public void BeginMotion(List<Vector3> path, float speed, float startSimTime)
+        /// <param name="fly">Through the air at the path's heights (a flight), not along the ground.</param>
+        public void BeginMotion(List<Vector3> path, float speed, float startSimTime, bool fly = false)
         {
             Unslam();
+            motionFlies = fly;
             motionPath = path;
             motionSpeed = speed;
             motionStart = startSimTime;
@@ -321,7 +324,7 @@ namespace TacticsGame.Presentation
                     float t = seg > 1e-5f ? Mathf.Clamp01(traveled / seg) : 1f;
                     Vector3 dir = motionPath[i] - motionPath[i - 1];
                     Vector3 p = Vector3.Lerp(motionPath[i - 1], motionPath[i], t);
-                    if (terrain != null) p.y = terrain.HeightAt(TerrainMap.Level(p, transform.position.y));   // the sim jumps the edges (a Jump event takes over there)
+                    if (terrain != null && !motionFlies) p.y = terrain.HeightAt(TerrainMap.Level(p, transform.position.y));   // the sim jumps the edges (a Jump event takes over there)
                     transform.position = p;
                     if (dir.sqrMagnitude > 1e-6f) transform.rotation = Quaternion.LookRotation(new Vector3(dir.x, 0f, dir.z));
                     return;

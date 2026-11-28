@@ -16,9 +16,10 @@ MonoBehaviour:
   DisplayName: Fate Encumbers Its Prey
   BehaviorId: sky_shot
   Roles: 0
-  Description: 'Linked from Destiny Closes In (only straight after it): fire a shot
-    that afflicts the target with FATED. Linked to Witness To The End.'
+  Description: Fire a shot that afflicts the target with FATED and enable the use
+    of Witness To The End.
   Details: 
+  TipOverrides: []
   WindupName: 
   Targeting: 2
   Range: 16
@@ -35,17 +36,22 @@ MonoBehaviour:
   RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 0
+  WindupDisplay: 0
   Damage: 15
   BaseAccuracy: 1
   StunDuration: 0.5
   StrainOnTarget: 7
   StrainOnSelf: 0
   HealthCost: 0
+  HysteriaOnUse: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
   BlockPierce: 0
   StunnedDamageMultiplier: 1
+  DivergedVersion: {fileID: 0}
+  Form: 0
   Shape: 0
+  ConeAngle: 90
   AreaRadius: 0
   LineWidth: 1
   AreaHeight: 0
@@ -93,6 +99,7 @@ MonoBehaviour:
       CountsUp: 0
       Hidden: 0
       Important: 0
+      Description: 
     HealPerSecond: 0
     StrainPerSecond: 0
     StrainOnWeakpointBreak: 0
@@ -100,6 +107,10 @@ MonoBehaviour:
     HealOnExpire: 0
     HealMissingOnExpire: 0
     Shield: 0
+    Uses: 1
+    DamageAsStrain: 0
+    ReflectShare: 0
+    ReflectDelay: 0.25
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -139,6 +150,15 @@ MonoBehaviour:
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  ProjectileSpeed: 7
+  ProjectileAcceleration: 16
+  ProjectileMaxSpeed: 26
+  ProjectileRadius: 0.3
+  ProjectileLifetime: 4
+  ProjectileHoming: 2
+  ProjectileHomingDelay: 0.25
+  ProjectileTurnRate: 200
+  ProjectileTurnGrowth: 500
   LinkedAbilities:
   - {fileID: 11400000, guid: 14285dddb97afb74b9d6e888c210df92, type: 2}
   RequiresLink: 1
@@ -152,7 +172,8 @@ MonoBehaviour:
     Color: {r: 0.85, g: 0.55, b: 1, a: 1}
     Width: 0.08
     Pierce: 0
+    Orb: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
   Params: []
-  DataVersion: 15
+  DataVersion: 16

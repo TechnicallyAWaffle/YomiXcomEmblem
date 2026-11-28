@@ -23,6 +23,7 @@ namespace TacticsGame.Core
         public bool Aimed;          // ReleaseGrapple: throw toward TargetPos
         public bool NoFocus;        // Wait: a pause, not a Focus (UnitCommand.Idle)
         public bool FreeAim;        // Action: aimed toward TargetPos with no target; it picks one in a cone as it lands (BattleSimulation.FreeAim.cs)
+        public float Facing = float.NaN;   // Action: which way a placed shape runs, in degrees (ActionBehavior.Rotatable: Obstruction's wall); NaN: its own default
 
         /// <summary>This order, Transcended (ignored for actions that can't be).</summary>
         public UnitCommand Transcended(bool transcend = true) { Transcend = transcend; return this; }
@@ -101,7 +102,9 @@ namespace TacticsGame.Core
     {
         public DecisionKind Kind;
         public string UnitId;
-        public string AttackerId;   // DodgeDash only
+        public string AttackerId;   // DodgeDash only (none: a blast of the world's, Temperance's)
+        public Vector3? ThreatPoint; // DodgeDash with no attacker: where it came from (it dashes away from there by default)
+        public bool Sidestep;        // DodgeDash from a hitscan shot: by default it dashes across the line of fire, not along it
         public string Reason;       // set when a previously submitted command was rejected
     }
 

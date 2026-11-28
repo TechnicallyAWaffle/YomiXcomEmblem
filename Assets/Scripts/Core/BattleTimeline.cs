@@ -55,6 +55,15 @@ namespace TacticsGame.Core
         Weakpoints,            // actor's weakpoints changed; payload WeakpointsInfo (all it has now, and what a hit just broke)
         ProjectileLaunched,    // actor fired a projectile (BattleSimulation.Projectiles.cs); payload its ProjectilePath, which fills in as it flies
         ProjectileEnded,       // that projectile hit target (none: it struck the ground or ran out); payload the same ProjectilePath
+        ShieldChanged,         // actor's shields changed (gained, soaked damage, ran out); payload float: all the shield it has now
+        WallRaised,            // actor raised a wall (Obstruction); payload WallInfo
+        WallEnded,             // that wall is gone; payload WallInfo (Id)
+        FormChanged,           // actor (the Forsaken) changed form; payload bool: true = Diverged now
+        TeamChanged,           // actor is on another side now (INSANITY: Team.Rogue, then back); payload Team
+        TemperanceTimer,       // Temperance's arrival time was set or changed (actor = an Omen hastening it, or none); payload TemperanceInfo
+        TemperanceArrived,     // Temperance is over the map; payload TemperanceInfo
+        TemperanceExecution,   // Temperance's beam started winding up on target (it dies at ExecutionInfo.At); payload ExecutionInfo
+        AimLocked,             // actor's hitscan shot stopped tracking target: it fires at the payload point (Vector3)
     }
 
     /// <summary>
@@ -108,13 +117,14 @@ namespace TacticsGame.Core
     public struct ActionStartedInfo { public string ActionId; public float Windup; public float Recovery; public Vector3 TargetPos; public bool Free; public bool Transcended; public float Range, Radius; }
     public struct ActionResolvedInfo { public string ActionId; public float Recovery; }
     public struct InterruptInfo { public string Reason; }
-    public struct MoveInfo { public List<Vector3> Path; public float Speed; }
+    public struct MoveInfo { public List<Vector3> Path; public float Speed; public bool Fly; }   // Fly: through the air at the path's heights (not on the ground)
     public struct DamageInfo
     {
         public string ActionId; public float Amount; public float BlockedAmount; public float ShieldedAmount;   // what Block stopped; what a shield soaked up
         public ImpactType Impact; public float RemainingHealth; public bool CausedUnravel;
         public bool Critical;   // a critical strike (Eye For Weakness)
         public int WeakpointsBroken;   // weakpoints the hit broke (each made it land harder)
+        public float AsStrain;   // damage that took no health and came as this much strain instead (Strange Axis); Amount is what health lost
     }
     // Reason: "cover" (would have hit in the open), "miss", "out_of_range", "hidden". HitCover: the shot struck the cover that
     // saved the target, at CoverPoint (a point where a sight line to the target first meets that cover).
@@ -147,6 +157,12 @@ namespace TacticsGame.Core
     // Unit: the newcomer as it arrives (for its view); Definition: what it is (its model).
     public struct SpawnInfo { public Unit Unit; public UnitDefinition Definition; }
     public struct BlastInfo { public string Id; public string ActionId; public Vector3 Center; public float Radius; public float At; }
+    /// <summary>Temperance (BattleSimulation.Temperance.cs): when it comes (or came), and the execution threshold from then on:
+    /// ThresholdStart of max health at ArrivesAt, ThresholdPerSecond more each second after, up to all of it.</summary>
+    public struct TemperanceInfo { public float StartedAt; public float ArrivesAt; public float WarningSeconds; public float ThresholdStart; public float ThresholdPerSecond; }
+    public struct ExecutionInfo { public float At; }
+    // A wall from From to To (its ends), Height tall and Thickness thick, up until EndsAt (Obstruction).
+    public struct WallInfo { public string Id; public string ActionId; public Vector3 From; public Vector3 To; public float Height; public float Thickness; public float EndsAt; }
     // Kind: which look ("rift", "unmade"...); From: where it starts, for one drawn between two points.
     public struct FxInfo { public string Kind; public string ActionId; public Vector3 Center; public Vector3 From; public float Radius; }
     // From: up in the sky; To: where it lands, Seconds later.

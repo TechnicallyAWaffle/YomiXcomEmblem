@@ -19,6 +19,8 @@ MonoBehaviour:
   Description: Dash to an enemy, striking them and bounding up into the air past
     them. Ready Conjecture as a follow-up.
   Details: 
+  TipOverrides: []
+  WindupName: 
   Targeting: 2
   Range: 6
   IsRanged: 0
@@ -34,17 +36,22 @@ MonoBehaviour:
   RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 1
+  WindupDisplay: 0
   Damage: 9
   BaseAccuracy: 1
   StunDuration: 0.3
   StrainOnTarget: 5
   StrainOnSelf: 0
   HealthCost: 0
+  HysteriaOnUse: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
   BlockPierce: 0
   StunnedDamageMultiplier: 1
+  DivergedVersion: {fileID: 0}
+  Form: 0
   Shape: 0
+  ConeAngle: 90
   AreaRadius: 0
   LineWidth: 1
   AreaHeight: 0
@@ -87,12 +94,18 @@ MonoBehaviour:
       CountsUp: 0
       Hidden: 1
       Important: 0
+      Description: 
     HealPerSecond: 0
     StrainPerSecond: 0
     StrainOnWeakpointBreak: 0
     BreakStun: 0
     HealOnExpire: 0
     HealMissingOnExpire: 0
+    Shield: 0
+    Uses: 1
+    DamageAsStrain: 0
+    ReflectShare: 0
+    ReflectDelay: 0.25
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -135,15 +148,28 @@ MonoBehaviour:
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  ProjectileSpeed: 7
+  ProjectileAcceleration: 16
+  ProjectileMaxSpeed: 26
+  ProjectileRadius: 0.3
+  ProjectileLifetime: 4
+  ProjectileHoming: 2
+  ProjectileHomingDelay: 0.25
+  ProjectileTurnRate: 200
+  ProjectileTurnGrowth: 500
+  LinkedAbilities: []
+  RequiresLink: 0
   CanTranscend: 0
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
+  TranscendCooldown: -1
   ExtraCinematic: 0
   Visuals:
     Kind: 3
     Color: {r: 0.95, g: 0.9, b: 0.6, a: 1}
     Width: 0.14
     Pierce: 0
+    Orb: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
   Params:
@@ -153,4 +179,4 @@ MonoBehaviour:
     Value: 3
   - Key: bound_seconds
     Value: 0.35
-  DataVersion: 15
+  DataVersion: 16

@@ -27,6 +27,8 @@ namespace TacticsGame.Presentation
             public string Name;
             public Team Team;
             public float Health, MaxHealth, Strain, MaxStrain, Energy, MaxEnergy;
+            public string StrainName;   // what its strain is called (the Forsaken: Entropy); empty: strain
+            public float Shield;   // what its shields will still soak (ShieldChanged): a blue stretch of the health bar
             public readonly List<string> Statuses = new List<string>();
             public List<string> Passives = new List<string>();   // passive ids (PassiveDisplay: their names and what they do)
             public List<ActionDefinition> AlwaysOn = new List<ActionDefinition>();   // its always-on abilities (a Makina's passives: InnatePassive), shown on hover
@@ -82,10 +84,10 @@ namespace TacticsGame.Presentation
                 units[u.Id] = new UnitReadout
                 {
                     Name = u.DisplayName, Team = u.Team,
-                    Health = u.Health, MaxHealth = u.MaxHealth, Strain = u.Strain, MaxStrain = u.MaxStrain,
+                    Health = u.Health, MaxHealth = u.MaxHealth, Strain = u.Strain, MaxStrain = u.MaxStrain, StrainName = u.StrainName,
                     Energy = u.Energy, MaxEnergy = u.MaxEnergy, Passives = u.Passives != null ? new List<string>(u.Passives) : new List<string>(), AlwaysOn = AlwaysOnOf(u),
                 };
-                foreach (var a in u.Actions)
+                foreach (var a in u.KnownActions())
                     for (var d = a; d != null && !defs.ContainsKey(d.Id); d = d.LinkedAction) defs[d.Id] = d;
             }
             // What each status does, from the abilities that give it (for the details panel).
@@ -154,7 +156,7 @@ namespace TacticsGame.Presentation
                         actor.WindupEnd = evt.SimTime + a.Windup;
                         actor.WindupId = a.ActionId;
                         actor.WindupName = def.WindupLabel;   // its WindupName if it has one (Grasp and Impel: Grasp)
-                        actor.WindupHeavy = def.Impact == ImpactType.Heavy;
+                        actor.WindupHeavy = def.ShowsHeavyWindup;   // its impact, or its WindupDisplay override
                         actor.WindupAttack = KindOf(def);
                     }
                     break;
@@ -249,6 +251,12 @@ namespace TacticsGame.Presentation
                 case TacticsGame.Core.EventType.StrainChanged:
                     if (actor != null) actor.Strain = ((StrainInfo)evt.Payload).Total;
                     break;
+                case TacticsGame.Core.EventType.TeamChanged:
+                    if (actor != null && evt.Payload is Team) actor.Team = (Team)evt.Payload;   // INSANITY: on no side for now
+                    break;
+                case TacticsGame.Core.EventType.ShieldChanged:
+                    if (actor != null) actor.Shield = (float)evt.Payload;
+                    break;
                 case TacticsGame.Core.EventType.Heal:
                     if (target != null) target.Health = Mathf.Min(target.MaxHealth, target.Health + (float)evt.Payload);
                     break;
@@ -307,8 +315,8 @@ namespace TacticsGame.Presentation
                     var s = (SpawnInfo)evt.Payload;
                     var u = s.Unit;
                     if (u == null) break;
-                    units[u.Id] = new UnitReadout { Name = u.DisplayName, Team = u.Team, Health = u.Health, MaxHealth = u.MaxHealth, Strain = u.Strain, MaxStrain = u.MaxStrain, Energy = u.Energy, MaxEnergy = u.MaxEnergy, Passives = u.Passives != null ? new List<string>(u.Passives) : new List<string>(), AlwaysOn = AlwaysOnOf(u) };
-                    foreach (var a in u.Actions)
+                    units[u.Id] = new UnitReadout { Name = u.DisplayName, Team = u.Team, Health = u.Health, MaxHealth = u.MaxHealth, Strain = u.Strain, MaxStrain = u.MaxStrain, StrainName = u.StrainName, Energy = u.Energy, MaxEnergy = u.MaxEnergy, Passives = u.Passives != null ? new List<string>(u.Passives) : new List<string>(), AlwaysOn = AlwaysOnOf(u) };
+                    foreach (var a in u.KnownActions())
                         for (var d = a; d != null && !defs.ContainsKey(d.Id); d = d.LinkedAction) defs[d.Id] = d;
                     break;
                 }
@@ -355,6 +363,8 @@ namespace TacticsGame.Presentation
                 {
                     var r = Get(pair.Key);
                     if (r == null || pair.Value == null) continue;
+                    if (r.Statuses.Contains(StatusIds.Composition)) continue;
+                    if (r.Dead && r.Team != Team.Player) continue;   // a fallen enemy: its name and bars go with it   // Compositions of Destruction's projectile: an object, no bars
                     Vector2 at;
                     if (!UiScale.WorldToGui(cam, pair.Value.transform.position + Vector3.up * BarHeightAboveUnit, out at)) continue;
                     DrawUnit(r, at);
@@ -396,7 +406,7 @@ namespace TacticsGame.Presentation
             float height = head + 4f + Mathf.Max(1, shown) * line;
             var box = new Rect(10, bottom - height, width, height);
             LogRect = box;
-            if (Event.current.type == UnityEngine.EventType.Repaint) logExpanded = box.Contains(Event.current.mousePosition);
+            if (Event.current.type == UnityEngine.EventType.Repaint) logExpanded = UiScale.Hovering(box);
             GUI.Box(box, GUIContent.none);
             if (logExpanded) GUI.Box(box, GUIContent.none);   // more opaque while open: it covers the battle
             if (logStyle == null) logStyle = new GUIStyle(GUI.skin.label) { richText = true, wordWrap = false, clipping = TextClipping.Clip };
@@ -438,7 +448,7 @@ namespace TacticsGame.Presentation
                 if (!string.IsNullOrEmpty(activity)) CombatVfx.OutlinedLabel(new Rect(x - 40, at.y - 20, width + 80, 18), activity, label, label.normal.textColor, 1f);
             }
 
-            Bar(new Rect(x, at.y, width, 7), r.MaxHealth > 0f ? r.Health / r.MaxHealth : 0f, new Color(0.3f, 0.9f, 0.3f), r.MaxHealth);
+            HealthBar(new Rect(x, at.y, width, 7), r.Health, r.Dead ? 0f : r.Shield, r.MaxHealth, HealthColorOf(r.Team), r.Team == Team.Player && !r.Dead ? TemperanceDisplay.ExecuteThreshold : 0f);
             Bar(new Rect(x, at.y + 9, width, 4), r.MaxStrain > 0f ? r.Strain / r.MaxStrain : 0f, new Color(1f, 0.7f, 0.2f), r.MaxStrain);
             float below = at.y + 15f;
             if (r.MaxEnergy > 0f)
@@ -528,7 +538,7 @@ namespace TacticsGame.Presentation
                 colors.Add(PassiveColor);
             }
 
-            string title = string.Format("{0}   health {1:0}/{2:0}   strain {3:0}/{4:0}", r.Name, r.Health, r.MaxHealth, r.Strain, r.MaxStrain);
+            string title = string.Format("{0}   health {1:0}/{2:0}   {5} {3:0}/{4:0}", r.Name, r.Health, r.MaxHealth, r.Strain, r.MaxStrain, string.IsNullOrEmpty(r.StrainName) ? "strain" : r.StrainName.ToLowerInvariant());
             float h = PanelPad + panelTitle.CalcHeight(new GUIContent(title), inner);
             if (windup != null) h += 4f + panelText.CalcHeight(new GUIContent(windup), inner) + (windupNote != null ? panelSmall.CalcHeight(new GUIContent(windupNote), inner) : 0f);
             if (rows.Count > 0) h += 6f;
@@ -606,10 +616,7 @@ namespace TacticsGame.Presentation
         /// <summary>The icon for an ability's windup bar: melee or ranged for anything that hits enemies, none otherwise.</summary>
         private static WindupKind KindOf(ActionDefinition def)
         {
-            bool attack = def.Damage > 0f || def.StunDuration > 0f;
-            bool atEnemies = def.Targeting == TargetType.Enemy || def.Targeting == TargetType.Position || def.Targeting == TargetType.AnyUnit ||
-                             (def.Targeting == TargetType.Self && def.Shape != AreaShape.None);
-            if (!attack || !atEnemies) return WindupKind.None;
+            if (!def.IsAttack) return WindupKind.None;
             return def.IsRanged ? WindupKind.Ranged : WindupKind.Melee;
         }
 
@@ -627,7 +634,7 @@ namespace TacticsGame.Presentation
         {
             float left = Mathf.Max(0f, r.WindupEnd - Director.PlaybackClock);
             float fill = r.WindupFull > 0f ? Mathf.Clamp01(1f - left / r.WindupFull) : 1f;
-            bool heavy = r.WindupHeavy && !r.Charging && !r.Channeling && r.WindupAttack != WindupKind.None;
+            bool heavy = r.WindupHeavy && !r.Charging && !r.Channeling;
             Color color = r.Channeling ? ChannelWindup : r.Charging ? ChargeWindup : heavy ? HeavyWindup : LightWindup;
             if (r.Channeling) fill = 1f - fill;   // a channel drains as it runs out
             else if (fill > 0.8f && Mathf.Repeat(Time.unscaledTime * 8f, 1f) < 0.5f) color = Color.Lerp(color, Color.white, 0.7f);
@@ -690,7 +697,51 @@ namespace TacticsGame.Presentation
             return look.CountsUp ? 1f - left : left;
         }
 
+        /// <summary>Health bars: the squad's (and anyone else's) green, the enemy's red.</summary>
+        public static readonly Color PlayerHealthColor = new Color(0.3f, 0.9f, 0.3f), EnemyHealthColor = new Color(0.95f, 0.25f, 0.22f);
+        /// <summary>A shield's stretch of a health bar.</summary>
+        public static readonly Color ShieldColor = new Color(0.35f, 0.65f, 1f);
+
+        /// <summary>On no side (Team.Rogue: an INSANE Forsaken, Deliverance): everyone's enemy.</summary>
+        public static readonly Color NeutralHealthColor = new Color(0.95f, 0.8f, 0.3f);
+
+        public static Color HealthColorOf(Team team) { return team == Team.Enemy ? EnemyHealthColor : team == Team.Rogue ? NeutralHealthColor : PlayerHealthColor; }
+
+        /// <summary>
+        /// A health bar with its shield in it: health from the left in 'color', then the shield in blue straight after it.
+        /// The bar stands for the max health, or for health and shield together when they come to more (the health part
+        /// shrinks to make room, so a big shield on a full unit still shows). Cut into segments of 10 health like Bar.
+        /// </summary>
+        /// <param name="executeAt">Temperance's execution threshold (a share of max health; 0: none): a gold divider there.</param>
+        public static void HealthBar(Rect rect, float health, float shield, float max, Color color, float executeAt = 0f)
+        {
+            health = Mathf.Max(0f, health); shield = Mathf.Max(0f, shield);
+            float scale = Mathf.Max(max, health + shield);
+            Bar(rect, scale > 0f ? health / scale : 0f, color, scale);
+            if (executeAt > 0f && scale > 0f)
+            {
+                var keep = GUI.color;
+                float x = rect.x + rect.width * Mathf.Clamp01(executeAt * max / scale);
+                GUI.color = new Color(0f, 0f, 0f, 0.8f);
+                GUI.DrawTexture(new Rect(x - 1.5f, rect.y - 3f, 3f, rect.height + 6f), Texture2D.whiteTexture);
+                GUI.color = ExecuteDividerColor;
+                GUI.DrawTexture(new Rect(x - 0.75f, rect.y - 2f, 1.5f, rect.height + 4f), Texture2D.whiteTexture);
+                GUI.color = keep;
+            }
+            if (shield <= 0f || scale <= 0f) return;
+            float x0 = rect.x + rect.width * health / scale, w = rect.width * shield / scale;
+            var old = GUI.color;
+            GUI.color = ShieldColor;
+            GUI.DrawTexture(new Rect(x0, rect.y, Mathf.Max(1f, w), rect.height), Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 1f, 1f, 0.55f);
+            GUI.DrawTexture(new Rect(x0, rect.y, Mathf.Max(1f, w), 1f), Texture2D.whiteTexture);   // a lit top edge, so it reads as a layer over the bar
+            GUI.color = old;
+        }
+
         /// <summary>A bar filled to 'fill'; with 'max' above 0, cut into segments of SegmentSize (health and strain: one per 10).</summary>
+        /// <summary>The gold divider at Temperance's execution threshold on the squad's health bars.</summary>
+        public static Color ExecuteDividerColor = new Color(1f, 0.82f, 0.25f);
+
         private static void Bar(Rect rect, float fill, Color color, float max = 0f)
         {
             var old = GUI.color;

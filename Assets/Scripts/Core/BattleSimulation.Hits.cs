@@ -100,6 +100,28 @@ namespace TacticsGame.Core
                         if (spec != null && spec.AppliesToUnit(src, hit.Target)) sim.ApplyStatus(hit.Target, spec.Create(sim.Now, src.Id, null, src.DurationScale(s.FromAction)), src);
                 }
             });
+            // A reflecting status (Wrathful Reflection): its share of what the attack dealt (shields and all) and of its stun goes
+            // back at the attacker a moment later, with the attack's impact. A reflected hit isn't reflected again.
+            AddHitRule(HitStage.Resolved, (sim, hit) => sim.Reflect(hit));
+        }
+
+        /// <summary>Tag on a reflected hit (Wrathful Reflection): it isn't reflected again.</summary>
+        public const string ReflectedTag = "reflected";
+
+        private void Reflect(HitContext hit)
+        {
+            var r = hit.Reflector; var src = hit.Source; var target = hit.Target;
+            if (r == null || src == null || target == null || src == target || src.Team == target.Team || hit.Negated) return;
+            if (hit.Effect != null && hit.Effect.Tag == ReflectedTag) return;
+            float taken = hit.Dealt + hit.Shielded;
+            if (taken <= 1e-3f) return;
+            var def = r.FromAction ?? hit.Definition;
+            var back = new AttackEffect
+            {
+                Source = target, TargetId = src.Id, Definition = def, FlatDamage = taken * r.ReflectShare, FlatStun = hit.StunFor * r.ReflectShare,
+                ImpactOverride = hit.Impact, Unerring = true, IgnoreRange = true, IgnoreCover = true, NoStatuses = true, CritChance = 0f, Tag = ReflectedTag,
+            };
+            ScheduleStrike(back, r.ReflectDelay, target, "reflect", true);
         }
 
         /// <summary>
@@ -146,6 +168,15 @@ namespace TacticsGame.Core
         private bool ReachTarget(HitContext hit)
         {
             var src = hit.Source; var def = hit.Definition; var atk = hit.Effect;
+            // COUNTERSIGN: the Duelist who marked the attacker blinks in front of its ally and takes the hit (Karranos Sigil's
+            // parry meets it, against its NEMESIS: that rule runs as the hit is aimed, after this).
+            var signer = InterceptCountersigned(src, hit.Target, def, atk);
+            if (signer != null)
+            {
+                Emit(EventType.HitRedirected, signer.Id, hit.Target.Id, new RedirectInfo { ActionId = def.Id, AttackerId = src.Id });
+                hit.Target = signer;
+                atk.IgnoreRange = true;
+            }
             // A dome (Sanctity) takes projectiles and melee hits meant for those sheltering in it.
             var guard = RedirectTarget(src, def, hit.Target);
             if (guard == null) { Emit(EventType.Miss, src.Id, hit.Target.Id, new MissInfo { Reason = "absorbed", ActionId = def.Id }); return false; }
@@ -167,6 +198,12 @@ namespace TacticsGame.Core
             if (!atk.IgnoreRange && Vector3.Distance(src.Position, target.Position) > src.ActionStat(def, ActionStat.Range) * RangeTolerance)
             {
                 Emit(EventType.Miss, src.Id, target.Id, new MissInfo { Reason = "out_of_range" });
+                return false;
+            }
+            // A hitscan shot fires along the line it locked onto: a target that has left it (a dodge, a blink) is missed.
+            if (atk.HasLineOfFire && !atk.Unerring && target.Id == atk.TargetId && !LineOfFireCatches(src, def, atk.LineOfFire, target))
+            {
+                Emit(EventType.Miss, src.Id, target.Id, new MissInfo { Reason = "off_line", ActionId = def.Id });
                 return false;
             }
             return true;
@@ -202,7 +239,11 @@ namespace TacticsGame.Core
             return false;
         }
 
-        /// <summary>The dodge roll, against the snapshot taken as the tick began (stunned units snapshot at 0). False: dodged.</summary>
+        /// <summary>
+        /// As the hit lands: a counter stance on the target (Mesmerize evades it; Parry takes it). There is no dodge roll here
+        /// any more: dodges are rolled DodgeLead before an attack lands (RollIncomingDodges) and are a dash out of its way, so
+        /// a unit that dodged but is still in reach is hit. False: countered.
+        /// </summary>
         private bool RollDodge(HitContext hit, Dictionary<string, CombatSnapshot> snapshot)
         {
             CombatSnapshot snap;
@@ -210,12 +251,95 @@ namespace TacticsGame.Core
             hit.Dodge = snap.Dodge; hit.Block = snap.Block;
             bool takesIt;
             if (MeetsWithCounter(hit, out takesIt)) return false;   // a counter stance comes first: it evades the hit
-            if (takesIt) return true;                                // or takes it itself, no dodge rolled
-            if (hit.Effect.Unerring) return true;   // can't be dodged
-            bool forced = PlayersAlwaysDodge && hit.Target.Team == Team.Player;   // the tutorial's dodge lesson
-            if (rng.NextDouble() >= snap.Dodge && !forced) return true;
-            OnDodged(hit.Source, hit.Target, hit.Definition);
-            return false;
+            return true;
+        }
+
+        /// <summary>
+        /// DodgeLead before they land: every attack winding up (and every free action) rolls the dodges of the enemies it is
+        /// going to hit (its target, or those in its area as they stand now), once. A projectile does as it is about to
+        /// touch someone (TickProjectiles), a delayed blast as it is about to go off.
+        /// </summary>
+        private void RollIncomingDodges()
+        {
+            foreach (var u in State.Units)
+                if (u.IsAlive && u.Phase == UnitPhase.Windup && u.ActiveAction != null) RollDodgesFor(u.ActiveAction);
+            foreach (var f in freeActions) RollDodgesFor(f);
+        }
+
+        private void RollDodgesFor(ActionInstance a)
+        {
+            if (a.DodgesRolled || a.ResolveAt - Now > DodgeLead + 1e-4f) return;
+            a.DodgesRolled = true;
+            LockAim(a);   // before the dodges: a dodge dashes off the line it is now set on
+            if (a.Actor == null || !a.Behavior.RollsToHit(a.Definition)) return;
+            foreach (var t in IncomingTargets(a)) RollDodgeAgainst(a.Actor, t, a.Definition);
+        }
+
+        /// <summary>Metres off the line of fire a hitscan shot still catches a body (beyond its radius).</summary>
+        public float HitscanTolerance = 0.1f;
+
+        /// <summary>A hitscan shot stops tracking: from now it fires at where its target's chest is now.</summary>
+        private void LockAim(ActionInstance a)
+        {
+            if (a.AimLocked || a.Actor == null || !a.Behavior.IsHitscan(a.Definition)) return;
+            var t = GetUnit(a.TargetUnitId);
+            if (t == null || !t.IsAlive) return;
+            a.AimLocked = true;
+            a.AimPoint = t.Position + Vector3.up * (t.BodyHeight * 0.5f);
+            Emit(EventType.AimLocked, a.Actor.Id, t.Id, a.AimPoint);
+        }
+
+        /// <summary>
+        /// Is 'target' on the line 'src' fires along toward 'aim' (from its chest, out to the shot's range)? Within its body
+        /// radius (plus HitscanTolerance) of the line, at a height its body covers there.
+        /// </summary>
+        public bool LineOfFireCatches(Unit src, ActionDefinition def, Vector3 aim, Unit target)
+        {
+            Vector3 from = src.Position + Vector3.up * (src.BodyHeight * 0.5f);
+            Vector3 dir = aim - from;
+            Vector3 flat = new Vector3(dir.x, 0f, dir.z);
+            if (flat.sqrMagnitude < 1e-6f) return true;   // straight up or down: nothing to step off
+            float reach = src.ActionStat(def, ActionStat.Range) * RangeTolerance + target.BodyRadius;
+            Vector3 f = flat.normalized;
+            Vector3 v = target.Position - from; v.y = 0f;
+            float along = Vector3.Dot(v, f);
+            if (along < -target.BodyRadius || along > reach) return false;
+            float side = (v - f * along).magnitude;
+            if (side > target.BodyRadius + HitscanTolerance) return false;
+            float h = from.y + dir.y * (along / flat.magnitude);   // the line's height over the target
+            return h >= target.Position.y - HitscanTolerance && h <= target.Position.y + target.BodyHeight + HitscanTolerance;
+        }
+
+        /// <summary>Who 'a' is going to hit, as things stand: those in its area, else its target unit.</summary>
+        private List<Unit> IncomingTargets(ActionInstance a)
+        {
+            var def = a.Definition;
+            if (def.Shape != AreaShape.None && def.Targeting != TargetType.Enemy) return UnitsInArea(a.Actor, def, a.TargetPos);
+            var list = new List<Unit>();
+            var t = GetUnit(a.TargetUnitId);
+            if (t != null) list.Add(t);
+            if (def.Shape != AreaShape.None) foreach (var o in UnitsInArea(a.Actor, def, t != null ? t.Position : a.TargetPos)) if (!list.Contains(o)) list.Add(o);
+            return list;
+        }
+
+        /// <summary>
+        /// 'target' rolls its dodge against 'attacker''s 'def' about to land: on a success it dodges (a Dodge event, and a dash
+        /// out of the way: picked by its player, or by itself). Not against an ally or itself, not while it can't dash
+        /// (rooted, a state that keeps it where it is), and not with a counter stance up (that answers the hit as it lands).
+        /// </summary>
+        /// <param name="from">With no attacker (a blast of the world's: Temperance), where it comes from: the dash goes away from it.</param>
+        public void RollDodgeAgainst(Unit attacker, Unit target, ActionDefinition def, Vector3? from = null)
+        {
+            if (target == null || !target.IsAlive || target == attacker || IsVoided(target)) return;
+            if (attacker == null ? !from.HasValue : target.Team == attacker.Team || !IsTargetableBy(target, attacker)) return;
+            if (target.CannotDodge) return;
+            if (target.IsRooted || target.AnyState(s => s.BlocksDodgeDash)) return;   // no dodging in place
+            if (target.Statuses.Exists(s => s.Has(StatusFlags.Counters))) return;
+            if (pendingDashes.Exists(d => d.UnitId == target.Id)) return;   // already dodging this moment
+            bool forced = PlayersAlwaysDodge && target.Team == Team.Player;   // the tutorial's dodge lesson
+            float dodge = target.EffectiveDodge();
+            if (!forced && (dodge <= 0f || rng.NextDouble() >= dodge)) return;   // no roll at all for no chance (the random stream is left as it was)
+            OnDodged(attacker, target, def, from);
         }
 
         /// <summary>
@@ -252,14 +376,18 @@ namespace TacticsGame.Core
                 hit.DamageMultiplier *= 1f + Mathf.Max(0f, src.ActionStat(def, ActionStat.CritDamage));
             }
             float missing = def.MissingHealthDamage > 0f ? def.MissingHealthDamage * Mathf.Max(0f, target.MaxHealth - target.Health) : 0f;   // Witness To The End
-            hit.Raw = (src.ActionStat(def, ActionStat.Damage) + missing) * atk.DamageMultiplier * hit.DamageMultiplier;
+            float baseDamage = atk.FlatDamage >= 0f ? atk.FlatDamage : src.ActionStat(def, ActionStat.Damage);   // a reflected share: its own number
+            hit.Raw = (baseDamage + missing) * atk.DamageMultiplier * hit.DamageMultiplier;
             float effectiveBlock = hit.Negated ? 1f : Mathf.Clamp01(hit.Block * (1f - Mathf.Clamp01(src.ActionStat(def, ActionStat.BlockPierce) + atk.BlockPierceBonus)));
             hit.Dealt = hit.Raw * (1f - effectiveBlock);
             float dealt = hit.Dealt; DevAdjustDamage(src, target, ref dealt); hit.Dealt = dealt;
             EtchingTraits.Dissipate(this, target, hit.Raw - hit.Dealt);   // what Block stopped (Dissipation)
+            hit.Reflector = target.Statuses.Find(s => s.ReflectShare > 0f);   // as the hit came in: a shield it breaks still reflects it
             hit.Shielded = AbsorbWithShields(target, hit.Dealt);
             hit.Dealt -= hit.Shielded;
-            target.Health -= hit.Dealt;
+            float asStrain;
+            float lost = TakeAsStrain(target, hit.Dealt, out asStrain);   // Strange Axis: it still counts as dealt (triggers, reflects), as strain
+            target.Health -= lost;
             target.LastAttackerId = src.Id;
             target.LastHitAction = def;
             target.LastHitTag = atk.Tag;
@@ -267,13 +395,13 @@ namespace TacticsGame.Core
             // Strain and Unravel (checked against strain BEFORE this hit adds to it). Nothing is immune to Unravel: not Block,
             // not a Transcended Block that stops the damage, not Unstoppable.
             bool atMaxStrain = target.Strain >= target.MaxStrain - 0.001f;
-            hit.Unravel = atMaxStrain && hit.Impact == ImpactType.Heavy;
+            hit.Unravel = atMaxStrain && hit.Impact == ImpactType.Heavy && !target.Passives.Contains(ForsakenRules.EntropyBeast);   // the Forsaken never Unravels: Entropy Beast turns it Diverged
             if (!hit.Negated) AddStrain(target, src.ActionStat(def, ActionStat.StrainOnTarget) * src.StrainDealtMult());
 
             Emit(EventType.Damage, src.Id, target.Id, new DamageInfo
             {
-                ActionId = def.Id, Amount = hit.Dealt, BlockedAmount = hit.Raw - hit.Dealt - hit.Shielded, ShieldedAmount = hit.Shielded, Impact = hit.Impact,
-                RemainingHealth = target.Health, CausedUnravel = hit.Unravel, Critical = hit.Critical, WeakpointsBroken = hit.WeakpointsBroken,
+                ActionId = def.Id, Amount = lost, BlockedAmount = hit.Raw - hit.Dealt - hit.Shielded, ShieldedAmount = hit.Shielded, Impact = hit.Impact,
+                RemainingHealth = target.Health, CausedUnravel = hit.Unravel, Critical = hit.Critical, WeakpointsBroken = hit.WeakpointsBroken, AsStrain = asStrain,
             });
             Triggers.Fire(new TriggerContext { Type = TriggerType.DamageTaken, Sim = this, Subject = target, Other = src, Amount = hit.Dealt, Impact = hit.Impact, Action = def });
 
@@ -304,7 +432,7 @@ namespace TacticsGame.Core
                 if (pick != null && pick.AppliesToUnit(src, target)) ApplyStatus(target, pick.Create(Now, src.Id, null, src.DurationScale(def)), src);
             }
             if (def.Displace == DisplaceMode.TowardSource || def.Displace == DisplaceMode.AwayFromSource) DisplaceUnit(target, src, def);
-            hit.StunFor = src.ActionStat(def, ActionStat.StunDuration) * atk.StunMultiplier * (1f + WeakpointBonus * hit.WeakpointsBroken);
+            hit.StunFor = (atk.FlatStun >= 0f ? atk.FlatStun : src.ActionStat(def, ActionStat.StunDuration)) * atk.StunMultiplier * (1f + WeakpointBonus * hit.WeakpointsBroken);
             // Weakpoints the hit opens: the ability's own (when its hits carry them), what its user's Etchings add (on enemies:
             // Gaps In Their Mind), and a granted Transcend's (Unwind Their Self).
             int own = ActionBehaviors.Get(def.BehaviorId).WeakpointsOnHit(def) ? def.WeakpointsOnTarget : 0;
@@ -365,18 +493,45 @@ namespace TacticsGame.Core
             else if (hit.StunFor > 0f) ApplyStun(hit.Target, hit.StunFor, hit.Source);
         }
 
-        private void OnDodged(Unit attacker, Unit target, ActionDefinition def)
+        private void OnDodged(Unit attacker, Unit target, ActionDefinition def, Vector3? from = null)
         {
-            Emit(EventType.Dodge, attacker.Id, target.Id, new MissInfo { Reason = "dodge" });
+            Emit(EventType.Dodge, attacker != null ? attacker.Id : null, target.Id, new MissInfo { Reason = "dodge" });
             Triggers.Fire(new TriggerContext { Type = TriggerType.Dodged, Sim = this, Subject = target, Other = attacker, Action = def });
-            if (!target.IsAlive || target.IsRooted) return;   // rooted units still dodge, but can't dash
-            if (target.AnyState(s => s.BlocksDodgeDash)) return;   // a Mesmerize counter, a channel, a slam: it dodges where it stands
+            if (!target.IsAlive || target.IsRooted) return;   // (RollDodgeAgainst rolls none for a unit that can't dash)
+            if (target.AnyState(s => s.BlocksDodgeDash)) return;
 
             if (EtchingTraits.DodgesOnInstinct(target)) { DodgeTo(target, InstinctDodgeSpot(target, attacker)); return; }   // Instinct Overtakes Methods
-            if (target.PlayerOrdered)
-                pendingDashes.Add(new DecisionRequest { Kind = DecisionKind.DodgeDash, UnitId = target.Id, AttackerId = attacker.Id });
-            else
-                ExecuteDash(target, BestDashDirection(target, attacker));
+            var request = new DecisionRequest { Kind = DecisionKind.DodgeDash, UnitId = target.Id, AttackerId = attacker != null ? attacker.Id : null, ThreatPoint = attacker == null ? from : null,
+                                                Sidestep = attacker != null && def != null && ActionBehaviors.Get(def.BehaviorId).IsHitscan(def) };
+            if (target.PlayerOrdered) pendingDashes.Add(request);
+            else ExecuteDash(target, DodgeDirection(target, request));
+        }
+
+        /// <summary>The 8-way direction most nearly across the line from 'attacker' (to whichever side a dash gets further).</summary>
+        public int SidestepDirection(Unit unit, Unit attacker)
+        {
+            Vector3 away = unit.Position - attacker.Position; away.y = 0f;
+            away = away.sqrMagnitude > 1e-6f ? away.normalized : Vector3.forward;
+            Vector3 side = Vector3.Cross(Vector3.up, away);
+            int best = 0; float bestScore = float.MinValue;
+            for (int i = 0; i < Directions8.Length; i++)
+            {
+                float across = Mathf.Abs(Vector3.Dot(side, Directions8[i]));
+                if (across < 0.6f) continue;   // across the line, give or take 45 degrees
+                Vector3 to = Paths.ClampDash(unit.Position, unit.Position + Directions8[i] * unit.DashDistanceNow());
+                float s = across + 0.5f * Flat(unit.Position, to) + 0.2f * Vector3.Dot(away, Directions8[i]);   // a little away rather than toward, all else equal
+                if (s > bestScore) { bestScore = s; best = i; }
+            }
+            return best;
+        }
+
+        /// <summary>Where a dodge dashes by default: away from its attacker, or from the point a blast of the world's came from.</summary>
+        public int DodgeDirection(Unit unit, DecisionRequest dodge)
+        {
+            var attacker = GetUnit(dodge.AttackerId);
+            if (attacker != null && dodge.Sidestep) return SidestepDirection(unit, attacker);
+            if (attacker != null) return BestDashDirection(unit, attacker);
+            return dodge.ThreatPoint.HasValue ? BestDashDirection(unit, dodge.ThreatPoint.Value) : 0;
         }
 
         /// <summary>
@@ -409,7 +564,6 @@ namespace TacticsGame.Core
         /// <summary>
         /// Dodge dash. Dashing out of a windup cancels it, but the unit remembers the ability and target and retries
         /// them when the dash ends, keeping the windup progress it had and paying nothing twice (see TryResume).
-        /// Dashing nowhere (picking your own spot) stands firm and leaves the windup running.
         /// </summary>
         private void DodgeTo(Unit unit, Vector3 to)
         {
@@ -422,10 +576,10 @@ namespace TacticsGame.Core
                 unit.ResumeAction = a;
                 unit.ResumeWindupLeft = left;
                 unit.Phase = UnitPhase.Recovery;
-                unit.PhaseEndsAt = Now + DashDuration;
+                unit.PhaseEndsAt = Now + DodgeDuration;
             }
-            else if (unit.ResumeAction != null) unit.PhaseEndsAt = Now + DashDuration;   // dodging again mid-dodge: retry when this dash lands
-            Relocate(unit, to, DashDuration, false);
+            else if (unit.ResumeAction != null) unit.PhaseEndsAt = Now + DodgeDuration;   // dodging again mid-dodge: retry when this dash lands
+            Relocate(unit, to, DodgeDuration, false);
         }
 
         /// <summary>The dash after a mid-windup dodge has ended: start the remembered ability again if it is still possible.</summary>

@@ -1,0 +1,97 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 517e8aab4ab60c342a77467cd77e163b, type: 3}
+  m_Name: Forsaken
+  m_EditorClassIdentifier: Core::TacticsGame.Core.UnitDefinition
+  Id: 
+  DisplayName: Forsaken
+  MaxHealth: 120
+  BaseDodge: 0
+  BaseBlock: 0
+  MaxStrain: 100
+  StrainRecoveryPerSecond: -5
+  StrainRecoveryDelay: 0
+  MaxEnergy: 0
+  StartingEnergy: 0
+  ActionSpeed: 1
+  MoveSpeed: 5
+  DashDistance: 3
+  EyeHeight: 1.6
+  BodyHeight: 1.8
+  BodyRadius: 0.4
+  ReactionSpeed: 0.25
+  BasicAttack: {fileID: 11400000, guid: 988b7ae8f52ea334eb725d0cff6aa081, type: 2}
+  Makina: 0
+  CannotBlock: 0
+  CannotFocus: 0
+  CannotMove: 0
+  CannotDash: 0
+  CannotDodge: 0
+  MapObjective: 0
+  StrainPerSecond: 0
+  StrainName: 
+  ExcludedEtchings:
+  - suffer_beyond_your_limits
+  - untethered_to_sanity
+  - desecrate_your_being
+  DivergeAction: {fileID: 11400000, guid: 3703756e973f3724a93f4b2d85b18321, type: 2}
+  RegressAction: {fileID: 11400000, guid: 0996928709e7a4b47b46a9d0e0e21390, type: 2}
+  InsanityAction: {fileID: 11400000, guid: 31dc7142ec98a574e8a70e14fcdf896a, type: 2}
+  Description: A mind split in two. Composed, it harries from range; at maximum Strain
+    it is torn into its Diverged form, a fast, heavily guarded beast that rips through
+    enemies until its Strain runs dry.
+  Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
+  Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
+  Actions:
+  - {fileID: 11400000, guid: 9b289d88f06c9544a8ca2718a0ee18a2, type: 2}
+  - {fileID: 11400000, guid: 236e76375925345499d427ca4f50f220, type: 2}
+  - {fileID: 11400000, guid: 7bf3efc89ad91994faba669b6d88b63e, type: 2}
+  - {fileID: 11400000, guid: 2ea3506eb2ae0b64da4ca4ad15f67790, type: 2}
+  - {fileID: 11400000, guid: b7134c88cab002d43aa72b9a2da03370, type: 2}
+  - {fileID: 11400000, guid: 285cbf3bb1fb3234486aa8ff7f3973af, type: 2}
+  - {fileID: 11400000, guid: cfa20472abd67514b9502e565773a375, type: 2}
+  - {fileID: 11400000, guid: db1bf55492b0dc24894c2cbff29619d9, type: 2}
+  - {fileID: 11400000, guid: f73cf1b6ba24b3545b8b76b26ed1e5d9, type: 2}
+  - {fileID: 11400000, guid: 0c3f88df81b2f6642ad951594ce6c24d, type: 2}
+  - {fileID: 11400000, guid: 56adb213703857649a93dca3e0e2e01f, type: 2}
+  - {fileID: 11400000, guid: a04b709e37377ae46990786df5120aeb, type: 2}
+  - {fileID: 11400000, guid: 220351af2ed4e4141b972a37aa21f60a, type: 2}
+  - {fileID: 11400000, guid: a33d673013cd5b44e92100a901ad75af, type: 2}
+  - {fileID: 11400000, guid: e0003848eace08b45b741b35b00383e6, type: 2}
+  - {fileID: 11400000, guid: 265c777f3a7654947956455a5b5ba3ad, type: 2}
+  Passives:
+  - entropy_beast
+  AIProfile: 
+  AI: {fileID: 0}
+  Boss: 0
+  ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Model: {fileID: 919132149155446097, guid: 077a008f9916f7d40861ea32540e81ad, type: 3}
+  ModelAnimations: {fileID: 9100000, guid: 6b4f5a0d8552e504983b619db28ffec2, type: 2}
+  ModelEtchings: {fileID: 0}
+  DivergedModel: {fileID: 919132149155446097, guid: 1f2530b6a567c084cb7ccc211f4d85e3, type: 3}
+  DivergedAnimations: {fileID: 9100000, guid: 5f2dbbf8a00a27c4fbdf8b8d6f95cd99, type: 2}
+  Icon: {fileID: 0}
+  GrantedActions:
+  - perplexity
+  - paranoia
+  - controlled_burst
+  - berserk
+  - withdrawal
+  - madness_spills_forth
+  - feast
+  - shatter_the_foundations
+  - miserable_cacophony
+  - porcupine
+  - wretched_visions
+  - simplicity
+  - agitation
+  DataVersion: 16

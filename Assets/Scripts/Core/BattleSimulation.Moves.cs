@@ -96,6 +96,7 @@ namespace TacticsGame.Core
             u.Move = null;
             ClearChase(u);
             if (u.Phase == UnitPhase.Moving) u.Phase = UnitPhase.Ready;
+            else if (u.Phase == UnitPhase.Charging) u.ChargeDecisionAt = Now;
             Emit(EventType.MoveEnded, u.Id, null, new MoveEndedInfo { Position = u.Position });
             StartFall(u, low, drop, 0f, source, true);
         }
@@ -111,10 +112,22 @@ namespace TacticsGame.Core
             Emit(EventType.Jump, u.Id, null, new JumpInfo { From = from, To = to, Duration = seconds });
         }
 
+        /// <summary>The speed 'u' walks at now: its move speed, slowed by ChargeMoveSpeedMultiplier while it charges.</summary>
+        public float WalkSpeedOf(Unit u)
+        {
+            float speed = u.EffectiveMoveSpeed();
+            return u.Phase == UnitPhase.Charging ? Mathf.Max(0.1f, speed * Mathf.Max(0f, ChargeMoveSpeedMultiplier)) : speed;
+        }
+
+        /// <summary>Walking now: on a walk of its own (Moving), or walking while it charges (Charging, with a Move).</summary>
+        public static bool IsWalking(Unit u) { return u.Move != null && (u.Phase == UnitPhase.Moving || u.Phase == UnitPhase.Charging); }
+
         private void StartMove(Unit unit, List<Vector3> path)
         {
-            unit.Phase = UnitPhase.Moving;
-            float moveSpeed = unit.EffectiveMoveSpeed();
+            // A charging unit walks on charging (slowed); its next keep-or-release choice comes when the walk ends.
+            if (unit.Phase == UnitPhase.Charging) unit.ChargeDecisionAt = float.MaxValue;
+            else unit.Phase = UnitPhase.Moving;
+            float moveSpeed = WalkSpeedOf(unit);
             unit.Move = new ActiveMove { Path = path, NextIndex = 1, Speed = moveSpeed };
             Emit(EventType.MoveStarted, unit.Id, null, new MoveInfo { Path = new List<Vector3>(path), Speed = moveSpeed });
         }
@@ -142,6 +155,7 @@ namespace TacticsGame.Core
                 * (grant == TranscendGrant.QuickWindup ? Mathf.Max(0f, unit.GrantParam(def, "windup_mult", 0.25f)) : 1f)   // Quickness And Lethargy
                 * link;
             if (!resuming) EtchingTraits.SpendRevenge(this, unit);   // spent by the next ability, whatever it is
+            var carried = !resuming && !behavior.KeepsQueuedOrder ? SpendOnAbility(unit, def) : null;   // Clear and Steady, INTENTION (a Dash doesn't spend them)
             unit.Waiting = false;
             if (!resuming && unit.Queued != cmd && !behavior.KeepsQueuedOrder) ClearQueued(unit, null);   // using another ability overrides a queued ranged one (a Dash doesn't)
             var inst = new ActionInstance
@@ -153,6 +167,8 @@ namespace TacticsGame.Core
                 NoRecovery = grant == TranscendGrant.NoRecovery,
                 RecoveryScale = (grant == TranscendGrant.QuickWindup ? Mathf.Max(0f, unit.GrantParam(def, "recovery_mult", 1.25f)) : 1f) * link,
             };
+            if (carried != null) inst.Carried = carried;
+            inst.Facing = cmd.Facing;
             inst.LinkedUse = linkedUse;
             inst.LinkDepth = linkedUse ? unit.LinkDepth + 1 : 0;
             unit.Phase = UnitPhase.Windup;
@@ -171,7 +187,7 @@ namespace TacticsGame.Core
                 PayCosts(unit, def, behavior, cmd.TargetUnitId, inst.Transcended);
                 NoteRecastStart(unit, cmd, recast);   // after the costs: they read the open recast
                 if (!behavior.KeepsQueuedOrder) BreakLinks(unit);   // after the costs (they read the run): any ability but a dash ends a linked run, and opens its own as it lands
-                if (unit.Hover != null && !unit.Hover.Permanent) unit.Hover.EndsAfterAction = true;   // one ability from the air, then it comes down
+                if (unit.Hover != null && !unit.Hover.OutlastsActions) unit.Hover.EndsAfterAction = true;   // one ability from the air, then it comes down
             }
             var mesmer = unit.Mesmer;
             if (mesmer != null && mesmer.Strike != null && def == mesmer.Strike && mesmer.StrikesLeft > 0) mesmer.StrikesLeft--;
@@ -193,7 +209,7 @@ namespace TacticsGame.Core
             StepIntoMelee(inst);
             if (!resuming) OpenOwnWeakpoints(inst);
             Emit(EventType.ActionStarted, unit.Id, cmd.TargetUnitId,
-                new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = inst.NoRecovery ? 0f : unit.ActionStat(def, ActionStat.Recovery) * inst.RecoveryScale / speed, TargetPos = inst.TargetPos, Transcended = inst.Transcended,
+                new ActionStartedInfo { ActionId = def.Id, Windup = windup, Recovery = inst.NoRecovery ? 0f : inst.Stat(ActionStat.Recovery) * inst.RecoveryScale / speed, TargetPos = inst.TargetPos, Transcended = inst.Transcended,
                     Range = unit.RangeOf(def), Radius = unit.ActionStat(def, ActionStat.AreaRadius) });   // inst.TargetPos: where OnWindupStart aimed it (the smite's circle)
             ApplyWindupStatuses(inst);
             Triggers.Fire(new TriggerContext { Type = TriggerType.ActionStarted, Sim = this, Subject = unit, Action = def });
@@ -277,6 +293,7 @@ namespace TacticsGame.Core
             }
             if (def.ConsumesRequiredStatus && !def.ConsumeOnResolve)
                 foreach (var id in def.RequiredStatuses()) RemoveStatus(unit, id);
+            if (def.HysteriaOnUse > 0) AddHysteria(unit, def.HysteriaOnUse);   // Devour
             if (def.SelfStatusesOnWindup) ApplySelfStatuses(unit, def);
         }
 

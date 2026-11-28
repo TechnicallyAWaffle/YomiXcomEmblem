@@ -17,6 +17,7 @@ namespace TacticsGame.Core
         public float DamageMultiplier = 1f;
         public string Tag;      // behavior bookkeeping, copied onto the hits it makes (e.g. Final Cut follow-ups)
         public float Charge;    // 0..1: how fully a charge ability was charged before release
+        public float NextPulseAt;   // a channel that acts over time: when it next does (channel_barrage's next shot)
         public bool Transcended;   // ordered Transcended (and the definition allows it): the behavior's stronger version
         public bool UnravelsActor; // its strain cost took the actor past max (ActionDefinition.UnravelsOverMaxStrain): it Unravels once this lands
         // Behavior bookkeeping for actions that keep going after they land (a channel's strikes, a pull): a count and a time.
@@ -32,9 +33,14 @@ namespace TacticsGame.Core
         public float ApproachGlideEnd = -1f; // when that step lands (another glide since: a dodge, a shove; leave it be)
         public bool LinkedUse;               // used as a linked ability (BattleSimulation.Recasts.cs)
         public int LinkDepth;                // linked uses in a row up to and including this one (0: used fresh)
+        public List<ActionModifier> Carried = new List<ActionModifier>();   // from the statuses it spent as it started (StatusFlags.SpentOnAbility: INTENTION's no recovery)
+        public float Facing = float.NaN;     // which way what it places runs, in degrees (UnitCommand.Facing)
+        public bool DodgesRolled;            // the units it is about to hit have rolled their dodges (BattleSimulation.RollIncomingDodges)
+        public bool AimLocked;               // a hitscan shot stopped tracking its target then (ActionBehavior.IsHitscan) ...
+        public Vector3 AimPoint;             // ... at this point: the target's chest as it stood
 
-        /// <summary>One of this action's numbers for its actor, upgrades and statuses included (Unit.ActionStat).</summary>
-        public float Stat(ActionStat stat) { return Actor.ActionStat(Definition, stat); }
+        /// <summary>One of this action's numbers for its actor, upgrades and statuses included (Unit.ActionStat), with what it carries.</summary>
+        public float Stat(ActionStat stat) { return Actor.ActionStat(Definition, stat, Stats.Base(Definition, stat), Carried); }
     }
 
     /// <summary>
@@ -54,9 +60,14 @@ namespace TacticsGame.Core
         public AbilityTip(ActionDefinition def, Unit who, BattleSimulation sim = null) { Def = def; Who = who; Sim = sim; }
 
         public float V(ActionStat stat) { return Who != null ? Who.ActionStat(Def, stat) : Stats.Base(Def, stat); }
-        public void Add(string label, string value) { Effect.Add(new KeyValuePair<string, string>(label, value)); }
+        /// <summary>A line of the popup, with the ability's own wording changes applied (ActionDefinition.TipOverrides).</summary>
+        public void Add(string label, string value)
+        {
+            if (Def != null && !Def.ApplyTipOverride(ref label, ref value)) return;
+            Effect.Add(new KeyValuePair<string, string>(label, value));
+        }
 
-        public static string Secs(float s) { return s <= 0f ? "instant" : string.Format("{0:0.###}s", s); }
+        public static string Secs(float s) { return s <= 0f ? GameText.Get("tip.instant", "instant") : string.Format("{0:0.###}s", s); }
         public static string Metres(float m) { return string.Format("{0:0.#}m", m); }
         public static string Mult(float m) { return "x" + m.ToString("0.##"); }
     }
@@ -77,8 +88,13 @@ namespace TacticsGame.Core
         public int BreakWeakpoints;      // it breaks this many of the target's weakpoints from any side (a Transcend an Etching gave: Brute Force)
         public int ExtraWeakpoints;      // it opens this many more on an enemy it hits, for ExtraWeakpointSeconds (Unwind Their Self's Transcend)
         public float ExtraWeakpointSeconds;
+        public float FlatDamage = -1f;   // 0 or more: the hit's damage before multipliers and block, in place of the ability's (a reflected share: Wrathful Reflection)
+        public float FlatStun = -1f;     // 0 or more: its stun, in place of the ability's
+        public ImpactType? ImpactOverride;   // lands with this impact whatever the ability's own (a reflected hit keeps the impact it came with)
         public bool HasPush;        // shove the target to PushTo if this hits (Bash)
         public Vector3 PushTo;
+        public bool HasLineOfFire;  // a hitscan shot fired at LineOfFire: it lands only if its target is on that line (ActionBehavior.IsHitscan)
+        public Vector3 LineOfFire;
         public bool IgnoreRange;    // area hits: the target only needs to be in the area, not in the action's range
         public bool IgnoreCover;    // area hits land regardless of the target's exposure
         public bool Unerring;       // no hit roll and no dodge: it always connects (a chain snapping taut)
@@ -139,6 +155,23 @@ namespace TacticsGame.Core
         /// preview's ring around the user. 0: it takes no one.</summary>
         public virtual float GatherRadius(Unit actor, ActionDefinition def) { return 0f; }
 
+        /// <summary>
+        /// The abilities that act for this one: a summon's are those of the unit it brings in (SummonUnit). Etchings on this
+        /// ability carry over to them (BattleSimulation.InheritEtchings), and a number they have counts as this ability having
+        /// it (Stats.Has): Summation can go on Termoul's Monolith because The Monolith's crash deals damage.
+        /// </summary>
+        public virtual IEnumerable<ActionDefinition> ActsThrough(ActionDefinition def)
+        {
+            var who = def != null ? def.SummonUnit : null;
+            if (who == null) yield break;
+            if (who.BasicAttack != null) yield return who.BasicAttack;
+            if (who.Actions != null) foreach (var a in who.Actions) if (a != null && a != who.BasicAttack) yield return a;
+        }
+
+        /// <summary>Does it use its AreaRadius, so a radius Etching does something? An area (Shape), or a radius of its own
+        /// (a trap's trigger, a dome, the allies a blink takes along: GatherRadius).</summary>
+        public virtual bool UsesAreaRadius(ActionDefinition def) { return def.Shape != AreaShape.None; }
+
         /// <summary>For one that MovesUser as it lands: are its hits held until the user reaches each target
         /// (BattleSimulation.HoldHitsForArrival)? False for those that time their own (Conjecture's slashes).</summary>
         public virtual bool HitsOnArrival(ActionDefinition def) { return true; }
@@ -195,7 +228,7 @@ namespace TacticsGame.Core
         private Dictionary<string, float> defaults;
 
         /// <summary>One of this behavior's numbers for 'def': the ability's Params entry for 'key', else the default declared in Parameters.</summary>
-        protected float Param(ActionDefinition def, string key)
+        public float Param(ActionDefinition def, string key)
         {
             if (def != null && def.Params != null)
                 for (int i = 0; i < def.Params.Count; i++) if (def.Params[i].Key == key) return def.Params[i].Value;
@@ -215,6 +248,10 @@ namespace TacticsGame.Core
         /// Its roles when the definition sets none (AbilityRoles.Of). The base reads the data alone: marking someone (Mark),
         /// a damaging circle at a point (AreaBlast), a melee strike that needs a status first (Combo). Behaviors add theirs.
         /// </summary>
+        /// <summary>Statuses it puts on units in code rather than through the ability's StatusSpec lists (Countersign's
+        /// COUNTERSIGN), so its popup can say what they do (StatusGlossary.For).</summary>
+        public virtual IEnumerable<string> StatusesApplied(ActionDefinition def) { yield break; }
+
         public virtual AbilityRole DefaultRoles(ActionDefinition def)
         {
             var r = AbilityRole.None;
@@ -229,6 +266,16 @@ namespace TacticsGame.Core
         /// <summary>Does it roll to hit its targets (damage, accuracy and stun lines)? Single-target attacks do; area attacks say so.</summary>
         public virtual bool RollsToHit(ActionDefinition def) { return def.Targeting == TargetType.Enemy; }
 
+        /// <summary>
+        /// A hitscan shot: a ranged attack on one enemy that lands the moment it fires (no projectile, no channel). It stops
+        /// tracking its target DodgeLead before it fires and is then a line toward where the target was: a target that has
+        /// left it by then (a dodge, a blink, a dash) is missed (BattleSimulation.LineOfFireCatches).
+        /// </summary>
+        public virtual bool IsHitscan(ActionDefinition def)
+        {
+            return def.IsRanged && def.Shape == AreaShape.None && def.Targeting == TargetType.Enemy && def.ChannelSeconds <= 0f && RollsToHit(def);
+        }
+
         /// <summary>Hit chance the targeting preview should add for this use (Transcended Steady Strikes always hits).</summary>
         public virtual float PreviewAccuracyBonus(ActionDefinition def, bool transcended) { return 0f; }
 
@@ -239,11 +286,19 @@ namespace TacticsGame.Core
         public virtual void Describe(AbilityTip tip)
         {
             var def = tip.Def;
-            if (RollsToHit(def)) DescribeHit(tip, "Damage", "Stun", true);
-            if (tip.V(ActionStat.Heal) > 0f) tip.Add("Heal", tip.V(ActionStat.Heal).ToString("0"));
+            if (RollsToHit(def)) DescribeHit(tip, GameText.Get("tip.damage", "Damage"), GameText.Get("tip.stun", "Stun"), true);
+            DescribeHealAndCharge(tip, false);
             DescribeMovement(tip);
-            if (def.IsCharge && def.ChargeDamageMultiplier > 1f) tip.Add("Full charge", AbilityTip.Mult(def.ChargeDamageMultiplier) + " dmg");
-            if (def.IsCharge && def.ChargeHealMultiplier > 1f) tip.Add("Full charge", AbilityTip.Mult(def.ChargeHealMultiplier) + " heal");
+            DescribeHealAndCharge(tip, true);
+        }
+
+        /// <summary>The heal line (before the movement) or the charge bonus lines (after), shared by Describe and DescribeNumbers.</summary>
+        private static void DescribeHealAndCharge(AbilityTip tip, bool charge)
+        {
+            var def = tip.Def;
+            if (!charge) { if (tip.V(ActionStat.Heal) > 0f) tip.Add(GameText.Get("tip.heal", "Heal"), tip.V(ActionStat.Heal).ToString("0")); return; }
+            if (def.IsCharge && def.ChargeDamageMultiplier > 1f) tip.Add(GameText.Get("tip.full_charge", "Full charge"), GameText.Format("tip.full_charge_damage", "{0} dmg", AbilityTip.Mult(def.ChargeDamageMultiplier)));
+            if (def.IsCharge && def.ChargeHealMultiplier > 1f) tip.Add(GameText.Get("tip.full_charge", "Full charge"), GameText.Format("tip.full_charge_heal", "{0} heal", AbilityTip.Mult(def.ChargeHealMultiplier)));
         }
 
         /// <summary>
@@ -257,13 +312,12 @@ namespace TacticsGame.Core
             var scratch = new AbilityTip(def, tip.Who, tip.Sim);
             behavior.Describe(scratch);   // for its target statuses' heading only
             tip.TargetStatusesTitle = scratch.TargetStatusesTitle;
-            if (behavior.RollsToHit(def)) DescribeHit(tip, "Damage", "Stun", true);
-            if (tip.V(ActionStat.Heal) > 0f) tip.Add("Heal", tip.V(ActionStat.Heal).ToString("0"));
+            if (behavior.RollsToHit(def)) DescribeHit(tip, GameText.Get("tip.damage", "Damage"), GameText.Get("tip.stun", "Stun"), true);
+            DescribeHealAndCharge(tip, false);
             // A push or pull, only where DisplaceDistance means one (behaviors that reword it use it as a height or the like).
             var move = behavior.GetType().GetMethod("DescribeMovement", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (move != null && move.DeclaringType == typeof(ActionBehavior)) behavior.DescribeMovement(tip);
-            if (def.IsCharge && def.ChargeDamageMultiplier > 1f) tip.Add("Full charge", AbilityTip.Mult(def.ChargeDamageMultiplier) + " dmg");
-            if (def.IsCharge && def.ChargeHealMultiplier > 1f) tip.Add("Full charge", AbilityTip.Mult(def.ChargeHealMultiplier) + " heal");
+            DescribeHealAndCharge(tip, true);
             DescribeWeakpoints(tip);
         }
 
@@ -272,13 +326,14 @@ namespace TacticsGame.Core
         {
             var def = tip.Def;
             float damage = tip.V(ActionStat.Damage);
-            if (damage > 0f) tip.Add(damageLabel, string.Format("{0:0} {1}", damage, def.Impact == ImpactType.Heavy ? "heavy" : "light"));
-            else if (def.Impact == ImpactType.Heavy) tip.Add("Impact", "heavy");
-            if (accuracy && tip.V(ActionStat.Accuracy) < 0.995f) tip.Add("Accuracy", string.Format("{0:0}%", tip.V(ActionStat.Accuracy) * 100f));
-            if (tip.V(ActionStat.CritChance) > 0f) tip.Add("Critical", string.Format("{0:0}% for +{1:0}% dmg", tip.V(ActionStat.CritChance) * 100f, tip.V(ActionStat.CritDamage) * 100f));
+            string heavy = GameText.Get("tip.impact_heavy", "heavy");
+            if (damage > 0f) tip.Add(damageLabel, GameText.Format("tip.damage_value", "{0:0} {1}", damage, def.Impact == ImpactType.Heavy ? heavy : GameText.Get("tip.impact_light", "light")));
+            else if (def.Impact == ImpactType.Heavy) tip.Add(GameText.Get("tip.impact", "Impact"), heavy);
+            if (accuracy && tip.V(ActionStat.Accuracy) < 0.995f) tip.Add(GameText.Get("tip.accuracy", "Accuracy"), string.Format("{0:0}%", tip.V(ActionStat.Accuracy) * 100f));
+            if (tip.V(ActionStat.CritChance) > 0f) tip.Add(GameText.Get("tip.critical", "Critical"), GameText.Format("tip.critical_value", "{0:0}% for +{1:0}% dmg", tip.V(ActionStat.CritChance) * 100f, tip.V(ActionStat.CritDamage) * 100f));
             if (tip.V(ActionStat.StunDuration) > 0f) tip.Add(stunLabel, AbilityTip.Secs(tip.V(ActionStat.StunDuration)));
-            if (tip.V(ActionStat.StrainOnTarget) > 0f) tip.Add("Target strain", string.Format("+{0:0}", tip.V(ActionStat.StrainOnTarget)));
-            if (def.StunnedDamageMultiplier > 1f) tip.Add("Vs stunned", AbilityTip.Mult(def.StunnedDamageMultiplier) + " dmg");
+            if (tip.V(ActionStat.StrainOnTarget) > 0f) tip.Add(GameText.Get("tip.target_strain", "Target strain"), string.Format("+{0:0}", tip.V(ActionStat.StrainOnTarget)));
+            if (def.StunnedDamageMultiplier > 1f) tip.Add(GameText.Get("tip.vs_stunned", "Vs stunned"), GameText.Format("tip.vs_stunned_value", "{0} dmg", AbilityTip.Mult(def.StunnedDamageMultiplier)));
         }
 
         /// <summary>Is its follow-up aimed afresh (true: a new target is picked each time, Scepter Of Tyranny), rather than
@@ -295,6 +350,8 @@ namespace TacticsGame.Core
 
         /// <summary>After its target unit, is a second unit picked for it (UnitCommand.SecondTargetId: Supersede's swap)?</summary>
         public virtual bool PicksSecondUnit(ActionDefinition def) { return false; }
+        /// <summary>The player turns what it places before placing it (hold R: UnitCommand.Facing): Obstruction's wall.</summary>
+        public virtual bool Rotatable(ActionDefinition def) { return false; }
 
         /// <summary>Do its WeakpointsOnTarget open on what its hits land on (true), or, for an ability with no hit of its own
         /// (a status spell, a teleport, a pull), on the unit it was used on as it resolves (false)?</summary>
@@ -304,11 +361,13 @@ namespace TacticsGame.Core
         public static void DescribeWeakpoints(AbilityTip tip)
         {
             var def = tip.Def;
-            string lasts = def.WeakpointSeconds > 0f ? " for " + AbilityTip.Secs(def.WeakpointSeconds) : "";
-            if (def.WeakpointsOnTarget > 0) tip.Add("Weakpoints", def.WeakpointsOnTarget + " on the target" + lasts);
-            if (def.WeakpointsOnSelfDuringWindup > 0) tip.Add("Weakpoints", def.WeakpointsOnSelfDuringWindup + " on you while it winds up");
-            if (def.WeakpointsOnSelf > 0) tip.Add("Weakpoints", def.WeakpointsOnSelf + " on you" + lasts);
-            if (def.BreaksWeakpoints > 0) tip.Add("Breaks", def.BreaksWeakpoints + (def.BreaksWeakpoints == 1 ? " weakpoint" : " weakpoints") + " on each unit hit");
+            string lasts = def.WeakpointSeconds > 0f ? GameText.Format("tip.weakpoints_for", " for {0}", AbilityTip.Secs(def.WeakpointSeconds)) : "";
+            string label = GameText.Get("tip.weakpoints", "Weakpoints");
+            if (def.WeakpointsOnTarget > 0) tip.Add(label, GameText.Format("tip.weakpoints_target", "{0} on the target{1}", def.WeakpointsOnTarget, lasts));
+            if (def.WeakpointsOnSelfDuringWindup > 0) tip.Add(label, GameText.Format("tip.weakpoints_self_windup", "{0} on you while it winds up", def.WeakpointsOnSelfDuringWindup));
+            if (def.WeakpointsOnSelf > 0) tip.Add(label, GameText.Format("tip.weakpoints_self", "{0} on you{1}", def.WeakpointsOnSelf, lasts));
+            if (def.BreaksWeakpoints > 0) tip.Add(GameText.Get("tip.breaks", "Breaks"), def.BreaksWeakpoints == 1 ? GameText.Get("tip.breaks_one", "1 weakpoint on each unit hit")
+                                                                                                         : GameText.Format("tip.breaks_many", "{0} weakpoints on each unit hit", def.BreaksWeakpoints));
         }
 
         /// <summary>Does its user close in on the target while it winds up (BattleSimulation.StepIntoMelee)? Melee abilities
@@ -410,6 +469,8 @@ namespace TacticsGame.Core
     /// </summary>
     public class AuraBehavior : ActionBehavior
     {
+        public override bool UsesAreaRadius(ActionDefinition def) { return true; }   // the dome
+
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)
         {
             var def = a.Definition;
@@ -498,6 +559,31 @@ namespace TacticsGame.Core
             { "soulseeker", new SoulseekerBehavior() },
             { "sky_shot", new SkyShotBehavior() },
             { "chain_tether", new ChainTetherBehavior() },
+            // Duelist's tempo kit, Strategist's fourth round
+            { "feint", new FeintBehavior() },
+            { "contempt", new ContemptBehavior() },
+            { "countersign", new CountersignBehavior() },
+            { "reflect_shield", new ReflectShieldBehavior() },
+            { "wall", new WallBehavior() },
+            { "composition", new CompositionBehavior() },
+            // the Forsaken
+            { "forsaken_form", new FormShiftBehavior() },
+            { "shattered_mind", new ShatteredMindBehavior() },
+            { "projectile_shot", new ProjectileShotBehavior() },
+            { "fray", new FrayBehavior() },
+            { "rampage", new RampageBehavior() },
+            { "burst_volley", new BurstVolleyBehavior() },
+            { "channel_barrage", new ChannelBarrageBehavior() },
+            { "howling_end", new HowlingEndBehavior() },
+            { "berserk", new BerserkBehavior() },
+            { "blind_rampage", new BlindRampageBehavior() },
+            { "withdrawal", new WithdrawalBehavior() },
+            { "strain_siphon", new StrainSiphonBehavior() },
+            { "madness_spills", new MadnessSpillsBehavior() },
+            { "feast", new FeastBehavior() },
+            { "shatter_foundations", new ShatterFoundationsBehavior() },
+            { "cacophony", new CacophonyBehavior() },
+            { "wretched_visions", new WretchedVisionsBehavior() },
             // Matriarch, Howler (and any kit that fires projectiles: ProjectileBehavior)
             { "volley", new VolleyBehavior() },
             { "volley_stream", new VolleyStreamBehavior() },
@@ -538,6 +624,8 @@ namespace TacticsGame.Core
             { "crash_down", new CrashDownBehavior() },
             { "massacre", new MassacreBehavior() },
             { "omen", new OmenBehavior() },
+            // Map objectives
+            { "converge_realities", new ConvergeRealitiesBehavior() },
             { "outburst", new OutburstBehavior() },
             { "grasp", new GraspBehavior() },
             { "impel", new ImpelBehavior() },

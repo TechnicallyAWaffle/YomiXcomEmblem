@@ -63,17 +63,18 @@ namespace TacticsGame.Core
         /// it then. Damage knocks it down instead: a fall (StartFall) with its stun and fall damage (HoverState.OnStruck).
         /// </summary>
         /// riseSeconds / descendSeconds (0 = HoverRiseSeconds / HoverDescendSeconds): how long it takes up and back down (a
-        /// flight timed to an ability's windup and recovery). permanent: it never comes down of itself (the Monarch's Ascension).
+        /// flight timed to an ability's windup and recovery). outlastsActions: an ability started up there doesn't bring it
+        /// down, only 'until' does; flies: it can move about up there (StartFlight). Both: the Monarch's Ascension.
         /// False if the unit couldn't take off (already in the air, falling, dead).
-        public bool HoverUnit(Unit unit, Vector3 to, float until, List<string> statuses, float riseSeconds = 0f, float descendSeconds = 0f, bool permanent = false)
+        public bool HoverUnit(Unit unit, Vector3 to, float until, List<string> statuses, float riseSeconds = 0f, float descendSeconds = 0f, bool outlastsActions = false, bool flies = false)
         {
             if (!unit.IsAlive || unit.IsLifted || unit.FallLandAt >= 0f) return false;
             if (unit.HeldById != null) ReleaseHeld(unit);
             if (unit.Phase == UnitPhase.Moving) EndMove(unit, false);
             unit.GlideEnd = -1f;
             float rise = riseSeconds > 0f ? riseSeconds : HoverRiseSeconds;
-            var hover = unit.AddState(new HoverState { From = unit.Position, To = to, Start = Now, RiseEnd = Now + rise, SourceId = unit.Id, Statuses = statuses, DescendSeconds = descendSeconds, Permanent = permanent });
-            hover.DropAt = permanent ? float.MaxValue : Mathf.Max(hover.RiseEnd, until);
+            var hover = unit.AddState(new HoverState { From = unit.Position, To = to, Start = Now, RiseEnd = Now + rise, SourceId = unit.Id, Statuses = statuses, DescendSeconds = descendSeconds, OutlastsActions = outlastsActions, Flies = flies });
+            hover.DropAt = Mathf.Max(hover.RiseEnd, until);
             Emit(EventType.Lift, unit.Id, unit.Id,
                 new LiftInfo { From = hover.From, To = hover.To, RiseSeconds = rise, DropAt = hover.DropAt, Hover = true });
             return true;
@@ -96,13 +97,44 @@ namespace TacticsGame.Core
             Emit(EventType.Dash, u.Id, null, new DashInfo { From = u.Position, To = landing, Duration = descend, Fall = true });
         }
 
-        /// <summary>The hover's statuses come off and its lift ends (no landing: callers move the unit themselves).</summary>
+        /// <summary>The hover's statuses come off and its lift ends (no landing: callers move the unit themselves). A flight
+        /// under way stops where it is.</summary>
         private void ClearHover(Unit u)
         {
             var hover = u.Hover;
             if (hover == null) return;
+            if (u.Move != null && u.Move.Flying) EndMove(u, false);
             u.RemoveState(hover);
             if (hover.Statuses != null) foreach (var id in hover.Statuses) RemoveStatus(u, id);
+        }
+
+        /// <summary>
+        /// A hovering unit that Flies sets off for 'to': straight there through the air at its height (no path, no walls: it
+        /// is above them), at its walking speed. It is Moving meanwhile, like a walk (FlyStep moves it).
+        /// </summary>
+        private void StartFlight(Unit unit, Vector3 to)
+        {
+            var hover = unit.Hover;
+            Vector3 end = new Vector3(to.x, hover.To.y, to.z);
+            unit.Phase = UnitPhase.Moving;
+            float speed = WalkSpeedOf(unit);
+            unit.Move = new ActiveMove { Path = new List<Vector3> { unit.Position, end }, NextIndex = 1, Speed = speed, Flying = true };
+            Emit(EventType.MoveStarted, unit.Id, null, new MoveInfo { Path = new List<Vector3>(unit.Move.Path), Speed = speed, Fly = true });
+        }
+
+        /// <summary>One tick of a flight: the hover itself is carried across (its rise, if still going, goes on as it moves).</summary>
+        private void FlyStep(Unit u)
+        {
+            var hover = u.Hover;
+            if (hover == null) { EndMove(u, false); return; }
+            Vector3 next = u.Move.Path[u.Move.Path.Count - 1];
+            Vector3 d = next - hover.To; d.y = 0f;
+            float step = u.Move.Speed * TickLength;
+            if (d.magnitude <= step) { u.Move.NextIndex = u.Move.Path.Count; }
+            else d = d.normalized * step;
+            hover.From += d;
+            hover.To += d;
+            u.Position += d;
         }
 
         /// <summary>
@@ -134,6 +166,7 @@ namespace TacticsGame.Core
             to = Terrain.OnGround(FreeSpotNear(unit, to, to, false));   // crowded: the nearest free spot around the destination
             if (unit.Phase == UnitPhase.Moving) EndMove(unit, false);
             unit.Position = to;
+            if (source != unit) foreach (var s in unit.States.ToArray()) s.OnDisplaced(this);
             Emit(EventType.Dash, unit.Id, null, new DashInfo { From = from, To = to, Duration = 0f, Forced = source != unit, Teleport = true, Blink = source == unit });
         }
     }

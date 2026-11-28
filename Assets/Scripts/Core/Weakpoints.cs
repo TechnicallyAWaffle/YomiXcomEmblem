@@ -145,6 +145,12 @@ namespace TacticsGame.Core
         }
 
         /// <summary>Every tick: weakpoints that ran out, or whose windup is over, close.</summary>
+        /// <summary>Is the action a weakpoint is bound to still going: winding up, or channelling (Withdrawal)?</summary>
+        private static bool BoundHolds(Unit u, ActionInstance a)
+        {
+            return (u.ActiveAction == a && u.Phase == UnitPhase.Windup) || (u.Phase == UnitPhase.Channeling && u.Channel != null && u.Channel.Action == a);
+        }
+
         private void TickWeakpoints()
         {
             foreach (var u in State.Units)
@@ -152,7 +158,7 @@ namespace TacticsGame.Core
                 if (u.Weakpoints.Count == 0) continue;
                 int before = u.Weakpoints.Count;
                 if (!u.IsAlive) u.Weakpoints.Clear();
-                else u.Weakpoints.RemoveAll(w => w.Bound != null ? u.ActiveAction != w.Bound || u.Phase != UnitPhase.Windup : w.ExpiresAt <= Now);
+                else u.Weakpoints.RemoveAll(w => w.Bound != null ? !BoundHolds(u, w.Bound) : w.ExpiresAt <= Now);
                 if (u.Weakpoints.Count != before) EmitWeakpoints(u, 0, false);
             }
         }

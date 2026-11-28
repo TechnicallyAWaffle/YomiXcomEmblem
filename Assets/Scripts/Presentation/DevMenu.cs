@@ -94,8 +94,8 @@ namespace TacticsGame.Presentation
         /// <summary>Beside the panel: every mission of the campaign; picking one goes straight to its preparation.</summary>
         private void DrawMissionList()
         {
-            var missions = Campaign.DevMissions;
-            if (missions == null) return;
+            int missions = Campaign.DevMissionCount;
+            if (missions == 0) return;
             jumpRect = new Rect(rect.xMax + 6f, rect.y, 280f, rect.height);
             GUI.Box(jumpRect, GUIContent.none);
             GUI.Box(jumpRect, GUIContent.none);
@@ -103,10 +103,9 @@ namespace TacticsGame.Presentation
             GUILayout.Label("Jump to the preparation of:", head);
             jumpScroll = GUILayout.BeginScrollView(jumpScroll);
             int current = Campaign.DevRoster.MissionIndex;
-            for (int i = 0; i < missions.Count; i++)
+            for (int i = 0; i < missions; i++)
             {
-                if (missions[i] == null) continue;
-                string label = (i + 1) + ". " + missions[i].Title + (i == current ? "  (current)" : "");
+                string label = (i + 1) + ". " + Campaign.DevMissionTitle(i) + (i == current ? "  (current)" : "");
                 if (GUILayout.Button(label))
                 {
                     Campaign.DevJumpToMission(i);
@@ -161,12 +160,9 @@ namespace TacticsGame.Presentation
             GUILayout.Space(8f);
             GUILayout.Label("Campaign", head);
             GUILayout.Label(string.Format("Mission {0}, screen: {1}", roster.MissionIndex + 1, Campaign.DevScreenName), small);
-            if (GUILayout.Button("+5 ability points (everyone)")) Campaign.DevGrantPoints(5);
+            if (GUILayout.Button("+100 max Grasp (everyone)")) Campaign.DevGrantGrasp(100);
             GUI.enabled = Campaign.DevUpgrading;
-            GUILayout.BeginHorizontal();
             if (GUILayout.Button("Reroll Etchings")) Campaign.DevRerollOffers();
-            if (GUILayout.Button("+1 pick")) Campaign.DevExtraPick();
-            GUILayout.EndHorizontal();
             string who = Campaign.DevMemberName;
             GUILayout.Label(who != null ? "Abilities: " + who : "Abilities (on the upgrade screen)", small);
             GUILayout.BeginHorizontal();

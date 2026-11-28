@@ -77,8 +77,10 @@ class MeshBuilder:
         self.etched = []
 
     # Slots past Body / Metal / Etched, made on first use. In Unity (UnitLooks): Dark is near black (smoke, shadow),
-    # Glow the team's colour, glowing, Gold a warm gold. Their colours here are only for the previews.
-    SLOT_COLOURS = {'Dark': (0.08, 0.07, 0.09, 1), 'Glow': (1.0, 0.5, 0.45, 1), 'Gold': (0.9, 0.72, 0.3, 1)}
+    # Glow the team's colour, glowing, Gold a warm gold, Bone a pale ivory (masks, bone, pale flesh), Eye a bright white
+    # (eyes). Their colours here are only for the previews.
+    SLOT_COLOURS = {'Dark': (0.08, 0.07, 0.09, 1), 'Glow': (1.0, 0.5, 0.45, 1), 'Gold': (0.9, 0.72, 0.3, 1),
+                    'Bone': (0.9, 0.86, 0.74, 1), 'Eye': (0.98, 0.98, 0.98, 1)}
 
     def _mat(self, name):
         if name not in self.mats:

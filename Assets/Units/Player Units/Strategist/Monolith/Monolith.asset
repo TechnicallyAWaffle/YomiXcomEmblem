@@ -28,9 +28,21 @@ MonoBehaviour:
   EyeHeight: 1.6
   BodyHeight: 1.8
   BodyRadius: 0.6
+  ReactionSpeed: 0.25
   BasicAttack: {fileID: 0}
   Makina: 1
+  CannotBlock: 0
+  CannotFocus: 0
+  CannotMove: 0
+  CannotDash: 0
+  CannotDodge: 0
+  MapObjective: 0
   StrainPerSecond: 3
+  StrainName: 
+  ExcludedEtchings: []
+  DivergeAction: {fileID: 0}
+  RegressAction: {fileID: 0}
+  InsanityAction: {fileID: 0}
   Description: 
   Universal: {fileID: 0}
   Dash: {fileID: 0}
@@ -41,6 +53,11 @@ MonoBehaviour:
   AI: {fileID: 0}
   Boss: 0
   ViewPrefab: {fileID: 2525647911054256709, guid: b57f9a915ba94bb468bedf8d04e76ee2, type: 3}
+  Model: {fileID: 0}
+  ModelAnimations: {fileID: 0}
+  ModelEtchings: {fileID: 0}
+  DivergedModel: {fileID: 0}
+  DivergedAnimations: {fileID: 0}
   Icon: {fileID: 0}
   GrantedActions: []
-  DataVersion: 15
+  DataVersion: 16

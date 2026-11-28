@@ -191,7 +191,7 @@ namespace TacticsGame.Core
 
         private void TickParts()
         {
-            bool auraStep = IsStep(StrainRecoveryTicks);
+            bool auraStep = IsStep(RateTicks);   // attachments refresh with the rate step
             foreach (var u in State.Units.ToArray())
             {
                 if (!u.IsAlive || u.Passives.Count == 0) continue;

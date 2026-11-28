@@ -32,6 +32,9 @@ namespace TacticsGame.Core
         public virtual void OnDeath(BattleSimulation sim) { }
         /// <summary>The unit is being shoved, pulled or knocked somewhere (BattleSimulation.Relocate).</summary>
         public virtual void OnShoved(BattleSimulation sim) { }
+        /// <summary>Something else moved the unit: a shove, pull or knockback that took (BattleSimulation.Relocate), or a teleport
+        /// (BattleSimulation.TeleportUnit). Compositions of Destruction's projectile arms itself.</summary>
+        public virtual void OnDisplaced(BattleSimulation sim) { }
     }
 
     /// <summary>Subjugate in progress, on the grappler (see BattleSimulation.TickGrapples).</summary>
@@ -84,15 +87,16 @@ namespace TacticsGame.Core
     }
 
     /// <summary>
-    /// Hovering (Skyward Demise): a lift the unit made itself; it can act, not move. The ability it starts up there ends the
-    /// hover once it lands (EndsAfterAction); Statuses come off when the hover ends. Damage knocks it down.
+    /// Hovering (Skyward Demise): a lift the unit made itself; it can act, and moves only if it Flies. The ability it starts up
+    /// there ends the hover once it lands (EndsAfterAction); Statuses come off when the hover ends. Damage knocks it down.
     /// </summary>
     public class HoverState : LiftState
     {
         public bool EndsAfterAction;
         public List<string> Statuses;
         public float DescendSeconds;   // the glide down when it ends; 0 = BattleSimulation.HoverDescendSeconds
-        public bool Permanent;         // never ends of itself, nor after an ability (the Monarch's Ascension)
+        public bool OutlastsActions;   // an ability started up there doesn't end it: only its time does (the Monarch's Ascension)
+        public bool Flies;             // it can move about up there: moves fly straight at its height (BattleSimulation.StartFlight)
 
         // Damage knocks it down, unless the unit is Unstoppable (it can't be knocked out of the air).
         public override void OnStruck(BattleSimulation sim, HitContext hit) { if (hit.Dealt > 0f && !Unit.IsUnstoppable) sim.EndHover(Unit, true, hit.Source); }

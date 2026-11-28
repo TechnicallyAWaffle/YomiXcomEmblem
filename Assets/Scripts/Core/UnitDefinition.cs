@@ -25,6 +25,8 @@ namespace TacticsGame.Core
         public float EyeHeight = 1.6f;
         public float BodyHeight = 1.8f;
         public float BodyRadius = 0.4f;    // units block line of sight; bigger units block more
+        [Tooltip("Enemies: seconds it takes to react to standing in an area attack's windup or a projectile's path, before it tries to get out of the way (rolled each time: x0.5-1.5 for areas, x1-2 for projectiles). See BattleSimulation.Evasion.")]
+        [Min(0f)] public float ReactionSpeed = 0.25f;
         [Tooltip("Always-available fallback attack (no cooldown or cost). Added after Actions.")]
         public ActionDefinition BasicAttack;
         [Tooltip("A Makina: a construct the player orders, but which can't move, Block or Dash, only Waits (no Clear Mind), gains Strain Per Second, and breaks at max strain (BattleSimulation, Makina.cs).")]
@@ -33,8 +35,26 @@ namespace TacticsGame.Core
         public bool CannotBlock;
         [Tooltip("It can't Focus: a Wait is only a pause, never Clear Mind (the Howler).")]
         public bool CannotFocus;
+        [Tooltip("It can't walk (a Makina can't either). It can still be moved by others.")]
+        public bool CannotMove;
+        [Tooltip("It has no Dash.")]
+        public bool CannotDash;
+        [Tooltip("It never dodges: no dodge rolls at all, whatever raises its dodge.")]
+        public bool CannotDodge;
+        [Tooltip("A map objective (the Omen): placed on a map with the Map Builder rather than listed in an encounter, and it doesn't count toward victory (the battle is won with only objectives left).")]
+        public bool MapObjective;
         [Tooltip("Strain it gains every second, always (a Makina's decay). 0: none.")]
         [Min(0f)] public float StrainPerSecond = 0f;
+        [Tooltip("What its Strain is called on screen (the Forsaken: Entropy). Empty: Strain. It works as Strain whatever its name.")]
+        public string StrainName = "";
+        [Tooltip("Etching ids it is never offered (the Forsaken: those that Unravel or spend past maximum strain).")]
+        public List<string> ExcludedEtchings = new List<string>();
+        [Tooltip("The Forsaken: the ability cast for it when its strain (Entropy) reaches maximum, which turns it Diverged (NEUROSIS). Never ordered.")]
+        public ActionDefinition DivergeAction;
+        [Tooltip("The Forsaken: the ability cast for it when its Entropy runs out while Diverged, which turns it Composed again (REGRESSION). Never ordered.")]
+        public ActionDefinition RegressAction;
+        [Tooltip("The Forsaken: the ability cast for it once its HYSTERIA reaches the limit, as soon as it can act (SHATTERED MIND), which makes it INSANE. Never ordered. Empty: INSANE at once.")]
+        public ActionDefinition InsanityAction;
         [Tooltip("What this class is good at, shown when the player inspects it on the class selection screen.")]
         [TextArea(3, 8)] public string Description = "";
         [Tooltip("The universal Block (shared asset). Added after BasicAttack.")]
@@ -58,6 +78,10 @@ namespace TacticsGame.Core
         public RuntimeAnimatorController ModelAnimations;
         [Tooltip("The pattern on the model's \"Etched\" material slot (dark lines on white), laid over the team's colour. Set on import from Assets/Models/<DisplayName>/<DisplayName>Etchings.png (UnitModelImport).")]
         public Texture2D ModelEtchings;
+        [Tooltip("The Forsaken: the model of its Diverged form, shown in place of Model while Diverged. Filled in on import for models under Assets/Models/<DisplayName>Diverged/ (UnitModelImport).")]
+        public GameObject DivergedModel;
+        [Tooltip("The Diverged model's Animator Controller (UnitModelImport).")]
+        public RuntimeAnimatorController DivergedAnimations;
         [Tooltip("Portrait in the battle's unit panel (lower left). Empty: the unit's initials on a coloured tile.")]
         public Texture2D Icon;
         [HideInInspector] public List<string> GrantedActions = new List<string>();   // new abilities SquadAssets already handed this unit once (SquadAssets.Grant)

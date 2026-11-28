@@ -35,14 +35,24 @@ namespace TacticsGame.Core
         [Min(0)] public int MaxUp = 6;
     }
 
+    /// <summary>A map objective in an encounter, at one of its map's objective spawn points (MapTemplate.ObjectiveSpawns).</summary>
+    [System.Serializable]
+    public class ObjectiveEntry
+    {
+        public UnitDefinition Unit;
+        [Tooltip("Which of the map's objective spawn points it stands on.")]
+        [Min(0)] public int SpawnPoint;
+        public List<UpgradeDefinition> Upgrades = new List<UpgradeDefinition>();
+    }
+
     /// <summary>What winning an encounter earns.</summary>
     [System.Serializable]
     public class EncounterRewards
     {
-        [Tooltip("Experience every squad member gains (nothing spends it for now: upgrades are Etchings).")]
+        [Tooltip("Max Grasp every squad member gains (spent on upgrades: Progression).")]
+        [Min(0)] public int Grasp = 100;
+        [Tooltip("Experience every squad member gains (nothing spends it for now).")]
         public int Experience = 30;
-        [Tooltip("Ability points every squad member gains (spent on unlocking abilities).")]
-        public int AbilityPoints = 1;
         public int Currency;
         [Tooltip("Upgrades added to the squad's stock, to give to members later.")]
         public List<UpgradeDefinition> Upgrades = new List<UpgradeDefinition>();
@@ -56,12 +66,28 @@ namespace TacticsGame.Core
         [Tooltip("Stable id for saves (completed encounters). Empty: the encounter asset's name.")]
         public string Id = "";
         public List<EnemyEntry> Enemies = new List<EnemyEntry>();
+        [Tooltip("Map objectives (the Omen), each on one of the map's objective spawn points. They don't count toward winning.")]
+        public List<ObjectiveEntry> Objectives = new List<ObjectiveEntry>();
+        [Tooltip("Conditions on the battle (MissionRules), such as an objective's reinforcements.")]
+        public List<MissionRule> Rules = new List<MissionRule>();
         public EncounterObjective Objective = EncounterObjective.DefeatAllEnemies;
         [Tooltip("Endless reinforcements on the enemy side, dropped in at random spots (pair it with a boss: beating the bosses wins).")]
         public ReinforcementWaves Waves = new ReinforcementWaves();
         public EncounterRewards Rewards = new EncounterRewards();
         [Tooltip("The squad keeps its wounds afterwards (members brought to 0 health are down until they rest). Campaign missions don't.")]
         public bool CarryOverWounds = false;
+        [Tooltip("The battle is only won once every reinforcement (Enemies with Arrive After) has arrived and fallen; off: beating everyone on the field wins, whatever is still to come.")]
+        public bool AwaitReinforcements = false;
+        [Tooltip("Temperance, the ship that comes over the map: whether it comes, and when (BattleSimulation.Temperance.cs).")]
+        public TemperanceSettings Temperance = new TemperanceSettings();
+    }
+
+    /// <summary>Whether Temperance comes in an encounter, and how many seconds in it arrives (Omens bring it sooner).</summary>
+    [System.Serializable]
+    public class TemperanceSettings
+    {
+        public bool Enabled = true;
+        [Min(0f)] public float ArriveAfter = 60f;
     }
 
     // ------------------------------------------------------------------ the squad between battles
@@ -80,19 +106,44 @@ namespace TacticsGame.Core
         [Range(0f, 1f)] public float Wounds;                  // share of max health missing; 1 = down (can't deploy until it rests)
         // Progression (Progression): a progressing member brings exactly its unlocked abilities, and its Etchings.
         public bool Progressing;
-        public int Experience, AbilityPoints;
+        public int Experience;
         public List<string> Unlocked = new List<string>();    // ActionDefinition ids
-        public List<EtchingPick> Etchings = new List<EtchingPick>();
-        // The upgrade phase under way: the Etchings offered (ids) and how many more it takes.
+        public List<EtchingPick> Etchings = new List<EtchingPick>();   // each holds the Grasp it uses
+        // Grasp: how much the member can hold (Progression.MaxGrasp: earned, plus Amputations, less what destroying took)
+        // and what holds it (Progression.UsedGrasp: learned abilities, Etchings, rituals).
+        public int GraspEarned, GraspLost;
+        public List<GraspUse> AbilityGrasp = new List<GraspUse>();   // abilities learned in Knowledge, at the price paid (starters: none)
+        public List<RitualPick> Rituals = new List<RitualPick>();    // Form: stat rituals, in the order done
+        // The upgrade phase under way: the Etchings offered (ids; rerolled each time one is taken) and the abilities offered.
         public List<string> Offer = new List<string>();
-        public int PicksLeft;
-        public List<string> AbilityOffer = new List<string>();   // locked class abilities it may unlock this phase (ids)
+        public int EtchingDraws;                                     // offers drawn this phase (seeds the next draw)
+        public List<string> AbilityOffer = new List<string>();   // locked class abilities it may learn this phase (ids)
 
         public bool Down { get { return Wounds >= 1f - 1e-4f; } }
     }
 
+    /// <summary>The Grasp a learned ability uses (the price it was learned at).</summary>
+    [System.Serializable]
+    public class GraspUse
+    {
+        public string Id;
+        public int Grasp;
+    }
+
+    /// <summary>A Form ritual done on one of a member's stats (ProgressionConfig.Rituals): how far it moved the stat (a share of
+    /// its base, signed), the Grasp it uses, the max Grasp it gave.</summary>
+    [System.Serializable]
+    public class RitualPick
+    {
+        public string Ritual;
+        public StatId Stat;
+        public float Share;
+        public int Grasp, GraspBonus;
+        public bool Locks;   // Perpetuate: the stat stays at its base, whatever else would change it
+    }
+
     /// <summary>Where a campaign is between battles. New values go at the end.</summary>
-    public enum CampaignStage { Preparation, Upgrading, Finished }
+    public enum CampaignStage { Preparation, Upgrading, Finished, Lost }
 
     /// <summary>The player's squad between battles: members, currency, upgrades not yet given out, encounters won.</summary>
     [System.Serializable]
@@ -106,8 +157,8 @@ namespace TacticsGame.Core
         // Where a campaign stands (CampaignDefinition): the next mission, and which screen comes up.
         public int MissionIndex;
         public CampaignStage Stage = CampaignStage.Preparation;
-        public int Seed;   // the campaign's draws (Etching offers) come from it
-        public bool RerollUsed;   // this upgrade phase's one reroll of a member's Etching offer is spent (Progression.RerollOffer)
+        public int Seed;   // the campaign's draws (Etching offers, built missions) come from it
+        public MissionRunState Run = new MissionRunState();   // the mission builder's maps, cooldowns and current mission
 
         public RosterMember Find(string memberId) { return Members.Find(m => m.Id == memberId); }
 
@@ -171,7 +222,7 @@ namespace TacticsGame.Core
         public BattleOutcome Outcome;
         public bool Won { get { return Outcome == BattleOutcome.PlayerVictory; } }
         public int CurrencyEarned;
-        public int ExperienceEarned, AbilityPointsEarned;   // each member
+        public int ExperienceEarned, GraspEarned;   // each member
         public List<string> UpgradesEarned = new List<string>();
         public List<string> MembersDown = new List<string>();
     }
@@ -243,9 +294,9 @@ namespace TacticsGame.Core
             }
             if (!result.Won) return result;
             var rewards = spec.Rewards ?? new EncounterRewards();
-            Progression.Award(roster, rewards);
+            foreach (var m in roster.Members) m.Experience += rewards.Experience;
             result.ExperienceEarned = rewards.Experience;
-            result.AbilityPointsEarned = rewards.AbilityPoints;
+            result.GraspEarned = Progression.AwardGrasp(roster, rewards.Grasp);
             roster.Currency += rewards.Currency;
             result.CurrencyEarned = rewards.Currency;
             if (rewards.Upgrades != null)

@@ -16,9 +16,11 @@ namespace TacticsGame.Core
             TickLifts();
             TickAerialSlams();
             AdvanceGlides();
+            TickCompositions();   // Compositions of Destruction drifting on, striking, or going off once displaced
             TickSweeps();     // after glides: a thrown unit's front is where it has flown to
             AdvanceMovement();
             TickGrapples();   // after movement, so the held unit is carried to where the grappler walked
+            TickWalls();      // after movement: who is inside a wall now (Obstruction)
             TickTethers();    // after everyone has moved: chains pulled past their length snap
             TickEmitters();     // volleys and streams firing (BattleSimulation.Projectiles.cs)
             TickProjectiles();  // after everyone has moved: what flies meets the bodies where they are now
@@ -29,12 +31,15 @@ namespace TacticsGame.Core
             TickChannels();
             CheckTraps();
             TickWindups();
+            RollIncomingDodges();   // DodgeLead before an attack lands, the units it would hit roll their dodge (a dash out of its way)
             ResolveDueActions();
             ProcessDeaths();
             ExpireTimers();
+            TickForsaken();   // Entropy at max: NEUROSIS; Diverged: Entropy draining, HYSTERIA building, REGRESSION at 0
             RecoverStrain();
             TickHealOverTime();
             TickBlasts();
+            TickTemperance();   // Temperance's arrival, explosions and executions
             TickDrops();   // reinforcements arriving (EnemyEntry.ArriveAfter)
             TickReinforcementWaves();   // endless random reinforcements (StartReinforcementWaves)
             TickMelds();   // Stitch
@@ -45,6 +50,8 @@ namespace TacticsGame.Core
             TickSettled();   // what waits for a unit to land (Close The Loop on a dodger)
             TickParts();     // Deliverance's parts: SEE BEFORE ITSELF, EQUIPOSE at max strain, Wex's aura
             TickWatchers();  // AIs that keep watch between decisions (a pack noticing an opening)
+            TickEvasion();   // enemies noticing area attacks and projectiles on them, and waking to get out of the way
+            TickShields();   // last of the rules: what a unit's shields came to this tick, for the health bars
             AddSpawns();
             EtchingTraits.Tick(this);
         }
@@ -56,7 +63,13 @@ namespace TacticsGame.Core
         {
             foreach (var u in State.Units)
             {
-                if (u.Phase != UnitPhase.Moving || u.Move == null) continue;
+                if (!IsWalking(u)) continue;
+                if (u.Move.Flying)
+                {
+                    FlyStep(u);
+                    if (u.Move != null && u.Move.NextIndex >= u.Move.Path.Count) EndMove(u, false);   // up there: no bodies to settle out of
+                    continue;
+                }
                 if (u.IsJumping)
                 {
                     float k = Mathf.Clamp01((Now - u.JumpStart) / Mathf.Max(1e-4f, u.JumpEnd - u.JumpStart));
@@ -161,9 +174,10 @@ namespace TacticsGame.Core
         {
             u.Move = null;
             ClearChase(u);   // cancelled, rooted or dashed out of a chase: it is over
-            u.Phase = UnitPhase.Ready;
             Emit(EventType.MoveEnded, u.Id, null, new MoveEndedInfo { Position = u.Position });
             if (settle) SettleOutOfBodies(u);
+            if (u.Phase == UnitPhase.Charging) { u.ChargeDecisionAt = Now; return; }   // walked while charging: keep charging or release, now
+            u.Phase = UnitPhase.Ready;
             Emit(EventType.UnitReady, u.Id, null);
             Triggers.Fire(new TriggerContext { Type = TriggerType.UnitReady, Sim = this, Subject = u });
         }
@@ -212,6 +226,8 @@ namespace TacticsGame.Core
                 {
                     var atk = effects[i] as AttackEffect;
                     if (atk != null && atk.Source == a.Actor) atk.DamageMultiplier *= dealt;
+                    if (atk != null && a.AimLocked && atk.Source == a.Actor && atk.Definition == a.Definition && atk.TargetId == a.TargetUnitId)
+                    { atk.HasLineOfFire = true; atk.LineOfFire = a.AimPoint; }   // a hitscan shot fires where it locked on
                     if (atk != null && atk.Source == a.Actor && atk.CritChance < 0f && atk.Definition == a.Definition)
                         atk.CritChance = CritChanceFor(a.Actor, a.Definition, a.Transcended);   // Transcended or not, as it was used
                     if (atk != null && atk.Source == a.Actor && atk.Definition == a.Definition && a.Transcended)
@@ -323,17 +339,36 @@ namespace TacticsGame.Core
                 Triggers.Fire(new TriggerContext { Type = TriggerType.Killed, Sim = this, Subject = u, Other = GetUnit(u.LastAttackerId), Action = u.LastHitAction, Tag = u.LastHitTag });
             }
 
-            bool playersAlive = State.Units.Any(u => u.Team == Team.Player && u.IsAlive && !u.AIControlled);   // AI-played summons don't hold the field for a fallen squad
+            bool playersAlive = State.Units.Any(u => (u.Team == Team.Player || u.HomeTeam == Team.Player) && u.IsAlive && !u.AIControlled && !u.IsMakina);   // AI-played summons and Makina don't hold the field for a fallen squad; an INSANE squad member still does
             // With a boss in the fight, beating the bosses wins it (the endless reinforcements don't count); else every foe must fall.
             bool bossFight = State.Units.Any(u => u.IsBoss) || drops.Exists(d => d.Definition.Boss) || spawns.Exists(s => s.Definition.Boss);
             bool enemiesAlive = bossFight
                 ? State.Units.Any(u => u.IsBoss && u.IsAlive) || drops.Exists(d => d.Definition.Boss) || spawns.Exists(s => s.Definition.Boss)   // a boss's next phase on its way
-                : State.Units.Any(u => u.Team != Team.Player && u.IsAlive)
-                  || (!State.Units.Any(u => u.Team != Team.Player) && drops.Exists(d => d.Team != Team.Player));   // every foe down wins, reinforcements still to come or not; with none fielded yet, wait for them
+                : State.Units.Any(u => u.Team != Team.Player && u.HomeTeam != Team.Player && u.IsAlive && !u.IsMapObjective)   // map objectives (the Omen) don't count
+                  || (!State.Units.Any(u => u.Team != Team.Player) && drops.Exists(d => d.Team != Team.Player))   // every foe down wins, reinforcements still to come or not; with none fielded yet, wait for them
+                  || (AwaitReinforcements && drops.Exists(d => d.Team != Team.Player && !d.Anywhere));   // ... unless the encounter says to fight them all
             if (playersAlive && (enemiesAlive || HoldVictory)) return;   // a scripted battle goes on with no enemies left
             Outcome = !playersAlive && !enemiesAlive ? BattleOutcome.Draw
                     : playersAlive ? BattleOutcome.PlayerVictory : BattleOutcome.PlayerDefeat;
             Emit(EventType.BattleEnd, null, null);
+        }
+
+        /// <summary>
+        /// Has 'u' lost the unit a follow-up of its goes at: still alive, but hidden from it (HIDDEN) or out of the world
+        /// (VOIDED)? Then the follow-up is gone (its window closes, the re-cast is off), even if the unit comes back.
+        /// </summary>
+        public bool FollowupTargetLost(Unit u, string targetId)
+        {
+            var t = GetUnit(targetId);
+            return t != null && t != u && t.IsAlive && (IsVoided(t) || !IsTargetableBy(t, u));
+        }
+
+        /// <summary>The re-cast of 'u's last ability (ActionDefinition.IsFollowup, at the unit it last went at) is off once that unit is lost.</summary>
+        private void DropLostFollowup(Unit u)
+        {
+            if (string.IsNullOrEmpty(u.LastActionId) || string.IsNullOrEmpty(u.LastActionTargetId) || !FollowupTargetLost(u, u.LastActionTargetId)) return;
+            var last = u.Actions.Find(a => a != null && a.Id == u.LastActionId);
+            if (last != null && last.IsFollowup && !ActionBehaviors.Get(last.BehaviorId).FollowupRetargets(last)) u.LastActionId = null;   // as a wait would
         }
 
         private void ExpireTimers()
@@ -341,10 +376,13 @@ namespace TacticsGame.Core
             foreach (var u in State.Units)
             {
                 if (!u.IsAlive) continue;
-                bool repositioning = u.Phase == UnitPhase.Moving || u.GlideEnd >= 0f;
+                bool repositioning = IsWalking(u) || u.GlideEnd >= 0f;
+                DropLostFollowup(u);
                 for (int i = u.Statuses.Count - 1; i >= 0; i--)
                 {
                     var window = u.Statuses[i];
+                    // A follow-up's window at a unit that can't be targeted any more (HIDDEN, VOIDED) closes there and then.
+                    if (window.Has(StatusFlags.FollowupWindow) && window.TargetId != null && FollowupTargetLost(u, window.TargetId)) { window.ExpiresAt = Now; window.Held = false; }
                     // A follow-up's window doesn't run while its holder walks or dashes: it picks up where it left off.
                     if (window.Has(StatusFlags.FollowupWindow) && window.ExpiresAt < UntimedStatus)
                     {

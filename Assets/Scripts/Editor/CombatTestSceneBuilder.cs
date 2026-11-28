@@ -225,7 +225,7 @@ public static class CombatTestSceneBuilder
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Sniper, Count = 1 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Assassin, Count = 2 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Skirmisher, Count = 1 });
-            e.Spec.Rewards.Experience = 35; e.Spec.Rewards.AbilityPoints = 1;
+            e.Spec.Rewards.Experience = 35;
         });
         var lastStand = GetOrCreate<EncounterDefinition>(EncountersFolder + "/LastStand.asset", e =>
         {
@@ -236,7 +236,7 @@ public static class CombatTestSceneBuilder
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Brutebeast, Count = 2 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Caster, Count = 1 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Sniper, Count = 1 });
-            e.Spec.Rewards.Experience = 40; e.Spec.Rewards.AbilityPoints = 2;
+            e.Spec.Rewards.Experience = 40;
         });
         var thePass = GetOrCreate<EncounterDefinition>(EncountersFolder + "/ThePass.asset", e =>
         {
@@ -246,7 +246,7 @@ public static class CombatTestSceneBuilder
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Skirmisher, Count = 2 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Assassin, Count = 2 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Caster, Count = 1 });
-            e.Spec.Rewards.Experience = 40; e.Spec.Rewards.AbilityPoints = 1;
+            e.Spec.Rewards.Experience = 40;
         });
         var ruinedCourt = GetOrCreate<EncounterDefinition>(EncountersFolder + "/RuinedCourt.asset", e =>
         {
@@ -256,7 +256,7 @@ public static class CombatTestSceneBuilder
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Brutebeast, Count = 2 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Healer, Count = 1 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Caster, Count = 2 });
-            e.Spec.Rewards.Experience = 45; e.Spec.Rewards.AbilityPoints = 2;
+            e.Spec.Rewards.Experience = 45;
         });
         var siege = GetOrCreate<EncounterDefinition>(EncountersFolder + "/Siege.asset", e =>
         {
@@ -267,7 +267,7 @@ public static class CombatTestSceneBuilder
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Brutebeast, Count = 2 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Healer, Count = 1 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Caster, Count = 1 });
-            e.Spec.Rewards.Experience = 50; e.Spec.Rewards.AbilityPoints = 2;
+            e.Spec.Rewards.Experience = 50;
         });
         var monarchsCourt = GetOrCreate<EncounterDefinition>(EncountersFolder + "/MonarchsCourt.asset", e =>
         {
@@ -277,7 +277,7 @@ public static class CombatTestSceneBuilder
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Monarch, Count = 1 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Wraith, Count = 2 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Healer, Count = 1 });
-            e.Spec.Rewards.Experience = 55; e.Spec.Rewards.AbilityPoints = 2;
+            e.Spec.Rewards.Experience = 55;
         });
         var stormOfThought = GetOrCreate<EncounterDefinition>(EncountersFolder + "/StormOfThought.asset", e =>
         {
@@ -287,7 +287,7 @@ public static class CombatTestSceneBuilder
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Primavaeran, Count = 1 });   // first: the top-terrace spawn
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Zola, Count = 1 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Wraith, Count = 3 });
-            e.Spec.Rewards.Experience = 60; e.Spec.Rewards.AbilityPoints = 3;
+            e.Spec.Rewards.Experience = 60;
         });
         var finalTrial = GetOrCreate<EncounterDefinition>(EncountersFolder + "/Crossroads.asset", e =>
         {
@@ -299,7 +299,7 @@ public static class CombatTestSceneBuilder
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Healer, Count = 1 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Caster, Count = 1 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Sniper, Count = 1 });   // last: the seventh spawn, on a rooftop
-            e.Spec.Rewards.Experience = 60; e.Spec.Rewards.AbilityPoints = 3;
+            e.Spec.Rewards.Experience = 60;
         });
         var gildedVanguard = GetOrCreate<EncounterDefinition>(EncountersFolder + "/GildedVanguard.asset", e =>
         {
@@ -309,7 +309,7 @@ public static class CombatTestSceneBuilder
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Exemplar, Count = 2 });
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Exemplar, Count = 1, ArriveAfter = 15f });   // reinforcements
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Sniper, Count = 1, ArriveAfter = 15f });
-            e.Spec.Rewards.Experience = 55; e.Spec.Rewards.AbilityPoints = 2;
+            e.Spec.Rewards.Experience = 55;
         });
         var deliverance = GetOrCreate<EncounterDefinition>(EncountersFolder + "/Deliverance.asset", e =>
         {
@@ -319,7 +319,7 @@ public static class CombatTestSceneBuilder
             e.Spec.Enemies.Add(new EnemyEntry { Unit = enemies.Deliverance, Count = 1, Side = Team.Rogue });   // its own side: against everyone
             e.Spec.Waves.Pool = new List<UnitDefinition> { enemies.Brutebeast, enemies.Caster, enemies.Assassin, enemies.Skirmisher, enemies.Sniper, enemies.Wraith };
             e.Spec.Waves.FirstAfter = 6f; e.Spec.Waves.Every = 12f; e.Spec.Waves.PerWave = 2; e.Spec.Waves.MaxUp = 6;
-            e.Spec.Rewards.Experience = 100; e.Spec.Rewards.AbilityPoints = 3;
+            e.Spec.Rewards.Experience = 100;
         });
         var startingSquad = new List<UnitDefinition> { squad.Sharpshooter, squad.Melee, squad.Tank, squad.Paradigm };
         var squadClasses = new List<UnitDefinition>(startingSquad) { squad.Strategist, squad.Duelist };   // every class a campaign can be started with
@@ -330,7 +330,7 @@ public static class CombatTestSceneBuilder
             EditorUtility.SetDirty(progression);
         }
         AddNewEtchings(progression);
-        AddAbilityCosts(progression, squadClasses);
+        RetireEtchings(progression);
         AddClassStarts(progression, squadClasses);
         var campaign = GetOrCreate<CampaignDefinition>(CampaignFolder + "/Campaign.asset", c =>
         {
@@ -347,6 +347,7 @@ public static class CombatTestSceneBuilder
         InsertMissionsBefore(campaign, finalTrial, monarchsCourt, stormOfThought);   // the new enemies come before the finale
         InsertMissionsBefore(campaign, finalTrial, gildedVanguard);   // the Exemplars and the first reinforcements
         AppendMissions(campaign, deliverance);   // the final encounter, last of all
+        MissionBuilderAssets.Ensure(campaign);   // the roguelike run builds its missions (Deliverance stays the finale)
 
         // Pre-battle screen: it starts the battle once the player has picked an encounter (or enemies) and loadouts.
         var setup = controller.GetComponent<PreBattleSetup>();
@@ -491,45 +492,17 @@ public static class CombatTestSceneBuilder
         if (changed) EditorUtility.SetDirty(p);
     }
 
-    /// <summary>Unlock costs asked for with newer abilities; any other class ability without a cost gets the ballpark one.</summary>
-    private static readonly Dictionary<string, int> AbilityCostsById = new Dictionary<string, int>
-    {
-        { "cognitive_burden", 2 }, { "banishment", 3 }, { "death_sentence", 3 },
-        { "a_million_cuts", 3 }, { "fighter_polystep", 1 }, { "the_endless_hunt", 2 },
-        { "regeneration_seal", 2 }, { "true_inversion", 3 }, { "trammels", 2 }, { "minutes_turn_to_centuries", 2 },
-        { "flurry", 2 }, { "pierce_the_wound", 2 },
-        { "recollections_of_self", 2 }, { "unmake_the_harm", 1 }, { "soulseeker", 2 }, { "refraction_cloak", 2 }, { "destiny_closes_in", 3 },
-        { "you", 2 }, { "savior", 2 },
-        { "withering_end", 1 }, { "madness", 3 }, { "splinters", 1 }, { "baneful_domain", 2 }, { "mindshatter", 3 },
-        { "dreadful_fixation", 1 }, { "crippling_pursuit", 2 }, { "mental_weapon", 2 },
-        { "spatial_chrysalis", 2 }, { "cross_beyond_thresholds", 2 }, { "stride_in_unison", 3 }, { "supersede", 2 }, { "pressure_points", 1 },
-        { "termouls_monolith", 3 }, { "karraerms_hedron", 3 }, { "monostep", 1 }, { "impending_demise", 2 }, { "a_duet", 2 }, { "clear_and_steady", 2 },
-        { "schalys_convextion", 3 }, { "opening_theorem", 2 }, { "gift_of_thought", 2 }, { "monge_amperes_perfection", 3 }, { "counterpoise", 2 }, { "grasp_and_impel", 3 }, { "fissure", 3 }, { "delayed_crush", 2 },
-        { "incoherency", 1 }, { "gouge", 2 }, { "recursive_severance", 2 }, { "graze_the_precipice", 3 }, { "unsigned_rebuttal", 2 }, { "summation", 3 },
-        { "vindication", 2 }, { "quell_the_uproar", 2 }, { "mindmeld", 1 }, { "theory_of_displacement", 2 },
-    };
+    /// <summary>Etchings no longer in the game (Symbols of Memory gave ability points, which are gone) leave the config.</summary>
+    private static readonly string[] RetiredEtchingIds = { "symbols_of_memory" };
 
-    /// <summary>Every class ability gets an unlock cost on the config (abilities added since it was made had none).</summary>
-    private static void AddAbilityCosts(ProgressionConfig p, List<UnitDefinition> classes)
+    private static void RetireEtchings(ProgressionConfig p)
     {
-        bool changed = false;
-        foreach (var c in classes)
-        {
-            if (c == null) continue;
-            foreach (var a in c.Actions)
-            {
-                if (a == null || a == c.BasicAttack || p.AbilityCosts.Exists(x => x != null && x.Ability == a)) continue;
-                int cost;
-                p.AbilityCosts.Add(new AbilityCost { Ability = a, Cost = AbilityCostsById.TryGetValue(a.Id, out cost) ? cost : ProgressionConfig.BallparkCost(a) });
-                changed = true;
-            }
-        }
-        if (changed) EditorUtility.SetDirty(p);
+        if (p.Etchings.RemoveAll(e => e != null && System.Array.IndexOf(RetiredEtchingIds, e.Id) >= 0) > 0) EditorUtility.SetDirty(p);
     }
 
     /// <summary>
-    /// A new progression config's ballpark numbers: three starting abilities per class (its Default loadout), unlock costs
-    /// from ProgressionConfig.BallparkCost, and the starting Etchings. Tune them on the asset.
+    /// A new progression config's ballpark numbers: three starting abilities per class (its Default loadout) and the
+    /// starting Etchings (Grasp, rituals and prices keep the config's defaults). Tune them on the asset.
     /// </summary>
     /// <summary>Each class's Default loadout, by ability id (its basic attack comes as well).</summary>
     private static readonly Dictionary<string, string[]> DefaultStarts = new Dictionary<string, string[]>
@@ -581,8 +554,6 @@ public static class CombatTestSceneBuilder
         {
             if (c == null) continue;
             p.Classes.Add(StartFor(c));
-            foreach (var a in c.Actions)
-                if (a != null && a != c.BasicAttack) p.AbilityCosts.Add(new AbilityCost { Ability = a, Cost = AbilityCostsById.TryGetValue(a.Id, out var asked) ? asked : ProgressionConfig.BallparkCost(a) });
         }
         p.FillDefaultEtchings();
     }

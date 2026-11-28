@@ -18,6 +18,9 @@ MonoBehaviour:
   Roles: 0
   Description: Enter intense focus, tracking your target. If you aren't interrupted
     by damage or crowd control, fire a shot that pierces terrain and 75% block.
+  Details: 
+  TipOverrides: []
+  WindupName: 
   Targeting: 2
   Range: 35
   IsRanged: 1
@@ -30,19 +33,25 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 1
+  WindupDisplay: 0
   Damage: 40
   BaseAccuracy: 1
   StunDuration: 0.8
   StrainOnTarget: 20
   StrainOnSelf: 0
   HealthCost: 0
+  HysteriaOnUse: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
   BlockPierce: 0.75
   StunnedDamageMultiplier: 1
+  DivergedVersion: {fileID: 0}
+  Form: 0
   Shape: 0
+  ConeAngle: 90
   AreaRadius: 0
   LineWidth: 1
   AreaHeight: 0
@@ -51,12 +60,17 @@ MonoBehaviour:
   AuraAtTarget: 0
   AuraDamagePerSecond: 0
   AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
   InnatePassive: 0
   SummonUnit: {fileID: 0}
+  SummonUnits: []
+  RandomStatusesOnHit: []
   SummonCount: 0
+  SummonAIStyle: 
   GuardBreakSeconds: 0
   StartsOnCooldown: 0
   ChannelSeconds: 0
+  MissingHealthDamage: 0
   ChannelNeedsSight: 0
   ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
@@ -68,6 +82,7 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  SelfStatusesOnHit: []
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -80,25 +95,40 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 1
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
+  FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  ProjectileSpeed: 7
+  ProjectileAcceleration: 16
+  ProjectileMaxSpeed: 26
+  ProjectileRadius: 0.3
+  ProjectileLifetime: 4
+  ProjectileHoming: 2
+  ProjectileHomingDelay: 0.25
+  ProjectileTurnRate: 200
+  ProjectileTurnGrowth: 500
+  LinkedAbilities: []
+  RequiresLink: 0
   CanTranscend: 0
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
+  TranscendCooldown: -1
   ExtraCinematic: 1
   Visuals:
     Kind: 1
     Color: {r: 0.5, g: 0.95, b: 1, a: 1}
     Width: 0.13
     Pierce: 1
+    Orb: 0
   InterruptedByDamage: 1
   InterruptedByStun: 1
   Params: []
-  WeakpointsOnTarget: 0
-  WeakpointsOnSelfDuringWindup: 0
-  WeakpointsOnSelf: 1
-  WeakpointSeconds: 0
-  BreaksWeakpoints: 0
-  DataVersion: 15
+  DataVersion: 16

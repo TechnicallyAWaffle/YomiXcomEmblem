@@ -1,0 +1,171 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a945ad692ef15444ad3a9d59531e3a4, type: 3}
+  m_Name: MissionBuilder
+  m_EditorClassIdentifier: Apotheom.Presentation::TacticsGame.Presentation.MissionBuilderDefinition
+  Maps:
+  - {fileID: 11400000, guid: f9df28007b1f7b6408add43d0cde1b7d, type: 2}
+  - {fileID: 11400000, guid: af85aeb558410da41b10a5f5266d73da, type: 2}
+  - {fileID: 11400000, guid: 9a9d234af44a3fb4bb4ee36a3f2a29b1, type: 2}
+  - {fileID: 11400000, guid: 635d43a59cfa58648b67ed3e4af2f6f8, type: 2}
+  - {fileID: 11400000, guid: c21d0d0f0029e3f4b9d3d2833d1521aa, type: 2}
+  - {fileID: 11400000, guid: 8f661bc0c47a09548b452dd09c648d9e, type: 2}
+  - {fileID: 11400000, guid: 97df434dce3955646b88e3dc75e024f6, type: 2}
+  Settings:
+    StartingPoints: 10
+    PointsPerMission: 10
+    ObjectivesMin: 0
+    ObjectivesMax: 2
+    MaxObjectives: 2
+    Objectives:
+    - Unit: {fileID: 11400000, guid: 21f78fe3b50bcc5498955da80da97dbb, type: 2}
+      Cost: 3
+      MinCount: 1
+      MaxCount: 2
+      MissionCooldown: 2
+      MinimumMissionLevel: 1
+      Upgrades: []
+      Rules: []
+    Enemies:
+    - Unit: {fileID: 11400000, guid: 83cb6da5dfd1a1b4b9abb25a0305e2cf, type: 2}
+      Cost: 2
+      MinCount: 1
+      MaxCount: 3
+      MissionCooldown: 0
+      MinimumMissionLevel: 0
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: dafc72907786a7047b178f9b0053191c, type: 2}
+      Cost: 3
+      MinCount: 1
+      MaxCount: 3
+      MissionCooldown: 0
+      MinimumMissionLevel: 0
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: 0d44a1eeb31fbf044a97835909eade0d, type: 2}
+      Cost: 3
+      MinCount: 1
+      MaxCount: 2
+      MissionCooldown: 0
+      MinimumMissionLevel: 1
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: 6f68201e8fd253d429c466fdad6f1969, type: 2}
+      Cost: 4
+      MinCount: 1
+      MaxCount: 3
+      MissionCooldown: 0
+      MinimumMissionLevel: 1
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: e95ee1d8a76adb142a7fb71940391e01, type: 2}
+      Cost: 4
+      MinCount: 1
+      MaxCount: 2
+      MissionCooldown: 0
+      MinimumMissionLevel: 1
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: 41c12fa6ba1a286488b5a76fc28cb6f9, type: 2}
+      Cost: 2
+      MinCount: 3
+      MaxCount: 6
+      MissionCooldown: 0
+      MinimumMissionLevel: 2
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: 013132de130d91440a47ad4d7459b743, type: 2}
+      Cost: 3
+      MinCount: 1
+      MaxCount: 1
+      MissionCooldown: 0
+      MinimumMissionLevel: 2
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: 1c1630d06c3ce1341b0febc38013f263, type: 2}
+      Cost: 6
+      MinCount: 1
+      MaxCount: 2
+      MissionCooldown: 1
+      MinimumMissionLevel: 3
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: 0f1833ed2b2883c469a1093e9f4303e8, type: 2}
+      Cost: 7
+      MinCount: 1
+      MaxCount: 2
+      MissionCooldown: 1
+      MinimumMissionLevel: 3
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: d86f79d27c898af4aba4b4449007afff, type: 2}
+      Cost: 1
+      MinCount: 1
+      MaxCount: 5
+      MissionCooldown: 0
+      MinimumMissionLevel: 0
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: ac52d1cc6a76fa3419af737d6105f6c1, type: 2}
+      Cost: 7
+      MinCount: 1
+      MaxCount: 2
+      MissionCooldown: 0
+      MinimumMissionLevel: 4
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: 34772a92fcd716444a8e59c7aca4a735, type: 2}
+      Cost: 9
+      MinCount: 1
+      MaxCount: 1
+      MissionCooldown: 2
+      MinimumMissionLevel: 5
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: ae325096baf019346b947d358fe96619, type: 2}
+      Cost: 7
+      MinCount: 1
+      MaxCount: 3
+      MissionCooldown: 2
+      MinimumMissionLevel: 6
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: 20b9b8d1b861dd241a4b919a4421cb0f, type: 2}
+      Cost: 3
+      MinCount: 1
+      MaxCount: 3
+      MissionCooldown: 0
+      MinimumMissionLevel: 0
+      Upgrades: []
+      Rules: []
+    - Unit: {fileID: 11400000, guid: 0bcb152340095bd40b5e310711d49ef8, type: 2}
+      Cost: 4
+      MinCount: 1
+      MaxCount: 2
+      MissionCooldown: 0
+      MinimumMissionLevel: 0
+      Upgrades: []
+      Rules: []
+    FirstWavePoints: 10
+    FirstWavePointsPerMission: 5
+    WavePointsMin: 10
+    WavePointsMax: 15
+    WaveDelayMin: 7
+    WaveDelayMax: 10
+  GraspPerMission: 100
+  GraspPerMissionGrowth: 30
+  AwaitReinforcements: 1
+  Temperance:
+    Enabled: 1
+    ArriveAfter: 60
+  MissionName: Mission {0}

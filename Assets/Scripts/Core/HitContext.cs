@@ -42,6 +42,8 @@ namespace TacticsGame.Core
         public float StunFor;              // seconds of stun this hit gives (0 = none)
         public bool WillStun { get { return Unravel || StunFor > 0f; } }
         /// <summary>How it lands: the ability's impact, or Heavy if the attack says so (AttackEffect.Heavy).</summary>
-        public ImpactType Impact { get { return Effect != null && Effect.Heavy ? ImpactType.Heavy : Definition.Impact; } }
+        public ImpactType Impact { get { return Effect != null && Effect.ImpactOverride.HasValue ? Effect.ImpactOverride.Value : Effect != null && Effect.Heavy ? ImpactType.Heavy : Definition.Impact; } }
+        /// <summary>A reflecting status its target held as the hit came in (StatusEffect.ReflectShare: Wrathful Reflection).</summary>
+        public StatusEffect Reflector;
     }
 }

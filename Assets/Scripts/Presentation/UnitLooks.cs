@@ -169,18 +169,43 @@ namespace TacticsGame.Presentation
         /// <summary>
         /// A unit with a real model (UnitDefinition.Model): it stands in for the capsule (hidden, its collider kept for
         /// picking) at the unit's feet, its "Body" material takes the team's colour (the capsule's), "Etched" that colour with the
-        /// etching pattern, "Dark" near black, "Glow" the team's colour glowing, "Gold" gold, and the others a plain grey, and its Animator gets the unit's controller (ModelAnimations) and becomes the view's:
+        /// etching pattern, "Dark" near black, "Glow" the team's colour glowing, "Gold" gold, "Bone" ivory, "Eye" bright white, and the others a plain grey, and its Animator gets the unit's controller (ModelAnimations) and becomes the view's
+        /// (with a DivergedModel, both forms are built and ForsakenForm shows one):
         /// the placeholder poses stop and the clips play on battle events. False: no model.
         /// </summary>
         private static bool ApplyModel(UnitView view, UnitDefinition def, Renderer capsule)
         {
             if (def.Model == null) return false;
-            var go = Object.Instantiate(def.Model, view.transform, false);
-            go.name = ModelName;
+            var team = capsule != null ? capsule.sharedMaterial : null;
+            if (capsule != null) capsule.forceRenderingOff = true;
+            if (def.DivergedModel != null)
+            {
+                // Two forms (the Forsaken): both built under one root, the Composed one shown; ForsakenForm swaps them (and
+                // the view's Animator) when the form changes.
+                var both = new GameObject(ModelName);
+                both.transform.SetParent(view.transform, false);
+                both.layer = view.gameObject.layer;
+                var composed = Dress(Object.Instantiate(def.Model, both.transform, false), "Composed", view, def, team);
+                var diverged = Dress(Object.Instantiate(def.DivergedModel, both.transform, false), "Diverged", view, def, team);
+                var form = both.AddComponent<ForsakenForm>();
+                form.View = view;
+                form.Bind(composed.transform, diverged.transform, AnimatorOf(composed, def.ModelAnimations), AnimatorOf(diverged, def.DivergedAnimations));
+                diverged.SetActive(false);
+                view.Animator = form.ComposedAnimator;
+                return true;
+            }
+            var go = Dress(Object.Instantiate(def.Model, view.transform, false), ModelName, view, def, team);
+            view.Animator = AnimatorOf(go, def.ModelAnimations);
+            return true;
+        }
+
+        /// <summary>A model as placed under the view: named, at the view's feet, on its layer, its material slots made the look's.</summary>
+        private static GameObject Dress(GameObject go, string name, UnitView view, UnitDefinition def, Material team)
+        {
+            go.name = name;
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
             foreach (var t in go.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = view.gameObject.layer;
-            var team = capsule != null ? capsule.sharedMaterial : null;
             foreach (var r in go.GetComponentsInChildren<Renderer>(true))
             {
                 var mats = r.sharedMaterials;
@@ -192,18 +217,24 @@ namespace TacticsGame.Presentation
                     else if (slot.StartsWith("Dark")) mats[i] = MaterialFor(new Color(0.08f, 0.07f, 0.09f), false, team);   // smoke, shadow
                     else if (slot.StartsWith("Glow")) mats[i] = MaterialFor(Color.Lerp(TeamColor(team), Color.white, 0.35f), true, team);
                     else if (slot.StartsWith("Gold")) mats[i] = MaterialFor(new Color(0.9f, 0.72f, 0.3f), false, team);
+                    else if (slot.StartsWith("Bone")) mats[i] = MaterialFor(new Color(0.9f, 0.86f, 0.74f), false, team);   // masks, bone, pale flesh
+                    else if (slot.StartsWith("Eye")) mats[i] = MaterialFor(new Color(0.97f, 0.97f, 0.97f), true, team);    // eyes, bright
                     else mats[i] = body && team != null ? team : MaterialFor(new Color(0.75f, 0.77f, 0.82f), false, team);
                 }
                 r.sharedMaterials = mats;
             }
-            if (capsule != null) capsule.forceRenderingOff = true;
+            return go;
+        }
+
+        /// <summary>The model's Animator, playing 'controller'.</summary>
+        private static Animator AnimatorOf(GameObject go, RuntimeAnimatorController controller)
+        {
             var animator = go.GetComponent<Animator>();
             if (animator == null) animator = go.AddComponent<Animator>();
             animator.applyRootMotion = false;
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-            animator.runtimeAnimatorController = def.ModelAnimations;
-            view.Animator = animator;
-            return true;
+            animator.runtimeAnimatorController = controller;
+            return animator;
         }
 
         public static void Apply(UnitView view, UnitDefinition def)

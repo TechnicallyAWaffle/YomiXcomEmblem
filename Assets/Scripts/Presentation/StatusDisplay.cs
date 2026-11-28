@@ -57,6 +57,7 @@ namespace TacticsGame.Presentation
             { StatusIds.Sanctity, new Look(new Color(1f, 0.9f, 0.5f), "SANCTITY", "sanctity") },
             { StatusIds.Sheltered, new Look(new Color(1f, 0.9f, 0.5f), "SHELTERED", "sheltered") },
             { StatusIds.TimeSlowed, new Look(new Color(0.55f, 0.6f, 1f), "TIME SLOWED", "time slowed") },
+            { StatusIds.Countersign, new Look(new Color(1f, 0.85f, 0.4f), "COUNTERSIGN", "countersign") },
             { StatusIds.Burdened, new Look(new Color(0.85f, 0.55f, 1f), "BURDENED", "burdened") { Important = true } },
             { StatusIds.TrueInversion, new Look(new Color(0.4f, 1f, 0.85f), "TRUE INVERSION", "true inversion") { Important = true } },
             { StatusIds.RegenerationSeal, new Look(new Color(0.45f, 1f, 0.5f), "SEALED", "regeneration seal") },
@@ -81,7 +82,7 @@ namespace TacticsGame.Presentation
             { StatusIds.ClearAndSteady, new Look(new Color(0.6f, 0.9f, 1f), "CLEAR AND STEADY", "steady") { Important = true } },
             { StatusIds.Counterpoise, new Look(new Color(0.55f, 0.85f, 1f), "COUNTERPOISE", "full block") },
             { StatusIds.Linked, new Look(new Color(0.35f, 0.9f, 1f), "LINKED", "linked") },
-            { StatusIds.Shielded, new Look(new Color(0.7f, 0.9f, 1f), "SHIELDED", "shielded") { Important = true } },
+            { StatusIds.Shielded, new Look(new Color(0.7f, 0.9f, 1f), "SHIELDED", "shielded") },   // its amount is the blue stretch of the health bar (BattleHUD.HealthBar)
             { StatusIds.Clarity, new Look(new Color(0.7f, 1f, 0.95f), "CLARITY", "shedding strain") },
             { StatusIds.Ruptured, new Look(new Color(1f, 0.45f, 0.35f), "RUPTURED", "ruptured") { Important = true } },
             { StatusIds.Grasped, new Look(new Color(0.9f, 0.85f, 0.6f), "GRASPED", "held") },
@@ -109,7 +110,7 @@ namespace TacticsGame.Presentation
 
         /// <summary>Statuses that are bookkeeping, or AI state, not something the player needs to see (a last stand is the AI's
         /// secret). Follow-up chain windows ("..._chain", see ChainAttackBehavior) are hidden too.</summary>
-        private static readonly HashSet<string> Hidden = new HashSet<string> { DeliverancePassives.SplittingStatus, StatusIds.RapidChain, StatusIds.LastStand, StatusIds.RevengePrimed, EtchingTraits.MomentumStatus, EtchingTraits.MarchStatus, StatusIds.Apotheosis };   // Avidous March: a sub-second burst, seen in the walk itself
+        private static readonly HashSet<string> Hidden = new HashSet<string> { DeliverancePassives.SplittingStatus, StatusIds.RapidChain, StatusIds.LastStand, StatusIds.RevengePrimed, EtchingTraits.MomentumStatus, EtchingTraits.MarchStatus, StatusIds.Apotheosis, StatusIds.Composition };   // Avidous March: a sub-second burst, seen in the walk itself
 
         // Looks set on the loaded battle's statuses (Register), over the built-in ones.
         private static readonly Dictionary<string, Look> FromData = new Dictionary<string, Look>();

@@ -68,7 +68,8 @@ namespace TacticsGame.Core
 
         // ------------------------------------------------------------------ delayed blasts
 
-        private class Blast { public string Id; public Unit Source; public ActionDefinition Definition; public Vector3 Center; public float Radius, At; }
+        // World: nobody's (Temperance's): it hits every unit in it for Damage and Stun; ActionId names it.
+        private class Blast { public string Id; public Unit Source; public ActionDefinition Definition; public Vector3 Center; public float Radius, At; public bool DodgesRolled; public bool World; public float Damage, Stun; public string ActionId; }
 
         private readonly List<Blast> blasts = new List<Blast>();
         private int blastCounter;
@@ -83,17 +84,18 @@ namespace TacticsGame.Core
         }
 
         // A hit held back for a moment (Mental Weapon's bullet): it lands at At, out of FromId's mind if set (that is where it is drawn from).
-        private class DelayedStrike { public AttackEffect Attack; public float At; public string FromId, FxKind; }
+        private class DelayedStrike { public AttackEffect Attack; public float At; public string FromId, FxKind; public bool SourceMayBeDown; }
         private readonly List<DelayedStrike> delayedStrikes = new List<DelayedStrike>();
 
         /// <summary>
         /// Land 'attack' 'delay' seconds from now (StrikeNow then: the target's dodge as it is then). 'from': the unit it seems to
         /// come out of; 'fxKind': the AbilityFx the views get as it goes (from that unit to the target).
         /// </summary>
-        public void ScheduleStrike(AttackEffect attack, float delay, Unit from = null, string fxKind = null)
+        /// <param name="sourceMayBeDown">It lands even if its source has fallen by then (a reflected share: the blow was already struck).</param>
+        public void ScheduleStrike(AttackEffect attack, float delay, Unit from = null, string fxKind = null, bool sourceMayBeDown = false)
         {
             if (attack == null) return;
-            delayedStrikes.Add(new DelayedStrike { Attack = attack, At = Now + Mathf.Max(0f, delay), FromId = from != null ? from.Id : null, FxKind = fxKind });
+            delayedStrikes.Add(new DelayedStrike { Attack = attack, At = Now + Mathf.Max(0f, delay), FromId = from != null ? from.Id : null, FxKind = fxKind, SourceMayBeDown = sourceMayBeDown });
         }
 
         // Something an ability does a moment later (Opening Theorem's bound once its dash arrives): run at At, if Unit is still alive.
@@ -124,7 +126,7 @@ namespace TacticsGame.Core
                 if (target == null || !target.IsAlive || d.Attack.Source == null) continue;
                 var from = GetUnit(d.FromId);
                 if (d.FxKind != null) EmitFx(from ?? d.Attack.Source, target, d.FxKind, d.Attack.Definition, target.Position, 0f, (from ?? d.Attack.Source).Position);
-                StrikeNow(d.Attack);
+                StrikeNow(d.Attack, d.SourceMayBeDown);
             }
         }
 
@@ -134,16 +136,28 @@ namespace TacticsGame.Core
             for (int i = blasts.Count - 1; i >= 0; i--)
             {
                 var b = blasts[i];
+                if (!b.DodgesRolled && (b.Source != null || b.World) && b.At - Now <= DodgeLead + 1e-4f)
+                {
+                    // About to go off: those in it roll their dodge (a dash out of it; away from the centre for a world blast).
+                    b.DodgesRolled = true;
+                    foreach (var u in State.Units.ToArray())
+                    {
+                        if (!u.IsAlive || (!b.World && u.Team == b.Source.Team)) continue;
+                        Vector3 d = u.Position - b.Center; d.y = 0f;
+                        if (d.magnitude - u.BodyRadius <= b.Radius) RollDodgeAgainst(b.World ? null : b.Source, u, b.Definition, b.Center);
+                    }
+                }
                 if (Now + 1e-4f < b.At) continue;
                 blasts.RemoveAt(i);
-                Emit(EventType.BlastDetonated, b.Source != null ? b.Source.Id : null, null, new BlastInfo { Id = b.Id, ActionId = b.Definition.Id, Center = b.Center, Radius = b.Radius, At = b.At });
-                if (b.Source == null) continue;
+                Emit(EventType.BlastDetonated, b.Source != null ? b.Source.Id : null, null, new BlastInfo { Id = b.Id, ActionId = b.ActionId ?? b.Definition.Id, Center = b.Center, Radius = b.Radius, At = b.At });
+                if (b.Source == null && !b.World) continue;
                 foreach (var u in State.Units.ToArray())
                 {
-                    if (!u.IsAlive || u.Team == b.Source.Team) continue;
+                    if (!u.IsAlive || IsVoided(u) || (!b.World && u.Team == b.Source.Team)) continue;
                     Vector3 d = u.Position - b.Center; d.y = 0f;
                     if (d.magnitude - u.BodyRadius > b.Radius) continue;
-                    StrikeNow(new AttackEffect { Source = b.Source, TargetId = u.Id, Definition = b.Definition, IgnoreRange = true, IgnoreCover = true });
+                    if (b.World) WorldBlastHits(b, u);
+                    else StrikeNow(new AttackEffect { Source = b.Source, TargetId = u.Id, Definition = b.Definition, IgnoreRange = true, IgnoreCover = true });
                 }
             }
         }
@@ -151,16 +165,33 @@ namespace TacticsGame.Core
         // ------------------------------------------------------------------ tick damage and looks
 
         /// <summary>Damage with no hit roll (a zone's), credited to 'source': a Damage event and the DamageTaken trigger.</summary>
-        public void DealTickDamage(Unit source, Unit target, float amount, ActionDefinition def)
+        /// <summary>
+        /// What 'summoner' etched onto 'via' (the ability that brought 'summoned' in: Termoul's Monolith, Recollections of
+        /// Self) goes on every ability of the summoned unit (ActionBehavior.ActsThrough): Summation on the summon makes The
+        /// Monolith's crash hit 30% harder. Only Etchings on that ability (its UpgradeActionModifiers for it), not the
+        /// summoner's unit-wide ones or its statuses.
+        /// </summary>
+        public void InheritEtchings(Unit summoner, ActionDefinition via, Unit summoned)
+        {
+            if (summoner == null || via == null || summoned == null || summoner.UpgradeActionModifiers == null) return;
+            foreach (var m in summoner.UpgradeActionModifiers)
+                if (!string.IsNullOrEmpty(m.ActionId) && m.ActionId == via.Id)
+                    summoned.UpgradeActionModifiers.Add(new ActionModifier("", m.Stat, m.Op, m.Value));
+        }
+
+        /// <param name="actionId">What the damage is called with no ability behind it (a world blast: Temperance's).</param>
+        public void DealTickDamage(Unit source, Unit target, float amount, ActionDefinition def, string actionId = null)
         {
             if (target == null || !target.IsAlive || amount <= 0f || target.HasFlag(StatusFlags.NegatesDamage)) return;
             amount -= AbsorbWithShields(target, amount);
             if (amount <= 1e-4f) return;
-            target.Health -= amount;
+            float asStrain;
+            float lost = TakeAsStrain(target, amount, out asStrain);   // Strange Axis
+            target.Health -= lost;
             if (source != null) target.LastAttackerId = source.Id;
             target.LastHitAction = def;
             target.LastHitTag = null;
-            Emit(EventType.Damage, source != null ? source.Id : null, target.Id, new DamageInfo { ActionId = def != null ? def.Id : null, Amount = amount, Impact = ImpactType.Light, RemainingHealth = target.Health });
+            Emit(EventType.Damage, source != null ? source.Id : null, target.Id, new DamageInfo { ActionId = def != null ? def.Id : actionId, Amount = lost, Impact = ImpactType.Light, RemainingHealth = target.Health, AsStrain = asStrain });
             Triggers.Fire(new TriggerContext { Type = TriggerType.DamageTaken, Sim = this, Subject = target, Other = source, Amount = amount, Impact = ImpactType.Light, Action = def });
         }
 
@@ -182,6 +213,21 @@ namespace TacticsGame.Core
             }
             if (spent != null) foreach (var id in spent) RemoveStatus(u, id);
             return took;
+        }
+
+        private readonly Dictionary<string, float> shieldsShown = new Dictionary<string, float>();
+
+        /// <summary>Every tick: a ShieldChanged for each unit whose shields (Unit.ShieldTotal) are not what was last told.</summary>
+        private void TickShields()
+        {
+            foreach (var u in State.Units)
+            {
+                float now = u.IsAlive ? u.ShieldTotal() : 0f, was;
+                if (!shieldsShown.TryGetValue(u.Id, out was)) was = 0f;
+                if (Mathf.Abs(now - was) < 0.01f) continue;
+                shieldsShown[u.Id] = now;
+                Emit(EventType.ShieldChanged, u.Id, null, now);
+            }
         }
 
         /// <summary>Ask the views for a look of an ability's own (AbilityFx): 'kind' names it ("rift", "unmade"...).</summary>

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using TacticsGame.Core;
 
@@ -58,14 +59,17 @@ namespace TacticsGame.Presentation
                 float left = timed ? Mathf.Max(0f, s.ExpiresAt - sim.Now) : 0f;
                 y = Meter(x, y, inner, StatusDisplay.NameOf(s.Id) + (timed ? string.Format("  {0:0.00}s", left) : ""), timed ? Fill(unit.Id + "/" + s.Id, left) : 1f, look.Color);
             }
-            y = Meter(x, y, inner, string.Format("Health  {0:0} / {1:0}", unit.Health, unit.MaxHealth), unit.MaxHealth > 0f ? unit.Health / unit.MaxHealth : 0f, HealthColor, unit.MaxHealth);
-            y = Meter(x, y, inner, string.Format("Strain  {0:0} / {1:0}", unit.Strain, unit.MaxStrain), unit.MaxStrain > 0f ? unit.Strain / unit.MaxStrain : 0f, StrainColor, unit.MaxStrain);
+            float shield = unit.ShieldTotal();
+            GUI.Label(new Rect(x, y - 2f, inner, Row), string.Format("Health  {0:0} / {1:0}", unit.Health, unit.MaxHealth) + (shield > 0f ? string.Format("  <color=#5AA6FF>+{0:0} shield</color>", shield) : ""), label);
+            BattleHUD.HealthBar(new Rect(x, y + Row - 2f, inner, 5f), unit.Health, shield, unit.MaxHealth, HealthColor, unit.Team == Team.Player ? TemperanceDisplay.ExecuteThreshold : 0f);   // the shield as the bar's blue stretch
+            y += Row + 6f;
+            y = Meter(x, y, inner, string.Format("{2}  {0:0} / {1:0}", unit.Strain, unit.MaxStrain, string.IsNullOrEmpty(unit.StrainName) ? "Strain" : unit.StrainName), unit.MaxStrain > 0f ? unit.Strain / unit.MaxStrain : 0f, StrainColor, unit.MaxStrain);
 
             var icon = new Rect(x, y, IconSize, IconSize);
             DrawIcon(icon, unit);
             GUI.Label(new Rect(icon.xMax + 8f, y, inner - IconSize - 8f, IconSize), unit.DisplayName + "\n<size=11>" + EtchingCount(unit) + "</size>", label);
 
-            if (icon.Contains(Event.current.mousePosition)) DrawEtchings(unit, icon);
+            if (UiScale.Hovering(icon)) DrawEtchings(unit, icon);
             var e = Event.current;
             if (e.isMouse && rect.Contains(e.mousePosition)) e.Use();
         }
@@ -133,7 +137,7 @@ namespace TacticsGame.Presentation
                 {
                     var n = s.Key;
                     string on = null;
-                    if (!string.IsNullOrEmpty(n.ActionId)) { var a = unit.Actions.Find(x => x.Id == n.ActionId); on = a != null ? a.DisplayName : n.ActionId; }
+                    if (!string.IsNullOrEmpty(n.ActionId)) { var a = unit.KnownActions().FirstOrDefault(x => x.Id == n.ActionId); on = a != null ? CampaignScreens.PairName(a) : n.ActionId; }
                     rows.Add(new KeyValuePair<string, string>(n.Name + EtchingStacks.Times(s.Value) + (on != null ? "  on " + on : ""), n.Description));
                 }
             string head = unit.DisplayName + ": Etchings";

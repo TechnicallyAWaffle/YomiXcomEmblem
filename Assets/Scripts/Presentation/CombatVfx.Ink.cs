@@ -84,6 +84,32 @@ namespace TacticsGame.Presentation
             VfxKit.Burst(raysPs, at, 1, color, 0f, size, life);
         }
 
+        private static readonly Color HowlDark = new Color(0.07f, 0.04f, 0.12f), HowlEdge = new Color(0.32f, 0.22f, 0.5f);
+
+        /// <summary>
+        /// Howling Lament ("howl" AbilityFx): a translucent wave of darkness rolling out from the Howler to the howl's reach,
+        /// in three layers (a broad dark swell and two thinner crests behind it), with a dark pall welling up around the Howler
+        /// and its edge faintly lit. Painted (alpha-blended), so it darkens what it passes over rather than lighting it.
+        /// </summary>
+        private void PlayHowl(FxInfo f)
+        {
+            Vector3 c = f.Center;
+            float r = Mathf.Max(2f, f.Radius);
+            rings.Add(new RingFx { Center = c, From = 0.4f, To = r, Width = 0.45f, Life = 1.1f, Color = WithAlpha(HowlDark, 0.55f), Segments = 72 });
+            rings.Add(new RingFx { Center = c, From = 0.2f, To = r * 0.75f, Width = 0.12f, Life = 1.0f, Color = WithAlpha(HowlEdge, 0.5f), Segments = 72 });
+            for (int i = 0; i < 16; i++)
+            {
+                float a = i * Mathf.PI * 2f / 16f + Random.Range(-0.15f, 0.15f);
+                Vector3 rim = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                Burst(puffs, c + rim * Random.Range(0.6f, 1.4f) + Vector3.up * 0.3f, 1, WithAlpha(HowlDark, 0.75f), 2.2f, 0.9f, 1.0f, rim * 1.6f + Vector3.up * 0.4f);
+            }
+            if (!Inked) return;
+            BrushRing(c, 0.5f, r, 1.2f, WithAlpha(HowlDark, 0.6f));                   // the swell
+            BrushRing(c, 0.3f, r * 0.85f, 1.0f, WithAlpha(HowlDark, 0.45f));          // a crest behind it
+            BrushRing(c, 0.2f, r * 0.6f, 0.8f, WithAlpha(HowlEdge, 0.35f), VfxKit.Mode.Glow);   // the faint lit edge
+            VfxKit.Burst(stains, c + Vector3.up * 0.05f, 1, WithAlpha(HowlDark, 0.7f), 0f, 3.5f, 1.4f);   // the pall under it
+        }
+
         /// <summary>A painted ring on the ground at 'center', its radius going 'from' to 'to' over 'life'.</summary>
         private void BrushRing(Vector3 center, float from, float to, float life, Color color, VfxKit.Mode mode = VfxKit.Mode.Paint)
         {

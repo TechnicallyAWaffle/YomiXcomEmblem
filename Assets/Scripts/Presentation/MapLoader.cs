@@ -58,6 +58,7 @@ namespace TacticsGame.Presentation
             if (map.Blockout != null) CreateBlockout(root, map.Blockout, layer);
             for (int i = 0; i < map.PlayerSpawns.Count; i++) CreateSpawn(root, Team.Player, i, map.PlayerSpawns[i]);
             for (int i = 0; i < map.EnemySpawns.Count; i++) CreateSpawn(root, Team.Enemy, i, map.EnemySpawns[i]);
+            for (int i = 0; i < map.ObjectiveSpawns.Count; i++) CreateObjectiveSpawn(root, i, map.ObjectiveSpawns[i]);
             ApplyGround(map);
             return root;
         }
@@ -153,6 +154,16 @@ namespace TacticsGame.Presentation
             return go;
         }
 
+        /// <summary>An objective spawn point's marker (MapObjectiveMarker): the Map Builder moves it about; a mission's objectives stand on these.</summary>
+        public GameObject CreateObjectiveSpawn(Transform root, int index, Vector3 position)
+        {
+            var go = new GameObject("ObjectiveSpawn_" + index);
+            go.transform.SetParent(root, false);
+            go.transform.position = position;
+            go.AddComponent<MapObjectiveMarker>().Index = index;
+            return go;
+        }
+
         /// <summary>
         /// Write the pieces and spawns under "Map" into 'into' (its name, description and ground size are kept). Cover
         /// keeps its Y rotation; raised ground is saved axis-aligned. Positions are snapped to 'snap' meters on the ground
@@ -181,6 +192,10 @@ namespace TacticsGame.Presentation
             var spawns = new List<MapSpawnPoint>(root.GetComponentsInChildren<MapSpawnPoint>());
             spawns.Sort((a, b) => a.Index.CompareTo(b.Index));
             foreach (var s in spawns) into.Spawns(s.Team).Add(Snap(s.transform.position, snap));
+            into.ObjectiveSpawns.Clear();
+            var markers = new List<MapObjectiveMarker>(root.GetComponentsInChildren<MapObjectiveMarker>());
+            markers.Sort((a, b) => a.Index.CompareTo(b.Index));
+            foreach (var o in markers) into.ObjectiveSpawns.Add(Snap(o.transform.position, snap));
             Current = into;
         }
 

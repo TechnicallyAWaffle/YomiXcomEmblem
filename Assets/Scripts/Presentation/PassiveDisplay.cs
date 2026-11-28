@@ -13,7 +13,7 @@ namespace TacticsGame.Presentation
         private static readonly Dictionary<string, KeyValuePair<string, string>> Table = new Dictionary<string, KeyValuePair<string, string>>
         {
             { Passives.StrainReliefOnDodge, P("Strain Relief", "Dodging an attack sheds strain.") },
-            { Passives.Ascension, P("Ascension", "Below 30% health it shakes off every stun, becomes Unstoppable for good and takes to the air.") },
+            { Passives.Ascension, P("Ascension", "Once, below 30% health: it shakes off every stun and takes to the air for 2.5 seconds, Unstoppable and flying about, then glides back down.") },
             { Passives.KarranosSigil, P("Karranos Sigil", "Breaking an enemy's weakpoint makes it your NEMESIS for 5 seconds (one at a time). You deal 30% more damage to your NEMESIS. When your NEMESIS tries to hit you, it is parried automatically and is no longer your NEMESIS.") },
             { DeliverancePassives.UnravelResistance, P("Unravel Resistance", "Unravel stuns it for half as long.") },
             { DeliverancePassives.FreedomsEmbrace, P("Freedom's Embrace", "While it lives, orders must be given within 20 seconds. When the time runs out it stuns every other unit on the map, drops the squad's orders and acts at once, Unstoppable.") },

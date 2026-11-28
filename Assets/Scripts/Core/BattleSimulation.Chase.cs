@@ -38,7 +38,7 @@ namespace TacticsGame.Core
         {
             reason = null;
             if (unit.IsRooted) { reason = "immobilized"; return false; }
-            if (unit.IsMakina) { reason = "out of range"; return false; }   // it can't walk in: the target must be in reach
+            if (unit.CannotMove) { reason = "out of range"; return false; }   // it can't walk in: the target must be in reach
             if (unit.IsLifted) { reason = "in the air"; return false; }
             ClearQueued(unit, null);   // committing to an ability overrides a queued ranged one
             EtchingTraits.BeginMarch(this, unit);   // a chase is a new walk too (its re-paths aren't)
@@ -138,10 +138,11 @@ namespace TacticsGame.Core
         /// <summary>Stop a walk on the spot without handing the unit back (it is about to start an action).</summary>
         private void HaltWalk(Unit u)
         {
-            if (u.Phase != UnitPhase.Moving) return;
+            if (!IsWalking(u)) return;
             if (u.IsJumping) { u.Position = u.JumpTo; u.JumpEnd = -1f; }   // finish the jump rather than stop in mid-air
             u.Move = null;
-            u.Phase = UnitPhase.Ready;
+            if (u.Phase == UnitPhase.Charging) u.ChargeDecisionAt = Now;   // still charging, stopped
+            else u.Phase = UnitPhase.Ready;
             Emit(EventType.MoveEnded, u.Id, null, new MoveEndedInfo { Position = u.Position });
             SettleOutOfBodies(u);
         }

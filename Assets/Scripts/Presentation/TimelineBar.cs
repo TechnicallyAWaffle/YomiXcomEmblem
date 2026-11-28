@@ -77,7 +77,7 @@ namespace TacticsGame.Presentation
                     break;
                 case TacticsGame.Core.EventType.ActionInterrupted:
                     // A dodge retries the action once the dash lands; anything else frees the unit (a stun follows separately).
-                    readyAt[e.ActorId] = e.SimTime + (((InterruptInfo)e.Payload).Reason == "dodge" ? BattleSimulation.DashDuration : 0f);
+                    readyAt[e.ActorId] = e.SimTime + (((InterruptInfo)e.Payload).Reason == "dodge" ? BattleSimulation.DodgeDuration : 0f);
                     break;
                 case TacticsGame.Core.EventType.Stun:
                     readyAt[e.TargetId] = e.SimTime + ((StunInfo)e.Payload).Duration;
@@ -168,7 +168,7 @@ namespace TacticsGame.Presentation
             // Minimized to a slim strip unless the mouse is up near it (top-middle); once open it stays open while hovered.
             Vector2 mouse = Event.current.mousePosition;
             var zone = new Rect(bar.x - HoverMargin, 0f, bar.width + HoverMargin * 2f, (expanded ? bar.yMax : bar.y + CollapsedHeight) + HoverMargin);
-            if (Event.current.type == UnityEngine.EventType.Repaint) expanded = zone.Contains(mouse);
+            if (Event.current.type == UnityEngine.EventType.Repaint) expanded = UiScale.Hovering(zone);
             if (!expanded)
             {
                 DrawCollapsed(new Rect(bar.x, bar.y, bar.width, CollapsedHeight), now, preview ? landAt : movePreview ? moveReady : -1f);
@@ -221,7 +221,7 @@ namespace TacticsGame.Presentation
             {
                 var c = chips[i];
                 var r = ChipRect(bar, i);
-                bool hover = r.Contains(mouse);
+                bool hover = UiScale.Hovering(r);
                 if (hover) hoverNow = c.UnitId;
                 DrawChip(r, c, hover || c.UnitId == hoveredUnit);
                 Fill(new Rect(r.center.x, r.yMax, 1f, axisY - r.yMax), new Color(1f, 1f, 1f, 0.3f));   // drop line to its time

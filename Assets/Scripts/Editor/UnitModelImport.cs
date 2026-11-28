@@ -100,11 +100,24 @@ public class UnitModelImport : AssetPostprocessor
         var etchings = AssetDatabase.LoadAssetAtPath<Texture2D>(folder + "/" + unit + "Etchings.png");
 
         int linked = 0;
+        // A <Unit>Diverged model is that unit's Diverged form (the Forsaken): DivergedModel / DivergedAnimations.
+        const string DivergedSuffix = "Diverged";
+        bool divergedForm = unit.Length > DivergedSuffix.Length && unit.EndsWith(DivergedSuffix);
+        string owner = divergedForm ? unit.Substring(0, unit.Length - DivergedSuffix.Length) : unit;
         foreach (var guid in AssetDatabase.FindAssets("t:UnitDefinition"))
         {
             var def = AssetDatabase.LoadAssetAtPath<UnitDefinition>(AssetDatabase.GUIDToAssetPath(guid));
-            if (def == null || (def.DisplayName != unit && def.name != unit)) continue;
+            if (def == null || (def.DisplayName != owner && def.name != owner)) continue;
             linked++;
+            if (divergedForm)
+            {
+                if (def.DivergedModel == model && def.DivergedAnimations == controller) continue;
+                Undo.RecordObject(def, "Hook up unit model");
+                def.DivergedModel = model;
+                def.DivergedAnimations = controller;
+                EditorUtility.SetDirty(def);
+                continue;
+            }
             if (def.Model == model && def.ModelAnimations == controller && def.ModelEtchings == etchings) continue;
             Undo.RecordObject(def, "Hook up unit model");
             def.Model = model;

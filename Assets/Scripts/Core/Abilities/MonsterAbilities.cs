@@ -28,6 +28,8 @@ namespace TacticsGame.Core
         {
             if (!a.OwnsHover) return;
             a.OwnsHover = false;
+            var hover = a.Actor.Hover;
+            if (hover != null && hover.OutlastsActions) return;   // its flight was taken over by one of its own (the Monarch ascended meanwhile)
             sim.EndHover(a.Actor, false, null);
         }
 
@@ -86,7 +88,8 @@ namespace TacticsGame.Core
             float angle = (a.Steps + 0.5f) / count * Mathf.PI * 2f;
             Vector3 below = sim.Terrain.OnGround(a.Actor.Position);
             Vector3 at = below + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * Param(a.Definition, "spread");
-            sim.SpawnUnit(a.Definition.SummonUnit, a.Actor.Team, at, a.Actor, a.Definition.SummonAIStyle);
+            var summoner = a.Actor; var via = a.Definition;
+            sim.SpawnUnit(via.SummonUnit, summoner.Team, at, summoner, via.SummonAIStyle, m => sim.InheritEtchings(summoner, via, m));
             a.Steps++;
         }
     }

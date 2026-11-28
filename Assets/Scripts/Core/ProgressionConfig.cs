@@ -15,17 +15,39 @@ namespace TacticsGame.Core
         [Min(0)] public int RandomCount = 3;
     }
 
-    /// <summary>What unlocking one ability costs, in ability points.</summary>
+    /// <summary>What a Form ritual does to a stat (ProgressionConfig.Rituals).</summary>
+    public enum RitualKind { Raise, Lower, Perpetuate }
+
+    /// <summary>
+    /// A Form ritual: Raise or Lower a stat by a share of its base (rolled between MinShare and MaxShare), or Perpetuate it
+    /// (back to its base and locked there: no ritual, Etching or upgrade changes it again). It uses GraspCost and raises the
+    /// member's max Grasp by GraspBonus.
+    /// </summary>
     [System.Serializable]
-    public class AbilityCost
+    public class RitualDefinition
     {
-        public ActionDefinition Ability;
-        [Min(0)] public int Cost = 2;
+        public string Id = "";
+        public string Name = "";
+        [TextArea] public string Description = "";
+        public RitualKind Kind = RitualKind.Raise;
+        [Min(0f)] public float MinShare = 0.1f, MaxShare = 0.3f;
+        [Min(0)] public int GraspCost = 20;
+        [Min(0)] public int GraspBonus = 0;
+    }
+
+    /// <summary>A stat Form rituals work on, by name ("Compute" is action speed). BaseFloor: the base a share is taken of is at
+    /// least this (for a stat some units have none of).</summary>
+    [System.Serializable]
+    public class FormStat
+    {
+        public StatId Stat;
+        public string Name = "";
+        [Min(0f)] public float BaseFloor = 0f;
     }
 
     /// <summary>
     /// The progression's numbers (edit the asset in the Inspector: Assets/Campaign/Progression): what each class starts
-    /// with, what abilities cost to unlock, and the Etchings offered between missions. Build Scene writes a ballpark one.
+    /// with, and the Grasp economy between missions: Form (stat rituals), Cognition (Etchings), Knowledge (abilities).
     /// </summary>
     [CreateAssetMenu(menuName = "TacticsGame/Progression Config")]
     public class ProgressionConfig : ScriptableObject
@@ -33,25 +55,73 @@ namespace TacticsGame.Core
         [Tooltip("How a new campaign's squad starts unless the player picks otherwise.")]
         public LoadoutStart DefaultStart = LoadoutStart.Default;
         public List<ClassStart> Classes = new List<ClassStart>();
-        [Tooltip("Ability points to unlock an ability not listed below.")]
-        [Min(0)] public int DefaultAbilityCost = 2;
-        public List<AbilityCost> AbilityCosts = new List<AbilityCost>();
-        [Tooltip("Locked abilities offered to unlock per upgrade phase, drawn at random from the class's (0 = all of them).")]
+
+        [Header("Grasp")]
+        [Tooltip("Max Grasp a member starts the campaign with.")]
+        [Min(0)] public int StartingGrasp = 0;
+        [Tooltip("Overburdened (using more Grasp than its max): strain per second in battle, as a share of the Grasp over.")]
+        [Min(0f)] public float OverburdenStrainShare = 0.1f;
+        [Tooltip("Holding the mouse on an ability or Etching this long destroys it...")]
+        [Min(0.1f)] public float DestroyHoldSeconds = 2f;
+        [Tooltip("... and lowers max Grasp by this much (the Grasp it used is freed).")]
+        [Min(0)] public int DestroyGraspLoss = 10;
+
+        [Header("Knowledge (abilities)")]
+        [Tooltip("Abilities offered to learn per upgrade phase, drawn at random from the class's locked ones (0 = all of them).")]
         [Min(0)] public int AbilitiesOffered = 6;
-        [Header("Etchings")]
-        [Tooltip("The pool each upgrade phase draws from.")]
+        [Tooltip("Grasp to learn the first ability.")]
+        [Min(0)] public int AbilityGrasp = 10;
+        [Tooltip("Grasp added to an ability's price for each one the member has learned.")]
+        [Min(0)] public int AbilityGraspStep = 10;
+        [Tooltip("The abilities a member started with count as learned for the price (off: only ones learned in Knowledge).")]
+        public bool StartersRaisePrice = false;
+
+        [Header("Cognition (Etchings)")]
+        [Tooltip("The pool the offers are drawn from.")]
         public List<EtchingDefinition> Etchings = new List<EtchingDefinition>();
-        [Tooltip("Etchings offered to each member per upgrade phase (all different).")]
-        [Min(1)] public int EtchingsOffered = 6;
-        [Tooltip("How many of those each member takes when nothing else says (a campaign sets its own, per mission: CampaignDefinition.EtchingsPerMission).")]
-        [Min(0)] public int EtchingsTaken = 1;
+        [Tooltip("Etchings offered at a time (all different); taking one draws a fresh set.")]
+        [Min(1)] public int EtchingsOffered = 3;
+        [Tooltip("Grasp the first Etching uses.")]
+        [Min(0)] public int EtchingGrasp = 20;
+        [Tooltip("Grasp added to an Etching's price for each Etching the member already has.")]
+        [Min(0)] public int EtchingGraspStep = 10;
+
+        [Header("Form (stats)")]
+        public List<FormStat> FormStats = DefaultFormStats();
+        public List<RitualDefinition> Rituals = DefaultRituals();
 
         public ClassStart StartFor(UnitDefinition c) { return Classes.Find(s => s != null && s.Class == c); }
 
-        public int CostOf(ActionDefinition ability)
+        public RitualDefinition Ritual(string id) { return Rituals.Find(r => r != null && r.Id == id); }
+
+        public FormStat Form(StatId stat) { return FormStats.Find(f => f != null && f.Stat == stat); }
+
+        public static List<FormStat> DefaultFormStats()
         {
-            var e = AbilityCosts.Find(x => x != null && x.Ability == ability);
-            return e != null ? e.Cost : DefaultAbilityCost;
+            return new List<FormStat>
+            {
+                new FormStat { Stat = StatId.MaxHealth, Name = "Health" },
+                new FormStat { Stat = StatId.MaxStrain, Name = "Max Strain" },
+                new FormStat { Stat = StatId.StrainRecovery, Name = "Strain Recovery" },
+                new FormStat { Stat = StatId.MoveSpeed, Name = "Movement Speed" },
+                new FormStat { Stat = StatId.DashDistance, Name = "Dash Distance" },
+                new FormStat { Stat = StatId.ActionSpeed, Name = "Compute" },
+            };
+        }
+
+        public static List<RitualDefinition> DefaultRituals()
+        {
+            return new List<RitualDefinition>
+            {
+                new RitualDefinition { Id = "graft", Name = "Graft", Kind = RitualKind.Raise, MinShare = 0.1f, MaxShare = 0.3f, GraspCost = 20,
+                                       Description = "Raises the stat by a random 10-30% of its base value." },
+                new RitualDefinition { Id = "weave", Name = "Weave", Kind = RitualKind.Raise, MinShare = 0.5f, MaxShare = 0.5f, GraspCost = 50,
+                                       Description = "Raises the stat by 50% of its base value." },
+                new RitualDefinition { Id = "amputate", Name = "Amputate", Kind = RitualKind.Lower, MinShare = 0.3f, MaxShare = 0.3f, GraspCost = 0, GraspBonus = 20,
+                                       Description = "Lowers the stat by 30% of its base value. Raises maximum Grasp by 20." },
+                new RitualDefinition { Id = "perpetuate", Name = "Perpetuate", Kind = RitualKind.Perpetuate, GraspCost = 100,
+                                       Description = "Resets the stat to its base value and locks it there permanently. No other effect can override this." },
+            };
         }
 
         public EtchingDefinition Etching(string id) { return Etchings.Find(e => e != null && e.Id == id); }
@@ -86,7 +156,6 @@ namespace TacticsGame.Core
                     .MultAbility(ActionStat.Range, 1.5f).MultAbility(ActionStat.AreaRadius, 1.5f).MultAbility(ActionStat.DisplaceDistance, 1.5f),
                 new EtchingDefinition { Id = "etching_of_recurrence", Name = "Etching of Recurrence", Scope = EtchingScope.OneAbility, Description = "Etch onto an ability: 40% increased duration of its stuns, buffs and debuffs (stacks multiplicatively)." }
                     .MultAbility(ActionStat.StunDuration, 1.4f).MultAbility(ActionStat.Duration, 1.4f),
-                new EtchingDefinition { Id = "symbols_of_memory", Name = "Symbols of Memory", Description = "Gain 2 ability points.", AbilityPoints = 2 },
                 new EtchingDefinition { Id = "burst_of_cognition", Name = "Burst of Cognition", Scope = EtchingScope.OneAbility, Description = "Etch onto an ability: 30% shorter windup (stacks multiplicatively)." }
                     .MultAbility(ActionStat.Windup, 0.7f),
                 new EtchingDefinition { Id = "processing_proxies", Name = "Processing Proxies", Scope = EtchingScope.OneAbility, Description = "Etch onto an ability: 30% shorter recovery (stacks multiplicatively)." }
@@ -165,14 +234,6 @@ namespace TacticsGame.Core
                 new EtchingDefinition { Id = "guarded_approach", Name = "Guarded Approach", Scope = EtchingScope.OneAbility, Description = "Etch onto an ability with no Transcend: it can be Transcended for +10 strain, giving you a 40 health shield for 1.5 seconds." }
                     .GrantsTranscend(TranscendGrant.ShieldOnCast, 10f, new BehaviorParam("shield", 40f), new BehaviorParam("seconds", 1.5f)),
             };
-        }
-
-        /// <summary>A ballpark unlock cost: 3 for signature and gated abilities and long cooldowns, 2 for mid ones, 1 otherwise.</summary>
-        public static int BallparkCost(ActionDefinition a)
-        {
-            if (a.ExtraCinematic || !string.IsNullOrEmpty(a.RequiredStatus) || a.ChannelSeconds > 0f || a.Cooldown >= 12f) return 3;
-            if (a.Cooldown >= 6f || a.IsCharge || a.CanTranscend) return 2;
-            return 1;
         }
     }
 }

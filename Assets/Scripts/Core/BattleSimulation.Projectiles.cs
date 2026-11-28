@@ -38,10 +38,53 @@ namespace TacticsGame.Core
         public readonly List<float> Times = new List<float>();
         public readonly List<Vector3> Points = new List<Vector3>();
         public float EndsAt = -1f;
-        // How it flies (its ProjectileSpec), for the view's estimates: the tactical view's time to impact.
+        // How it flies (its ProjectileSpec), for the view's estimates: the tactical view's time to impact and predicted course.
         public float Accel, MaxSpeed, Radius, Lifetime;
         public ProjectileHoming Homing;
+        public float HomingDelay, TurnRate, TurnGrowth;
         public string TargetId;
+
+        /// <summary>
+        /// The course it will fly from 'time' on, as the simulation would fly it (Steer, speed gain, the ground and raised
+        /// terrain ending it), added to 'into' every 'step' seconds: toward 'aimAt' if it homes (where its target is now, as
+        /// if it stays there), straight on if it doesn't (aimAt ignored). It ends where it would reach aimAt, meet solid ground
+        /// ('solid': under the terrain there), or fall apart (Lifetime). 'into' starts with where it is now.
+        /// </summary>
+        public void Predict(float time, Vector3? aimAt, System.Func<Vector3, bool> solid, List<Vector3> into, float step = 0.05f, int maxPoints = 400)
+        {
+            Vector3 p, dir;
+            if (!PositionAt(time, out p, out dir) || Times.Count == 0) return;
+            float age = time - Times[0], speed = Mathf.Max(0.1f, SpeedAt(time));
+            into.Add(p);
+            bool homes = Homing != ProjectileHoming.None && aimAt.HasValue;
+            for (int n = 0; n < maxPoints && age < Lifetime; n++)
+            {
+                if (homes && age >= HomingDelay)
+                {
+                    Vector3 want = aimAt.Value - p;
+                    if (want.sqrMagnitude > 1e-6f) dir = Turn(dir, want.normalized, (TurnRate + TurnGrowth * (age - HomingDelay)) * Mathf.Deg2Rad * step);
+                }
+                speed = Mathf.Min(Mathf.Max(MaxSpeed, speed), speed + Accel * step);
+                Vector3 next = p + dir * (speed * step);
+                age += step;
+                if (homes && Vector3.Distance(next, aimAt.Value) <= Radius + 0.4f) { into.Add(next); return; }   // it gets there
+                if (age > 0.05f && solid != null && solid(next)) { into.Add(next); return; }   // into the ground or a wall
+                p = next;
+                into.Add(p);
+            }
+        }
+
+        /// <summary>'dir' turned toward 'want' (both unit length) by at most 'maxTurn' radians (spherical interpolation): how a
+        /// homing projectile steers (BattleSimulation.Steer, Predict).</summary>
+        public static Vector3 Turn(Vector3 dir, Vector3 want, float maxTurn)
+        {
+            float dot = Mathf.Clamp(Vector3.Dot(dir, want), -1f, 1f);
+            float angle = Mathf.Acos(dot);
+            if (angle <= maxTurn || angle < 1e-4f) return want;
+            float sin = Mathf.Sin(angle);
+            if (sin < 1e-4f) { want = (want + Vector3.up * 0.01f).normalized; sin = 1e-3f; }   // dead behind: tip it to pick a way round
+            return (dir * (Mathf.Sin(angle - maxTurn) / sin) + want * (Mathf.Sin(maxTurn) / sin)).normalized;
+        }
 
         /// <summary>Where it is at 'time' (its last point once it has ended; false before it was fired or after it ended).</summary>
         public bool PositionAt(float time, out Vector3 p, out Vector3 dir)
@@ -89,7 +132,7 @@ namespace TacticsGame.Core
     /// A projectile (LaunchProjectile) is a point moving through the world each tick: it speeds up (Accel, up to MaxSpeed),
     /// steers (Homing, after HomingDelay, turning faster the longer it steers), and lands its ability's hit, through the
     /// full hit pipeline (dodge, block, shields, stun), on the first enemy of its owner whose body it touches. Striking the
-    /// ground or running out of Lifetime spends it. Its flight is recorded in a ProjectilePath for the view.
+    /// ground or running out of Lifetime spends it; a homing one also fizzles on cover and terrain (CoverBlocks). Its flight is recorded in a ProjectilePath for the view.
     /// An emitter (StartEmitter) calls back every few seconds for a while, for its owner, as long as the owner lives: a
     /// volley spread over time (Needlestorm), or a stream that goes on while the owner does other things (Carapace).
     /// </summary>
@@ -104,6 +147,7 @@ namespace TacticsGame.Core
             public Vector3 Position, Direction;
             public float Speed, Born;
             public ProjectilePath Path;
+            public HashSet<string> Dodged = new HashSet<string>();   // who has rolled their dodge against it (DodgeLead before it touches them)
         }
 
         private class Emitter
@@ -116,6 +160,17 @@ namespace TacticsGame.Core
         }
 
         private readonly List<Projectile> projectiles = new List<Projectile>();
+        private readonly IStaticOcclusion staticOcclusion;
+
+        /// <summary>Does the segment a-b run into cover or terrain: the level's static geometry, or a cover piece or wall
+        /// (State.Occluders)? Bodies don't count.</summary>
+        public bool CoverBlocks(Vector3 a, Vector3 b)
+        {
+            if (staticOcclusion != null && staticOcclusion.IsBlocked(a, b)) return true;
+            foreach (var o in State.Occluders)
+                if (OcclusionMath.SegmentHitsCylinder(a, b, o.Position, o.Radius, o.Height)) return true;
+            return false;
+        }
         private readonly List<Emitter> emitters = new List<Emitter>();
         private int projectileCounter;
 
@@ -136,6 +191,7 @@ namespace TacticsGame.Core
                 {
                     Id = ++projectileCounter, OwnerId = owner.Id, ActionId = def.Id, TargetId = targetId,
                     Accel = spec.Accel, MaxSpeed = Mathf.Max(spec.Speed, spec.MaxSpeed), Radius = spec.HitRadius, Lifetime = spec.Lifetime, Homing = spec.Homing,
+                    HomingDelay = spec.HomingDelay, TurnRate = spec.TurnRate, TurnGrowth = spec.TurnGrowth,
                 },
             };
             p.Path.Times.Add(Now); p.Path.Points.Add(from);
@@ -150,7 +206,7 @@ namespace TacticsGame.Core
             if (owner == null || fire == null) return;
             emitters.Add(new Emitter
             {
-                Owner = owner, Definition = def, Every = Mathf.Max(TickLength, every), NextAt = Now,
+                Owner = owner, Definition = def, Every = shots > 0 && every <= 0f ? 0f : Mathf.Max(TickLength, every), NextAt = Now,   // a burst: all of them at once (Vipers)
                 Left = shots > 0 ? shots : -1, EndsAt = shots > 0 ? float.MaxValue : Now + seconds, Fire = fire,
             });
         }
@@ -197,7 +253,7 @@ namespace TacticsGame.Core
                     Vector3 q = Vector3.Lerp(from, to, s / (float)steps);
                     p.Position = q;
                     hit = Touching(p, q);
-                    if (hit == null && age > 0.05f && q.y < Terrain.HeightAt(TerrainMap.Level(q, q.y)) - 0.02f) grounded = true;
+                    if (hit == null && age > 0.05f && IsInsideGround(Terrain, q)) grounded = true;
                 }
                 if (hit != null)
                 {
@@ -209,9 +265,31 @@ namespace TacticsGame.Core
                     continue;
                 }
                 if (grounded) { EndProjectile(i, null); continue; }
+                RollDodgesAhead(p);
+                // A homing one fizzles on cover and terrain it flies into (not in its first moment, leaving its owner's cover).
+                if (p.Spec.Homing != ProjectileHoming.None && age > 0.1f && CoverBlocks(from, p.Position)) { p.Position = from; EndProjectile(i, null); continue; }
                 if (IsStep(ProjectileSampleTicks)) { p.Path.Times.Add(Now); p.Path.Points.Add(p.Position); }
             }
         }
+
+        /// <summary>Whoever it will touch within DodgeLead, flying on as it is, rolls a dodge against it (once each).</summary>
+        private void RollDodgesAhead(Projectile p)
+        {
+            float ahead = p.Speed * DodgeLead;
+            int steps = Mathf.Max(1, Mathf.CeilToInt(ahead / 0.25f));
+            for (int s = 1; s <= steps; s++)
+            {
+                var u = Touching(p, p.Position + p.Direction * (ahead * s / steps));
+                if (u == null || p.Dodged.Contains(u.Id)) continue;
+                p.Dodged.Add(u.Id);
+                RollDodgeAgainst(p.Owner, u, p.Definition);
+                return;   // it ends on the first body it touches
+            }
+        }
+
+        /// <summary>Is a point under the terrain there (the ground, a raised block's side): where a projectile ends. The view's
+        /// predicted courses use it too.</summary>
+        public static bool IsInsideGround(TerrainMap terrain, Vector3 q) { return terrain != null && q.y < terrain.HeightAt(TerrainMap.Level(q, q.y)) - 0.02f; }
 
         /// <summary>Turn toward what it homes on, by at most its turn rate this tick (plain spherical interpolation).</summary>
         private void Steer(Projectile p, float age)
@@ -225,14 +303,7 @@ namespace TacticsGame.Core
             float m = want.magnitude;
             if (m < 1e-4f) return;
             want /= m;
-            float maxTurn = (spec.TurnRate + spec.TurnGrowth * (age - spec.HomingDelay)) * Mathf.Deg2Rad * TickLength;
-            float dot = Mathf.Clamp(Vector3.Dot(p.Direction, want), -1f, 1f);
-            float angle = Mathf.Acos(dot);
-            if (angle <= maxTurn || angle < 1e-4f) { p.Direction = want; return; }
-            float sin = Mathf.Sin(angle);
-            if (sin < 1e-4f) { want = (want + Vector3.up * 0.01f).normalized; sin = 1e-3f; }   // dead behind: tip it to pick a way round
-            Vector3 d = p.Direction * (Mathf.Sin(angle - maxTurn) / sin) + want * (Mathf.Sin(maxTurn) / sin);
-            p.Direction = d.normalized;
+            p.Direction = ProjectilePath.Turn(p.Direction, want, (spec.TurnRate + spec.TurnGrowth * (age - spec.HomingDelay)) * Mathf.Deg2Rad * TickLength);
         }
 
         /// <summary>The enemy of 'owner' nearest to 'point' that a projectile can reach (targetable, in the world).</summary>

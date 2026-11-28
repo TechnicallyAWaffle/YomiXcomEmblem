@@ -85,8 +85,6 @@ namespace TacticsGame.Core
         public string Trait = "";
         [Tooltip("The Trait's numbers, by key (any left out keep EtchingTraits' default).")]
         public List<BehaviorParam> Params = new List<BehaviorParam>();
-        [Tooltip("Ability points it gives the member when taken.")]
-        [Min(0)] public int AbilityPoints;
         [Tooltip("One Ability: gives that ability a Transcend (it must have none of its own), for GrantStrain extra strain.")]
         public TranscendGrant Grant = TranscendGrant.None;
         public float GrantStrain = 15f;
@@ -187,6 +185,7 @@ namespace TacticsGame.Core
         public string SecondActionId;   // Two Abilities: the other ability's id; else empty
         public bool GrantsTranscend;   // it gave that ability a Transcend (no other Etching may give it one)
         public bool GrantsFollowup;    // it gave that ability a follow-up (no other Etching may give it one)
+        public int Grasp;              // the Grasp it uses (Progression.EtchingPrice when taken)
     }
 
     /// <summary>One copy of an Etching's Trait on a unit in battle, with that Etching's numbers.</summary>
@@ -256,6 +255,7 @@ namespace TacticsGame.Core
         public Dictionary<string, GrantedTranscend> Transcends = new Dictionary<string, GrantedTranscend>();   // by ability id
         public Dictionary<string, GrantedFollowup> Followups = new Dictionary<string, GrantedFollowup>();     // by ability id
         public List<string> RemovedBehaviors = new List<string>();
+        public List<StatId> LockedStats = new List<StatId>();   // Perpetuated: no modifier from growth or upgrades changes these
     }
 
     /// <summary>
@@ -321,6 +321,7 @@ namespace TacticsGame.Core
         public const string RepetitionIsStrength = "repetition_is_strength";
         public const string MomentumStatus = "momentum", StrideStatus = "unstoppable_stride";
         public const string FracturesOfStress = "fractures_of_stress", FracturedStatus = "fractured";
+        public const string Overburdened = "overburdened";   // more Grasp used than held (Progression.Growth): 'per_second' strain, always
 
         public static void Attach(BattleSimulation sim)
         {
@@ -342,6 +343,20 @@ namespace TacticsGame.Core
             TickSight(sim);
             TickSteadyCenter(sim);
             TickClarity(sim);
+            TickOverburdened(sim);
+        }
+
+        /// <summary>Overburdened: strain builds on its own, 'per_second' (every copy's), against its recovery.</summary>
+        private static void TickOverburdened(BattleSimulation sim)
+        {
+            if (!sim.IsStep(BattleSimulation.RateTicks)) return;
+            float step = BattleSimulation.RateTicks * BattleSimulation.TickLength;
+            foreach (var u in sim.State.Units)
+            {
+                if (!u.IsAlive || u.Traits.Count == 0) continue;
+                float gain = Sum(u, Overburdened, "per_second", 0f) * step;
+                if (gain > 0f) sim.AddStrain(u, gain, false);   // a drain on top: recovery still runs
+            }
         }
 
         // ---- Steady Center, Clarity From Aggravation, Dissipation, Acceleration Bypass
@@ -376,8 +391,8 @@ namespace TacticsGame.Core
 
         private static void TickSteadyCenter(BattleSimulation sim)
         {
-            if (!sim.IsStep(BattleSimulation.StrainRecoveryTicks)) return;
-            float step = BattleSimulation.StrainRecoveryTicks * BattleSimulation.TickLength;
+            if (!sim.IsStep(BattleSimulation.RateTicks)) return;
+            float step = BattleSimulation.RateTicks * BattleSimulation.TickLength;
             foreach (var u in sim.State.Units)
             {
                 if (!u.IsAlive || u.Traits.Count == 0 || u.Strain <= 0f) continue;
@@ -623,7 +638,7 @@ namespace TacticsGame.Core
                 u.StillSince = -1f;
                 if (u.MovingSince < 0f) u.MovingSince = sim.Now;
                 float walked = Mathf.Min(sim.Now - u.MovingSince, first.Param("max_seconds", 8f));
-                if (sim.IsStep(BattleSimulation.StrainRecoveryTicks))
+                if (sim.IsStep(BattleSimulation.RateTicks))
                 {
                     float bonus = first.Param("speed_per_second", 0.25f) * copies * walked;
                     if (bonus > 0.01f)
