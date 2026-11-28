@@ -6,23 +6,20 @@ namespace TacticsGame.Core
     /// <summary>
     /// A behavior that fires projectiles (BattleSimulation.Projectiles.cs). Every ability using one sets their speed, size and
     /// lifetime in its own fields (ActionDefinition.ProjectileSpeed, ProjectileAcceleration, ProjectileMaxSpeed,
-    /// ProjectileRadius, ProjectileLifetime), and how they steer in its Params: proj_homing (0 straight, 1 its target, 2 the
-    /// enemy nearest to it), proj_homing_delay (s flying as launched first), proj_turn (deg/s), proj_turn_growth (deg/s added a
-    /// second), and how it leaves: launch_spread (0: straight at its target;
+    /// ProjectileRadius, ProjectileLifetime) and how they steer (ProjectileHoming, ProjectileHomingDelay, ProjectileTurnRate,
+    /// ProjectileTurnGrowth); its Params say how it leaves: launch_spread (0: straight at its target;
     /// 1: any way at all) and launch_min_pitch (degrees above level it must at least leave at: 0 never toward the floor).
     /// Each projectile lands the ability's own hit (damage, impact, stun, statuses) on the first enemy it touches.
     /// Squad abilities can use it as well as enemies': subclass it, or use "volley" as it is.
     /// </summary>
     public abstract class ProjectileBehavior : ActionBehavior
     {
+        public override bool IsHitscan(ActionDefinition def) { return false; }   // it flies: its projectiles meet bodies on their own
+
         public override IEnumerable<BehaviorParam> Parameters
         {
             get
             {
-                yield return new BehaviorParam("proj_homing", (float)ProjectileHoming.ClosestEnemy);
-                yield return new BehaviorParam("proj_homing_delay", 0.25f);
-                yield return new BehaviorParam("proj_turn", 200f);
-                yield return new BehaviorParam("proj_turn_growth", 500f);
                 yield return new BehaviorParam("launch_spread", 1f);
                 yield return new BehaviorParam("launch_min_pitch", 5f);
                 foreach (var p in MoreParameters) yield return p;
@@ -41,8 +38,8 @@ namespace TacticsGame.Core
             return new ProjectileSpec
             {
                 Speed = def.ProjectileSpeed, Accel = def.ProjectileAcceleration, MaxSpeed = Mathf.Max(def.ProjectileSpeed, def.ProjectileMaxSpeed),
-                Homing = (ProjectileHoming)Mathf.Clamp(Mathf.RoundToInt(Param(def, "proj_homing")), 0, 2),
-                HomingDelay = Param(def, "proj_homing_delay"), TurnRate = Param(def, "proj_turn"), TurnGrowth = Param(def, "proj_turn_growth"),
+                Homing = def.ProjectileHoming,
+                HomingDelay = def.ProjectileHomingDelay, TurnRate = def.ProjectileTurnRate, TurnGrowth = def.ProjectileTurnGrowth,
                 HitRadius = def.ProjectileRadius, Lifetime = def.ProjectileLifetime,
             };
         }
@@ -93,7 +90,7 @@ namespace TacticsGame.Core
         protected void DescribeFlight(AbilityTip tip)
         {
             var def = tip.Def;
-            var homing = (ProjectileHoming)Mathf.RoundToInt(Param(def, "proj_homing"));
+            var homing = def.ProjectileHoming;
             tip.Add("Flight", string.Format("{0:0} m/s, speeding up to {1:0}, for up to {2}", def.ProjectileSpeed, Mathf.Max(def.ProjectileSpeed, def.ProjectileMaxSpeed), AbilityTip.Secs(def.ProjectileLifetime)) +
                 (homing == ProjectileHoming.ClosestEnemy ? ", homing on the nearest enemy" : homing == ProjectileHoming.Target ? ", homing on its target" : ""));
         }
@@ -115,7 +112,8 @@ namespace TacticsGame.Core
         public override void Describe(AbilityTip tip)
         {
             DescribeHit(tip, "Damage each", "Stun", true);
-            tip.Add("Projectiles", string.Format("{0:0}, one every {1}", Param(tip.Def, "count"), AbilityTip.Secs(Param(tip.Def, "every"))));
+            float every = Param(tip.Def, "every");
+            tip.Add("Projectiles", every <= 0f ? string.Format("{0:0}, all at once", Param(tip.Def, "count")) : string.Format("{0:0}, one every {1}", Param(tip.Def, "count"), AbilityTip.Secs(every)));
             DescribeFlight(tip);
         }
 
@@ -271,6 +269,7 @@ namespace TacticsGame.Core
             var def = a.Definition;
             float radius = a.Stat(ActionStat.AreaRadius);
             float scale = actor.DurationScale(def);
+            sim.EmitFx(actor, sim.GetUnit(a.TargetUnitId), "howl", def, actor.Position, radius);   // the wave, from the Howler (CombatVfx.PlayHowl)
             foreach (var u in sim.State.Units)
             {
                 if (!u.IsAlive || u == actor) continue;

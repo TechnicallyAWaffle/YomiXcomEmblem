@@ -20,10 +20,21 @@ namespace TacticsGame.Core
         public const float TickLength = 0.025f;
         public const float UnravelStunSeconds = 4f;
         public const float DashDuration = 0.2f;
+        /// <summary>Seconds a dodge's dash takes (out of an attack's way; see DodgeTo).</summary>
+        public const float DodgeDuration = 0.1f;
+        /// <summary>Seconds before an attack would land that the units it is going to hit roll their dodge (a dodge is a dash
+        /// out of the way: it doesn't stop the hit, so a dash that doesn't get out of reach in time is hit anyway).</summary>
+        public float DodgeLead = 0.1f;
         public const float DisplaceDuration = 0.3f;
         public const float StandingGap = 0.2f;     // kept between bodies where units stop (see FreeSpotNear)
         public const float SettleDuration = 0.2f;  // shuffle out of an overlap (see SettleOutOfBodies)
-        public const int StrainRecoveryTicks = 10;      // strain recovers in 0.25s steps (one StrainChanged event each)
+        /// <summary>
+        /// Every "X per second" effect (strain recovery and Clear Mind's drain, heal and strain over time, domes' damage and
+        /// strain, charge drain, per-second Etchings) applies in steps of this long: its rate times the step, one event each.
+        /// RateTicks is the same in ticks.
+        /// </summary>
+        public const float RateStepSeconds = 0.25f;
+        public const int RateTicks = 10;   // RateStepSeconds / TickLength
         public const float ChaseRepathSeconds = 0.3f;   // a melee chase re-plans its path toward the target this often
         /// <summary>Longest a melee chase runs, or a queued ranged ability waits, for its out-of-range target before giving up.</summary>
         public float MaxRangeWait = 10f;
@@ -48,6 +59,8 @@ namespace TacticsGame.Core
         /// when the squad falls or FinishBattle is called.
         /// </summary>
         public bool HoldVictory;
+        /// <summary>Not won while scheduled reinforcements (ScheduleDrop, not the endless waves) are still to come (EncounterSpec.AwaitReinforcements).</summary>
+        public bool AwaitReinforcements;
 
         public BattleOutcome Outcome { get; private set; }
         public float Now { get { return tick * TickLength; } }
@@ -74,12 +87,13 @@ namespace TacticsGame.Core
         // Focus (the Wait order): FocusDelay seconds of unbroken focusing, and strain drains at FocusStrainPerSecond on top
         // of normal recovery (no recovery delay) until the unit does anything else. Taking damage restarts the count.
         public float FocusDelay = 1.5f;
+        /// <summary>A charging unit may walk (a Move order keeps the charge going until the walk ends), at this share of its
+        /// move speed (0.2: 80% slower).</summary>
+        public float ChargeMoveSpeedMultiplier = 0.2f;
         /// <summary>The shortest a unit can take to reach Clear Mind, however much its Etchings cut FocusDelay (two Mantras of
         /// Focus would otherwise make it instant).</summary>
         public float MinFocusDelay = 0.1f;
         public float FocusStrainPerSecond = 35f;
-        /// <summary>Focus drains strain in steps of this many ticks (0.1s), at FocusStrainPerSecond all the same.</summary>
-        public const int FocusDrainTicks = 4;
 
 
         // Transcend (UnitCommand.Transcend). The strain price is per ability (ActionDefinition.TranscendStrain).
@@ -119,7 +133,8 @@ namespace TacticsGame.Core
             foreach (var u in State.Units) u.Position = Terrain.OnGround(u.Position);   // everyone starts standing on the ground
             foreach (var u in Timeline.InitialState.Units) u.Position = Terrain.OnGround(u.Position);
             rng = new System.Random(seed);
-            Visibility = new SimVisibility(staticOcclusion ?? new NoStaticOcclusion(), State);
+            this.staticOcclusion = staticOcclusion ?? new NoStaticOcclusion();
+            Visibility = new SimVisibility(this.staticOcclusion, State);
             Paths = terrainPaths = new TerrainPaths(paths ?? new StraightLinePathService(), State.Terrain);
             EnemyAI = enemyAI ?? new AIRouter();   // each unit's AIProfile (UnitAIs), else BasicEnemyAI
             Outcome = BattleOutcome.InProgress;
@@ -145,7 +160,9 @@ namespace TacticsGame.Core
             {
                 AttachBehavior(def);
                 if (def != null) AttachBehavior(def.LinkedAction);   // Take Aim's Snipe, Retaliate's shot
+                if (def != null) AttachBehavior(def.DivergedVersion);   // the Forsaken's other form of it
             }
+            if (u.Definition != null) { AttachBehavior(u.Definition.DivergeAction); AttachBehavior(u.Definition.RegressAction); AttachBehavior(u.Definition.InsanityAction); }
         }
 
         private void AttachBehavior(ActionDefinition def)
@@ -231,15 +248,19 @@ namespace TacticsGame.Core
             if (unit != null && unit.IsAlive) ExecuteDash(unit, direction8);
         }
 
-        /// <summary>Dash toward any point: stops there if it is within dash range, otherwise goes the full range that way.</summary>
+        /// <summary>Dash toward any point: stops there if it is within dash range, otherwise goes the full range that way. A
+        /// dodge always moves: a point it can't get anywhere toward (its own spot) dashes the best way instead.</summary>
         public void SubmitDodgeDashTo(string unitId, Vector3 point)
         {
             int idx = pendingDashes.FindIndex(d => d.UnitId == unitId);
             if (idx < 0) return;
+            var d = pendingDashes[idx];
             pendingDashes.RemoveAt(idx);
             var unit = GetUnit(unitId);
             if (unit == null || !unit.IsAlive) return;
-            DodgeTo(unit, DashDestination(unit, point));
+            Vector3 to = DashDestination(unit, point);
+            if ((to - unit.Position).sqrMagnitude <= 0.25f) { ExecuteDash(unit, BestDashDirection(unit, GetUnit(d.AttackerId))); return; }
+            DodgeTo(unit, to);
         }
 
         /// <summary>The Dash ability: slide toward 'point' like a dodge (same speed and reach), or Transcended: further and
@@ -300,9 +321,12 @@ namespace TacticsGame.Core
         }
 
         /// <summary>Index 0-7 of the dash direction that moves 'unit' furthest from 'threat'.</summary>
-        public int BestDashDirection(Unit unit, Unit threat)
+        public int BestDashDirection(Unit unit, Unit threat) { return BestDashDirection(unit, threat != null ? threat.Position : unit.Position - Vector3.forward); }
+
+        /// <summary>The 8-way direction most directly away from 'threat' (a point).</summary>
+        public int BestDashDirection(Unit unit, Vector3 threat)
         {
-            Vector3 away = (unit.Position - threat.Position);
+            Vector3 away = (unit.Position - threat);
             away.y = 0f;
             away = away.normalized;
             int best = 0;
@@ -323,7 +347,7 @@ namespace TacticsGame.Core
             if (checkResources && !CanAfford(actor, def, out reason, target != null ? target.Id : null, transcend)) return false;
             if (def.Targeting == TargetType.Enemy)
             {
-                if (target == null || !target.IsAlive || target.Team == actor.Team) { reason = "invalid target"; return false; }
+                if (target == null || !target.IsAlive || (target.Team == actor.Team && target.Id != actor.FrenzyTargetId)) { reason = "invalid target"; return false; }   // Madness Spills Forth strikes whoever it went for
                 if (!IsTargetableBy(target, actor)) { reason = "target hidden"; return false; }
                 if (Vector3.Distance(actor.Position, target.Position) > actor.ActionStat(def, ActionStat.Range)) { reason = "out of range"; return false; }
                 if (def.IsRanged && !def.PiercesTerrain && !Visibility.HasLineOfSight(actor, target)) { reason = "no line of sight"; return false; }
@@ -356,9 +380,10 @@ namespace TacticsGame.Core
             var forbidding = actor.StatusForbidding(def.Id);
             if (forbidding != null) { reason = "not during " + forbidding.Id.Replace('_', ' '); return false; }
             if (def.InnatePassive) { reason = "always on"; return false; }
+            if (def.Form != FormLock.Any && (def.Form == FormLock.Diverged) != actor.HasStatus(StatusIds.Diverged)) { reason = def.Form == FormLock.Diverged ? "Diverged form only" : "Composed form only"; return false; }
             if (EnergyCostOf(actor, def) > actor.Energy + 1e-4f) { reason = "not enough energy"; return false; }
             float strain = StrainCostOf(actor, def, targetId, transcend);
-            if (strain > 0f && actor.Strain + strain > actor.MaxStrain + 1e-4f && !behavior.AllowsStrainOverflow && !def.UnravelsOverMaxStrain && !EtchingTraits.SuffersPastMax(actor)) { reason = "too much strain"; return false; }
+            if (strain > 0f && actor.Strain + strain > actor.MaxStrain + 1e-4f && !behavior.AllowsStrainOverflow && !def.UnravelsOverMaxStrain && !EtchingTraits.SuffersPastMax(actor) && !ForsakenRules.CapsEntropy(actor, def)) { reason = "too much strain"; return false; }
             return true;
         }
 
@@ -459,30 +484,41 @@ namespace TacticsGame.Core
         public List<Unit> UnitsInArea(Unit actor, ActionDefinition def, Vector3 targetPos, bool circleAtTarget = false)
         {
             var hits = new List<Unit>();
+            foreach (var u in EnemiesOf(actor))
+                if (AreaCatches(actor, def, targetPos, u.Position, u.BodyRadius, u.BodyHeight, circleAtTarget)) hits.Add(u);
+            return hits;
+        }
+
+        /// <summary>
+        /// Would the definition's area (as UnitsInArea lays it out) catch a body of 'bodyRadius' and 'bodyHeight' standing at
+        /// 'p'? Asked of a unit where it stands, or of a spot it might move to (an enemy getting out of the way: Hazard).
+        /// </summary>
+        public bool AreaCatches(Unit actor, ActionDefinition def, Vector3 targetPos, Vector3 p, float bodyRadius, float bodyHeight, bool circleAtTarget = false)
+        {
             Vector3 origin = actor.Position;
             Vector3 dir = targetPos - origin; dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
-            Vector3 center = circleAtTarget || def.Targeting == TargetType.Position ? targetPos : origin;
-            foreach (var u in EnemiesOf(actor))
+            if (def.Shape == AreaShape.Line)
             {
-                Vector3 p = u.Position;
-                if (def.Shape == AreaShape.Line)
-                {
-                    Vector3 v = p - origin; v.y = 0f;
-                    float along = Vector3.Dot(v, dir);
-                    float side = (v - dir * along).magnitude;
-                    if (along < -u.BodyRadius || along > actor.ActionStat(def, ActionStat.Range) + u.BodyRadius || side > def.LineWidth / 2f + u.BodyRadius) continue;
-                    // Ranged lines (spells, projectiles) fly at the aimed elevation; a melee sweep catches anyone in reach.
-                    float h = def.IsRanged ? LineHeightAt(origin, targetPos, along) : p.y;
-                    if (h >= p.y - LineReachDown && h <= p.y + u.BodyHeight * LineReachUp) hits.Add(u);
-                }
-                else
-                {
-                    Vector3 v = p - center; v.y = 0f;
-                    if (v.magnitude <= actor.ActionStat(def, ActionStat.AreaRadius) + u.BodyRadius) hits.Add(u);
-                }
+                Vector3 v = p - origin; v.y = 0f;
+                float along = Vector3.Dot(v, dir);
+                float side = (v - dir * along).magnitude;
+                if (along < -bodyRadius || along > actor.ActionStat(def, ActionStat.Range) + bodyRadius || side > def.LineWidth / 2f + bodyRadius) return false;
+                // Ranged lines (spells, projectiles) fly at the aimed elevation; a melee sweep catches anyone in reach.
+                float h = def.IsRanged ? LineHeightAt(origin, targetPos, along) : p.y;
+                return h >= p.y - LineReachDown && h <= p.y + bodyHeight * LineReachUp;
             }
-            return hits;
+            if (def.Shape == AreaShape.Cone)
+            {
+                // From the user toward the aimed point: within reach, and within half the cone's angle of that line.
+                Vector3 v = p - origin; v.y = 0f;
+                float d = v.magnitude;
+                if (d > actor.ActionStat(def, ActionStat.AreaRadius) + bodyRadius) return false;
+                return d <= bodyRadius + 0.05f || Vector3.Angle(dir, v) <= def.ConeAngle / 2f + Mathf.Asin(Mathf.Clamp01(bodyRadius / d)) * Mathf.Rad2Deg;
+            }
+            Vector3 center = circleAtTarget || def.Targeting == TargetType.Position ? targetPos : origin;
+            Vector3 c = p - center; c.y = 0f;
+            return c.magnitude <= actor.ActionStat(def, ActionStat.AreaRadius) + bodyRadius;
         }
 
         /// <summary>Grant an immediate reaction action (Retaliate's free shot, a Snipe from Take Aim...).

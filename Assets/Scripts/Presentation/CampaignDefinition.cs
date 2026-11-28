@@ -5,15 +5,25 @@ using TacticsGame.Core;
 namespace TacticsGame.Presentation
 {
     /// <summary>
-    /// A campaign: its missions in order (each an EncounterDefinition: map, enemies, rewards), the squad's classes, and the
-    /// progression it is played with (ProgressionConfig). CampaignScreens runs it: preparation, the battle, rewards,
+    /// A campaign: its missions in order, the squad's classes, and the progression it is played with (ProgressionConfig).
+    /// With a Builder it is a roguelike run: Generated Missions built from points (MissionBuilderDefinition), then the
+    /// Finale; without one, the hand-made Missions list. CampaignScreens runs it: preparation, the battle, rewards,
     /// upgrades, the next mission.
     /// </summary>
     [CreateAssetMenu(menuName = "TacticsGame/Campaign")]
     public class CampaignDefinition : ScriptableObject
     {
         public string DisplayName = "Campaign";
+        [Tooltip("Builds the run's missions. Empty: the hand-made Missions below, in order.")]
+        public MissionBuilderDefinition Builder;
+        [Tooltip("With a Builder: how many missions it builds before the Finale.")]
+        [Min(0)] public int GeneratedMissions = 10;
+        [Tooltip("With a Builder: the last mission, hand-made (empty: the run ends after the built ones).")]
+        public EncounterDefinition Finale;
+        [Tooltip("Without a Builder: the missions, in order.")]
         public List<EncounterDefinition> Missions = new List<EncounterDefinition>();
+        [Tooltip("A lost battle ends the run (a new campaign starts over); off: the mission is tried again.")]
+        public bool LossEndsRun = true;
         [Tooltip("The squad a new campaign starts with, in order.")]
         public List<UnitDefinition> Squad = new List<UnitDefinition>();
         [Tooltip("Every class a new campaign can be started with. With more of them than Squad Size, the player picks the squad on a class selection screen; otherwise Squad is used as it is.")]
@@ -21,47 +31,45 @@ namespace TacticsGame.Presentation
         [Tooltip("How many classes the player picks for a squad.")]
         [Min(1)] public int SquadSize = 4;
         public ProgressionConfig Progression;
-        [Tooltip("How many of their offered Etchings each member takes in the upgrade phase before the first mission. 0 skips that phase.")]
-        [Min(0)] public int EtchingsBeforeFirstMission = 1;
-        [Tooltip("Ability points each unit starts the campaign with (to spend in the first upgrade phase), unless its class has its own number below.")]
-        [Min(0)] public int StartingAbilityPoints = 0;
-        [Tooltip("Squad classes that start with a different number of ability points than StartingAbilityPoints.")]
-        public List<UnitAbilityPoints> StartingAbilityPointsByUnit = new List<UnitAbilityPoints>();
-        [Tooltip("How many of their offered Etchings each member takes after winning a mission, unless the mission has its own number below.")]
-        [Min(0)] public int EtchingsPerMission = 1;
-        [Tooltip("Missions that reward a different number of Etchings than EtchingsPerMission.")]
-        public List<MissionEtchings> EtchingsByMission = new List<MissionEtchings>();
 
-        public EncounterDefinition Mission(int index) { return index >= 0 && index < Missions.Count ? Missions[index] : null; }
+        /// <summary>How many missions the campaign has.</summary>
+        public int MissionCount { get { return Builder != null ? GeneratedMissions + (Finale != null ? 1 : 0) : Missions.Count; } }
 
-        /// <summary>How many ability points a member of class 'unit' starts the campaign with.</summary>
-        public int StartingPointsFor(UnitDefinition unit)
+        /// <summary>Is mission 'index' built by the Builder (not hand-made)?</summary>
+        public bool IsBuilt(int index) { return Builder != null && index >= 0 && index < GeneratedMissions; }
+
+        /// <summary>
+        /// Mission 'index': a hand-made one, or (with a Builder) the one built for it, made now and kept on the roster's run
+        /// if it hasn't been yet. Null past the last.
+        /// </summary>
+        public EncounterDefinition Mission(int index, SquadRoster roster, ContentCatalog catalog)
         {
-            var own = StartingAbilityPointsByUnit.Find(x => x != null && x.Unit == unit && unit != null);
-            return own != null ? own.Points : StartingAbilityPoints;
+            if (Builder == null) return index >= 0 && index < Missions.Count ? Missions[index] : null;
+            if (index == GeneratedMissions) return Finale;
+            if (!IsBuilt(index) || roster == null) return null;
+            if (roster.Run == null) roster.Run = new MissionRunState();
+            return Builder.Build(Builder.PlanFor(roster.Run, index, roster.Seed), catalog);
         }
 
-        /// <summary>How many Etchings each member takes after winning 'mission'.</summary>
-        public int EtchingsFor(EncounterDefinition mission)
+        /// <summary>The max Grasp winning every mission before 'index' gives a member.</summary>
+        public int GraspBefore(int index)
         {
-            var own = EtchingsByMission.Find(x => x != null && x.Mission == mission && mission != null);
-            return own != null ? own.Etchings : EtchingsPerMission;
+            int grasp = 0;
+            for (int i = 0; i < index; i++)
+            {
+                if (IsBuilt(i)) { grasp += Builder.GraspFor(i); continue; }
+                var m = Builder != null ? (i == GeneratedMissions ? Finale : null) : (i < Missions.Count ? Missions[i] : null);
+                if (m != null && m.Spec != null && m.Spec.Rewards != null) grasp += m.Spec.Rewards.Grasp;
+            }
+            return grasp;
         }
-    }
 
-    /// <summary>A squad class's own starting ability points (CampaignDefinition.StartingAbilityPointsByUnit).</summary>
-    [System.Serializable]
-    public class UnitAbilityPoints
-    {
-        public UnitDefinition Unit;
-        [Min(0)] public int Points = 1;
-    }
-
-    /// <summary>A mission's own Etching reward (CampaignDefinition.EtchingsByMission).</summary>
-    [System.Serializable]
-    public class MissionEtchings
-    {
-        public EncounterDefinition Mission;
-        [Min(0)] public int Etchings = 1;
+        /// <summary>A mission's name in lists without building it ("Mission 3", or a hand-made one's title).</summary>
+        public string MissionTitle(int index)
+        {
+            if (Builder == null) return index >= 0 && index < Missions.Count && Missions[index] != null ? Missions[index].Title : "";
+            if (index == GeneratedMissions && Finale != null) return Finale.Title;
+            return string.Format(Builder.MissionName, index + 1);
+        }
     }
 }

@@ -16,10 +16,10 @@ MonoBehaviour:
   DisplayName: Destiny Closes In
   BehaviorId: sky_shot
   Roles: 0
-  Description: 'Rise into the air over the windup and fire a shot that MARKS the
-    target. Linked to Fate Encumbers Its Prey: it can be used straight after, at
-    any target.'
+  Description: Rise into the air over the windup and fire a shot that MARKS the target.
+    Recast to use Fate Encumbers its Prey.
   Details: 
+  TipOverrides: []
   WindupName: 
   Targeting: 2
   Range: 16
@@ -36,17 +36,22 @@ MonoBehaviour:
   RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 0
+  WindupDisplay: 0
   Damage: 10
   BaseAccuracy: 1
   StunDuration: 0.5
   StrainOnTarget: 5
   StrainOnSelf: 0
   HealthCost: 0
+  HysteriaOnUse: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
   BlockPierce: 0
   StunnedDamageMultiplier: 1
+  DivergedVersion: {fileID: 0}
+  Form: 0
   Shape: 0
+  ConeAngle: 90
   AreaRadius: 0
   LineWidth: 1
   AreaHeight: 0
@@ -97,6 +102,7 @@ MonoBehaviour:
       CountsUp: 0
       Hidden: 0
       Important: 0
+      Description: 
     HealPerSecond: 0
     StrainPerSecond: 0
     StrainOnWeakpointBreak: 0
@@ -104,6 +110,10 @@ MonoBehaviour:
     HealOnExpire: 0
     HealMissingOnExpire: 0
     Shield: 0
+    Uses: 1
+    DamageAsStrain: 0
+    ReflectShare: 0
+    ReflectDelay: 0.25
     DodgeBonus: 0
     BlockBonus: 0
     IncomingAccuracyBonus: 0
@@ -143,6 +153,15 @@ MonoBehaviour:
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  ProjectileSpeed: 7
+  ProjectileAcceleration: 16
+  ProjectileMaxSpeed: 26
+  ProjectileRadius: 0.3
+  ProjectileLifetime: 4
+  ProjectileHoming: 2
+  ProjectileHomingDelay: 0.25
+  ProjectileTurnRate: 200
+  ProjectileTurnGrowth: 500
   LinkedAbilities:
   - {fileID: 11400000, guid: a56eb4811f67a164483ef28a0d333048, type: 2}
   RequiresLink: 0
@@ -156,7 +175,8 @@ MonoBehaviour:
     Color: {r: 1, g: 0.85, b: 0.45, a: 1}
     Width: 0.07
     Pierce: 0
+    Orb: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
   Params: []
-  DataVersion: 15
+  DataVersion: 16

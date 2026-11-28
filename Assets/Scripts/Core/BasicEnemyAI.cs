@@ -19,7 +19,7 @@ namespace TacticsGame.Core
     /// The sim wakes waiting enemies when something starts winding up on them (BattleSimulation.AlertTarget), so the
     /// reactions get their chance.
     /// </summary>
-    public class BasicEnemyAI : IUnitAI, IDropPreference
+    public class BasicEnemyAI : IUnitAI, IDropPreference, IHazardEvader
     {
         /// <summary>Where it wants to land as a reinforcement (IDropPreference): by default the most hurt enemy if it fights up
         /// close, else nowhere in particular (a clear spot). Styles override it to pick their kind of target.</summary>
@@ -27,8 +27,17 @@ namespace TacticsGame.Core
 
         public const float ReleaseAtCharge = 0.6f;
 
-        /// <summary>Ranged units back off when a melee enemy gets this close.</summary>
+        /// <summary>Ranged units: a melee enemy inside this is close (a spot's safety caps out past 1.5x it: RangedSpotScore).</summary>
         public float KeepDistance = 6f;
+        /// <summary>Ranged units: seconds to spare a shot needs, past its windup, before a melee enemy could strike (Reposition).</summary>
+        public float ShotMargin = 0.2f;
+        /// <summary>Ranged units: seconds of safety kept while it has no shot ready (cooling down), else it steps away.</summary>
+        public float SafeSeconds = 1f;
+        /// <summary>Ranged units: seconds of safety a move must win, after its own walking time, to be worth taking over shooting.</summary>
+        public float EscapeGain = 0.35f;
+        /// <summary>Ranged units close in this many metres at most per order (ApproachStep), so they look again on the way and
+        /// shoot as soon as someone is in reach instead of walking all the way into the enemy.</summary>
+        public float ApproachStepLength = 5f;
         /// <summary>Melee units chase straight in once this close to their reach, cover or not.</summary>
         public float DirectChaseGap = 3f;
         /// <summary>How far a single repositioning hop goes.</summary>
@@ -79,9 +88,21 @@ namespace TacticsGame.Core
             if (here == 0) return UnitCommand.Wait(unit.Id, 0.5f);
             Vector3 spot;
             if (!unit.IsRooted && BestSpot(sim, unit, p => -3f * Danger(sim, unit, p) + 0.25f * Mathf.Min(12f, NearestEnemyDistance(sim, unit, p)), out spot) &&
-                Danger(sim, unit, spot) < here)
+                Danger(sim, unit, spot) < here && !BrawlerFollows(sim, unit, spot))
                 return StandsGround(sim, unit) ? null : UnitCommand.MoveTo(unit.Id, spot);
             return null;
+        }
+
+        /// <summary>
+        /// Would a brawler simply follow it to 'spot'? It could strike there within 2s of the unit arriving, and the move wins
+        /// less than EscapeGain seconds over standing here: a faster melee enemy close behind. Retreating from that only gives
+        /// up time it could spend fighting (Rest then fights on).
+        /// </summary>
+        protected bool BrawlerFollows(BattleSimulation sim, Unit unit, Vector3 spot)
+        {
+            if (!Pursued(sim, unit)) return false;   // no brawler coming after it: stepping away to rest gains real ground
+            float there = SecondsUntilStruck(sim, unit, spot) - WalkCost(sim, unit, spot, true);
+            return there < 2f && there - SecondsUntilStruck(sim, unit, unit.Position) < EscapeGain;
         }
 
         // ------------------------------------------------------------------ last stand
@@ -199,10 +220,13 @@ namespace TacticsGame.Core
             if (incoming == null) return null;
             string why;
 
-            // A shooter facing a melee swing: dash out of its reach, Transcended if a plain dash falls short.
+            // A shooter facing a melee swing: dash out of its reach, Transcended if a plain dash falls short. Only while
+            // the dash leaves its strain under HighStrain: dashing again and again from a brawler that keeps coming would
+            // spend it all and leave it nothing but resting, so past that it guards instead.
             var dash = AbilityRoles.Find(unit, AbilityRole.Dash);
             float reach = incoming.Stat(ActionStat.Range) * BattleSimulation.RangeTolerance;
-            if (dash != null && IsRangedUnit(unit) && !incoming.Definition.IsRanged && !unit.IsRooted)
+            if (dash != null && IsRangedUnit(unit) && !incoming.Definition.IsRanged && !unit.IsRooted &&
+                unit.Strain + sim.StrainCostOf(unit, dash, null) <= unit.MaxStrain * HighStrain)
             {
                 Vector3 to;
                 if (sim.CanAfford(unit, dash, out why) && EscapeDash(sim, unit, incoming.Actor, reach, false, out to))
@@ -223,6 +247,192 @@ namespace TacticsGame.Core
                 return UnitCommand.UseAction(unit.Id, block, unit.Id).Transcended(transcend);
             }
             return null;
+        }
+
+        // ------------------------------------------------------------------ getting out of the way (BattleSimulation.Evasion)
+
+        /// <summary>Getting out of the way: metres of extra distance from where it stands that one metre closer to where it wants
+        /// to be is worth (it leaves toward its goal, but not the long way round for it).</summary>
+        public float EvadeDetour = 0.5f;
+        /// <summary>Seconds to spare a way out needs: it is out this long before the hit lands.</summary>
+        public float EvadeMargin = 0.05f;
+        /// <summary>How far it looks for the edge of what is on it (metres), in steps of EvadeStep, and how far past the edge
+        /// it goes (so a nudge from a crowd doesn't put it back in).</summary>
+        public float EvadeSearch = 14f, EvadeStep = 0.5f, EvadeClearance = 0.5f;
+
+        /// <summary>
+        /// Out of the area attacks and projectile paths it has reacted to (BattleSimulation.DueHazards), toward where it wants
+        /// to be (EvadeGoal), by the first of these that works:
+        ///   walking (flying, for a flyer) out, if it is out before the hit lands;
+        ///   a ground-aimed blink or dash ability of its own whose windup is shorter than the time left;
+        ///   Dashing, Transcended first: one dash that gets it out, else as many as the strain and time allow toward the
+        ///   nearest way out (it is asked again as each dash lands);
+        ///   else Block (Transcended against a heavy one, as React does).
+        /// Null if it has nothing on it, or nothing it can do.
+        /// </summary>
+        public virtual UnitCommand Evade(BattleSimulation sim, Unit unit)
+        {
+            var due = sim.DueHazards(unit);
+            if (due.Count == 0) return null;
+            float landsAt = float.MaxValue;
+            Hazard first = null;
+            foreach (var h in due) if (h.LandsAt < landsAt) { landsAt = h.LandsAt; first = h; }
+            float time = landsAt - sim.Now - EvadeMargin;
+            System.Func<Vector3, bool> clear = p => { foreach (var h in due) if (h.Catches(p, unit)) return false; return true; };
+            Vector3 goal = EvadeGoal(sim, unit);
+            System.Func<Vector3, float> score = p => -Flat(p, goal) - EvadeDetour * Flat(p, unit.Position);
+
+            bool canMove = !unit.IsRooted && !unit.CannotMove && (!unit.IsLifted || unit.CanFly);
+            var exits = canMove ? Exits(sim, unit, clear) : new List<Vector3>();
+
+            // Walk (or fly) out in time.
+            Vector3 best = unit.Position;
+            float bestScore = float.MinValue;
+            float speed = Mathf.Max(0.01f, sim.WalkSpeedOf(unit));
+            foreach (var p in exits)
+            {
+                float walk = unit.CanFly ? Flat(unit.Position, p) : PathLength(sim, unit, p);
+                if (walk < 0f || walk / speed > time) continue;
+                float s = score(p);
+                if (s > bestScore) { bestScore = s; best = p; }
+            }
+            if (bestScore > float.MinValue) return UnitCommand.MoveTo(unit.Id, best);
+
+            if (canMove && !unit.IsLifted)
+            {
+                // A blink or dash of its own aimed at the ground, quick enough.
+                var dashRole = AbilityRoles.Find(unit, AbilityRole.Dash);
+                string why;
+                foreach (var def in unit.Actions)
+                {
+                    if (def == dashRole || def.Targeting != TargetType.Position || !ActionBehaviors.Get(def.BehaviorId).MovesUser) continue;
+                    if (!sim.CanAfford(unit, def, out why) || sim.WindupOf(unit, def) >= time) continue;
+                    float range = unit.ActionStat(def, ActionStat.Range) * 0.95f;
+                    best = unit.Position; bestScore = float.MinValue;
+                    foreach (var p in exits)
+                    {
+                        if (Flat(unit.Position, p) > range) continue;
+                        float s = score(p);
+                        if (s > bestScore) { bestScore = s; best = p; }
+                    }
+                    if (bestScore > float.MinValue) return UnitCommand.UseActionAt(unit.Id, def, best);
+                }
+
+                // Dash: Transcended first.
+                if (dashRole != null && !unit.HasFlag(StatusFlags.NoDash) && sim.WindupOf(unit, dashRole) < time)
+                {
+                    var cmd = DashOut(sim, unit, dashRole, true, clear, score, exits, time) ?? DashOut(sim, unit, dashRole, false, clear, score, exits, time);
+                    if (cmd != null) return cmd;
+                }
+            }
+
+            // Can't get out: guard, timed so the block is still up when it lands.
+            var block = AbilityRoles.Find(unit, AbilityRole.Guard);
+            if (block != null && Affordable(sim, unit, block, false))
+            {
+                float guard = GuardSeconds(block);
+                float until = landsAt - sim.Now;
+                if (until > guard * 0.85f) return UnitCommand.Idle(unit.Id, Mathf.Max(BattleSimulation.TickLength, until - guard * 0.6f));
+                bool transcend = first.Definition != null && first.Definition.Impact == ImpactType.Heavy && Affordable(sim, unit, block, true);
+                return UnitCommand.UseAction(unit.Id, block, unit.Id).Transcended(transcend);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Where it would rather be as it gets out of the way: away from its enemies when it is breaking off to rest, its
+        /// shooting distance from the nearest one for a ranged unit, else right at it. Styles may say otherwise.
+        /// </summary>
+        protected virtual Vector3 EvadeGoal(BattleSimulation sim, Unit unit)
+        {
+            var target = sim.NearestEnemy(unit);
+            if (target == null) return unit.Position;
+            Vector3 away = unit.Position - target.Position; away.y = 0f;
+            away = away.sqrMagnitude > 1e-6f ? away.normalized : Vector3.back;
+            float strain = unit.Strain / Mathf.Max(1f, unit.MaxStrain);
+            bool resting = !unit.HasStatus(StatusIds.LastStand) && (strain >= HighStrain || (unit.FocusSince >= 0f && strain > RestedStrain));
+            if (resting) return unit.Position + away * 12f;
+            if (IsRangedUnit(unit)) return target.Position + away * Mathf.Max(KeepDistance, MaxRange(unit) * 0.7f);
+            return target.Position;
+        }
+
+        /// <summary>The nearest spot out of it in each of 16 directions (walkable, still out once put on the map, and not where
+        /// an ally stands or is walking to: a crowd at one way out would shove some of them back in).</summary>
+        protected List<Vector3> Exits(BattleSimulation sim, Unit unit, System.Func<Vector3, bool> clear)
+        {
+            var taken = new List<Vector3>();
+            foreach (var o in sim.State.Units)
+            {
+                if (o == unit || !o.IsAlive || o.Team != unit.Team) continue;
+                taken.Add(o.Position);
+                if (o.Move != null && o.Move.Path.Count > 0) taken.Add(o.Move.Path[o.Move.Path.Count - 1]);
+            }
+            System.Func<Vector3, bool> free = p => { foreach (var t in taken) if (Flat(p, t) < unit.BodyRadius * 2f + 0.2f) return false; return true; };
+            var exits = new List<Vector3>();
+            for (int i = 0; i < 16; i++)
+            {
+                float a = i * Mathf.PI / 8f;
+                Vector3 dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                for (float d = EvadeStep; d <= EvadeSearch + 1e-3f; d += EvadeStep)
+                {
+                    Vector3 p = unit.Position + dir * d;
+                    if (!clear(p)) continue;
+                    Vector3 past = p + dir * EvadeClearance;
+                    if (clear(past)) p = past;
+                    if (!unit.CanFly) { p = sim.WalkablePointNear(p, unit.Position); if (!clear(p)) continue; }
+                    if (!free(p)) continue;
+                    exits.Add(p);
+                    break;
+                }
+            }
+            return exits;
+        }
+
+        /// <summary>The walking distance to 'p' along its path, or -1 if there is no way there.</summary>
+        protected static float PathLength(BattleSimulation sim, Unit unit, Vector3 p)
+        {
+            scratch.Clear();
+            if (!sim.PlanPath(unit, unit.Position, p, scratch)) return -1f;
+            float len = 0f;
+            for (int i = 1; i < scratch.Count; i++) len += Flat(scratch[i - 1], scratch[i]);
+            return len;
+        }
+
+        /// <summary>
+        /// A Dash (Transcended or not) out of it: the best landing that is out, if one is; else, if the strain and the time
+        /// allow enough dashes to reach the nearest way out, the first of them toward it. Null if neither.
+        /// </summary>
+        private UnitCommand DashOut(BattleSimulation sim, Unit unit, ActionDefinition dash, bool transcended, System.Func<Vector3, bool> clear,
+                                    System.Func<Vector3, float> score, List<Vector3> exits, float time)
+        {
+            string why;
+            if (transcended && !dash.CanTranscend) return null;
+            if (!sim.CanAfford(unit, dash, out why, null, transcended)) return null;
+            float cost = sim.StrainCostOf(unit, dash, null, transcended);
+            if (unit.Strain + cost > unit.MaxStrain) return null;
+            Vector3 best = unit.Position;
+            float bestScore = float.MinValue, longest = 0f;
+            for (int i = 0; i < 16; i++)
+            {
+                float a = i * Mathf.PI / 8f;
+                Vector3 p = sim.DashDestination(unit, unit.Position + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * 100f, transcended);
+                longest = Mathf.Max(longest, Flat(unit.Position, p));
+                if (!clear(p)) continue;
+                float s = score(p);
+                if (s > bestScore) { bestScore = s; best = p; }
+            }
+            var cmd = UnitCommand.UseActionAt(unit.Id, dash, best).Transcended(transcended);
+            if (bestScore > float.MinValue) return cmd;
+
+            // No one dash does it: a string of them toward the nearest way out, if there is time and strain for them all.
+            if (exits.Count == 0 || longest < 0.5f) return null;
+            Vector3 exit = exits[0];
+            foreach (var p in exits) if (Flat(unit.Position, p) < Flat(unit.Position, exit)) exit = p;
+            int needed = Mathf.CeilToInt(Flat(unit.Position, exit) / longest);
+            float each = sim.WindupOf(unit, dash) + (transcended ? sim.TranscendDashSeconds : BattleSimulation.DashDuration);
+            if (needed * each > time || unit.Strain + needed * cost > unit.MaxStrain) return null;
+            Vector3 d = exit - unit.Position; d.y = 0f;
+            return UnitCommand.UseActionAt(unit.Id, dash, sim.DashDestination(unit, unit.Position + d.normalized * 100f, transcended)).Transcended(transcended);
         }
 
         /// <summary>Usable now, and leaves strain BlockStrainMargin under max (Block may overflow; the AI won't).</summary>
@@ -262,18 +472,11 @@ namespace TacticsGame.Core
         {
             ActionDefinition shot; Unit target;
             BestShot(sim, unit, unit.Position, out shot, out target);
-            float threat = NearestMeleeThreat(sim, unit, unit.Position);
 
-            // Too close to a brawler that is free to come at us: back off, ideally to somewhere that still has a shot.
-            // One that is stunned or busy swinging at someone else can be shot instead (else a faster brawler is
-            // simply chased around forever).
-            if (threat < KeepDistance && !unit.IsRooted && (shot == null || BrawlerPressing(sim, unit)))
-            {
-                Vector3 spot;
-                if (BestSpot(sim, unit, p => RangedSpotScore(sim, unit, p), out spot) &&
-                    NearestMeleeThreat(sim, unit, spot) > threat + 1f)
-                    return UnitCommand.MoveTo(unit.Id, spot);
-            }
+            // Shoot whenever the shot lands before a brawler could strike; step away only when it wouldn't and a move
+            // really buys time (Reposition). Against a faster brawler there is no running away: it stands and shoots.
+            var away = Reposition(sim, unit, shot);
+            if (away != null) return away;
             if (shot != null) return UnitCommand.UseAction(unit.Id, shot, target.Id);
 
             // No shot right now. Cooling down with someone in sight: hold. Otherwise find a firing position.
@@ -281,7 +484,130 @@ namespace TacticsGame.Core
             Vector3 move;
             if (BestSpot(sim, unit, p => RangedSpotScore(sim, unit, p), out move)) return UnitCommand.MoveTo(unit.Id, move);
             var nearest = sim.NearestEnemy(unit);
-            return UnitCommand.MoveTo(unit.Id, sim.ApproachSpot(unit, nearest, Mathf.Max(KeepDistance, MaxRange(unit) * 0.7f)));
+            return ApproachStep(sim, unit, nearest, Mathf.Max(KeepDistance, MaxRange(unit) * 0.7f));
+        }
+
+        /// <summary>
+        /// A ranged unit closing in on 'target' to stand 'standOff' from it, one step (ApproachStepLength) at a time: it is
+        /// asked again after each, so it shoots the moment someone comes into reach rather than walking on into them (the
+        /// enemy is closing too).
+        /// </summary>
+        protected UnitCommand ApproachStep(BattleSimulation sim, Unit unit, Unit target, float standOff)
+        {
+            Vector3 want = sim.ApproachSpot(unit, target, standOff);
+            Vector3 d = want - unit.Position; d.y = 0f;
+            if (d.magnitude > ApproachStepLength) want = sim.WalkablePointNear(unit.Position + d.normalized * ApproachStepLength, unit.Position);
+            return UnitCommand.MoveTo(unit.Id, want);
+        }
+
+        /// <summary>
+        /// A ranged unit keeping its distance, by time rather than metres: how many seconds until a melee enemy could strike
+        /// it (SecondsUntilStruck) against what it needs: the windup of the shot it means to take plus ShotMargin, or
+        /// SafeSeconds with no shot ready. Enough: null, it stays and shoots (or holds). Not enough: a move to the nearby spot
+        /// that leaves the most time once its own walk there is paid for (preferring one with a shot from it), if that wins at
+        /// least EscapeGain seconds; else null too: running from a faster brawler only loses shots, so it fights.
+        /// </summary>
+        protected UnitCommand Reposition(BattleSimulation sim, Unit unit, ActionDefinition shot)
+        {
+            if (unit.IsRooted) return null;
+            float here = SecondsUntilStruck(sim, unit, unit.Position);
+            float need = shot != null ? sim.WindupOf(unit, shot) + ShotMargin : SafeSeconds;
+            if (here > need) return null;
+            bool pursued = Pursued(sim, unit);
+            Vector3 spot;
+            if (!BestSpot(sim, unit, p => EscapeScore(sim, unit, p, pursued), out spot)) return null;
+            float there = SecondsUntilStruck(sim, unit, spot) - WalkCost(sim, unit, spot, pursued);
+            return there - here >= EscapeGain ? UnitCommand.MoveTo(unit.Id, spot) : null;
+        }
+
+        /// <summary>A spot to step away to: the seconds it leaves before a brawler could strike once the walk there is paid for
+        /// (WalkCost; capped: past 4s all are safe), and a little for still having someone in range and sight from it.</summary>
+        private float EscapeScore(BattleSimulation sim, Unit unit, Vector3 p, bool pursued)
+        {
+            float t = Mathf.Min(4f, SecondsUntilStruck(sim, unit, p) - WalkCost(sim, unit, p, pursued));
+            var ghost = Ghost(unit, p);
+            float range = MaxRange(unit);
+            foreach (var e in sim.EnemiesOf(unit))
+                if (Flat(p, e.Position) <= range && sim.Visibility.HasLineOfSight(ghost, e)) return 3f * t + 1.5f;
+            return 3f * t;
+        }
+
+        /// <summary>
+        /// What walking to 'spot' costs in safety: its walking time while a brawler is coming after it (Pursued: the brawler
+        /// closes in all the while, so outrunning a faster one wins nothing), nothing while none is (stepping back from a
+        /// brawler that isn't coming gains the whole distance).
+        /// </summary>
+        protected float WalkCost(BattleSimulation sim, Unit unit, Vector3 spot, bool? pursued = null)
+        {
+            if (!(pursued ?? Pursued(sim, unit))) return 0f;
+            return Flat(unit.Position, spot) / Mathf.Max(0.5f, unit.EffectiveMoveSpeed());
+        }
+
+        /// <summary>Is a melee enemy coming after the unit: chasing it to strike, or walking to somewhere within a few metres of it?</summary>
+        protected static bool Pursued(BattleSimulation sim, Unit unit)
+        {
+            foreach (var e in sim.EnemiesOf(unit))
+            {
+                if (IsRangedUnit(e)) continue;
+                if (e.Chase != null && e.Chase.TargetUnitId == unit.Id) return true;
+                if (e.Phase == UnitPhase.Moving && e.Move != null && e.Move.Path != null && e.Move.Path.Count > 0 &&
+                    Flat(e.Move.Path[e.Move.Path.Count - 1], unit.Position) < 4f) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Seconds until a melee enemy could strike a unit standing at 'p', if it came straight at it: the gap past its reach
+        /// over its walking speed, after whatever holds it (a stun; an action on someone else). One winding up on this unit
+        /// counts from now. float.MaxValue with no melee enemy.
+        /// </summary>
+        protected static float SecondsUntilStruck(BattleSimulation sim, Unit unit, Vector3 p)
+        {
+            float best = float.MaxValue;
+            foreach (var e in sim.EnemiesOf(unit))
+            {
+                if (IsRangedUnit(e)) continue;
+                float reach = MeleeReach(sim, e) + unit.BodyRadius + e.BodyRadius;
+                float gap = Mathf.Max(0f, Flat(p, e.Position) - reach);
+                float held = 0f;
+                if (e.Phase == UnitPhase.Stunned) held = Mathf.Max(0f, e.PhaseEndsAt - sim.Now);
+                else if ((e.Phase == UnitPhase.Windup || e.Phase == UnitPhase.Recovery || e.Phase == UnitPhase.Channeling) && e.LastActionTargetId != unit.Id)
+                    held = Mathf.Max(0f, sim.NextFreeAt(e) - sim.Now);
+                best = Mathf.Min(best, held + gap / Mathf.Max(0.5f, e.EffectiveMoveSpeed()));
+            }
+            return best;
+        }
+
+        /// <summary>How far a unit's melee strikes reach now: its longest melee ability aimed at enemies that it can use now (off
+        /// cooldown, affordable: a lunge on cooldown is no threat from afar); 1.5m without one.</summary>
+        protected static float MeleeReach(BattleSimulation sim, Unit u)
+        {
+            float r = 0f;
+            string why;
+            foreach (var a in u.Actions)
+                if (a.Targeting == TargetType.Enemy && !a.IsRanged && sim.CanAfford(u, a, out why)) r = Mathf.Max(r, u.ActionStat(a, ActionStat.Range));
+            return r > 0f ? r : 1.5f;
+        }
+
+        /// <summary>The quickest shot it has ready on someone in reach now (its windup decides how much time it needs).</summary>
+        protected static ActionDefinition QuickestShot(BattleSimulation sim, Unit unit)
+        {
+            ActionDefinition best = null;
+            float windup = float.MaxValue;
+            foreach (var def in unit.Actions)
+            {
+                if (def.Targeting != TargetType.Enemy || !def.IsRanged) continue;
+                float w = sim.WindupOf(unit, def);
+                if (w >= windup) continue;
+                foreach (var e in sim.EnemiesOf(unit))
+                {
+                    string why;
+                    if (!sim.CanUse(unit, def, e, out why)) continue;
+                    best = def; windup = w;
+                    break;
+                }
+            }
+            return best;
         }
 
         /// <summary>The usable shot with the best expected damage (damage x chance to land) from 'from'. 0 if none.</summary>

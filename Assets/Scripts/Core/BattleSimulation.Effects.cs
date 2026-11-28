@@ -5,7 +5,7 @@ namespace TacticsGame.Core
 {
     /// <summary>
     /// BattleSimulation: rules any status or ability can use through its data or a behavior.
-    ///   Heal over time   StatusEffect.HealPerSecond (Regeneration Seal), in StrainRecoveryTicks steps.
+    ///   Heal over time   StatusEffect.HealPerSecond (Regeneration Seal), in RateTicks steps.
     ///   Seal breaks      a BreaksOnDamage status with BreakStun stuns whichever enemy broke it (see DealDamage).
     ///   Strain inverted  StatusFlags.InvertsStrainGain: strain the unit would gain, it loses instead (True Inversion; AddStrain).
     ///   Strike now       a hit outside an action resolving (a channel's flurry: A Million Cuts).
@@ -17,8 +17,8 @@ namespace TacticsGame.Core
         /// <summary>Statuses that heal their holder (HealPerSecond) do it here, a step at a time, with a Heal event each.</summary>
         private void TickHealOverTime()
         {
-            if (tick % StrainRecoveryTicks != 0) return;
-            float step = StrainRecoveryTicks * TickLength;
+            if (tick % RateTicks != 0) return;
+            float step = RateTicks * TickLength;
             foreach (var u in State.Units)
             {
                 if (!u.IsAlive) continue;

@@ -47,7 +47,7 @@ namespace TacticsGame.Core
                 foreach (var d in pendingDashes.ToArray())
                 {
                     var du = GetUnit(d.UnitId);
-                    if (du != null && du.IsAlive) ExecuteDash(du, BestDashDirection(du, GetUnit(d.AttackerId)));
+                    if (du != null && du.IsAlive) ExecuteDash(du, DodgeDirection(du, d));
                 }
                 pendingDashes.Clear();
             }
@@ -100,7 +100,9 @@ namespace TacticsGame.Core
                 }
                 else
                 {
-                    cmd = (unit.AIControlled && unit.Team == Team.Player ? AllyAI : EnemyAI).Decide(this, unit) ?? (charging ? UnitCommand.ContinueCharge(unit.Id, 0.25f) : UnitCommand.Idle(unit.Id, 0.5f));
+                    var ai = unit.AIControlled && unit.Team == Team.Player ? AllyAI : EnemyAI;
+                    cmd = (charging ? null : EvadeHazards(unit, ai))   // out of an area or a projectile's way first (BattleSimulation.Evasion)
+                          ?? ai.Decide(this, unit) ?? (charging ? UnitCommand.ContinueCharge(unit.Id, 0.25f) : UnitCommand.Idle(unit.Id, 0.5f));
                     cmd = FlankWeakpoint(unit, cmd) ?? cmd;   // a weakpoint on its target, on another side: dash round to it first
                 }
 
@@ -135,9 +137,9 @@ namespace TacticsGame.Core
         private bool TryStartCommand(Unit unit, UnitCommand cmd, out string reason)
         {
             reason = null;
-            // Charging can't be cancelled: the only orders are keep charging and release.
+            // Charging can't be cancelled: the only orders are keep charging, walk on charging (slowed) and release.
             bool chargeOrder = cmd.Type == CommandType.ContinueCharge || cmd.Type == CommandType.ReleaseCharge;
-            if (unit.Phase == UnitPhase.Charging && !chargeOrder) { reason = "charging: keep charging or release it"; return false; }
+            if (unit.Phase == UnitPhase.Charging && !chargeOrder && cmd.Type != CommandType.Move) { reason = "charging: keep charging, move or release it"; return false; }
             if (unit.Phase != UnitPhase.Charging && chargeOrder) { reason = "not charging"; return false; }
             // Any order other than the next rapid strike ends a Mesmerize counter.
             if (unit.MesmerStrikesLeft > 0 && (cmd.Action == null || cmd.Action != unit.MesmerStrike)) EndMesmer(unit);
@@ -153,7 +155,8 @@ namespace TacticsGame.Core
             }
             else if (cmd.Type == CommandType.HoldGrapple || cmd.Type == CommandType.ReleaseGrapple) { reason = "not grappling"; return false; }
             // Up in the air (Skyward Demise's hover, or lifted): no walking, dashing or other moves.
-            if (unit.IsLifted && (cmd.Type == CommandType.Move || (cmd.Action != null && ActionBehaviors.Get(cmd.Action.BehaviorId).MovesUser))) { reason = "in the air"; return false; }
+            // A hover that flies (the Monarch's Ascension) moves about up there, but doesn't dash either.
+            if (unit.IsLifted && ((cmd.Type == CommandType.Move && !unit.CanFly) || (cmd.Action != null && ActionBehaviors.Get(cmd.Action.BehaviorId).MovesUser))) { reason = "in the air"; return false; }
             // CRIPPLED (NoDash): no dashes.
             if (cmd.Action != null && unit.HasFlag(StatusFlags.NoDash) && ActionBehaviors.Get(cmd.Action.BehaviorId).Dashes) { reason = "crippled: can't dash"; return false; }
 
@@ -179,7 +182,8 @@ namespace TacticsGame.Core
                 case CommandType.Move:
                 {
                     if (unit.IsRooted) { reason = "immobilized"; return false; }
-                    if (unit.IsMakina) { reason = "a Makina can't move"; return false; }
+                    if (unit.CannotMove) { reason = unit.IsMakina ? "a Makina can't move" : "it can't move"; return false; }
+                    if (unit.CanFly) { StartFlight(unit, cmd.TargetPos); return true; }
                     var path = new List<Vector3>();
                     if (!PlanMove(unit, cmd, path)) { reason = "no path"; return false; }
                     EtchingTraits.BeginMarch(this, unit);   // a new walk: Avidous March's burst (before it starts, so it walks at that speed)

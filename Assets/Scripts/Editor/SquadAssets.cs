@@ -11,8 +11,8 @@ using TacticsGame.Core;
 /// </summary>
 public static class SquadAssets
 {
-    public struct Squad { public UnitDefinition Sharpshooter, Melee, Tank, Paradigm, Strategist, Duelist; }
-    public struct Enemies { public UnitDefinition Sniper, Assassin, Skirmisher, Healer, Caster, Brutebeast, Wraith, Monarch, Zola, Primavaeran, Exemplar, Deliverance, Syne, Alio, Revl, Wex, Howler, Matriarch; }
+    public struct Squad { public UnitDefinition Sharpshooter, Melee, Tank, Paradigm, Strategist, Duelist, Forsaken; }
+    public struct Enemies { public UnitDefinition Sniper, Assassin, Skirmisher, Healer, Caster, Brutebeast, Wraith, Monarch, Zola, Primavaeran, Exemplar, Deliverance, Syne, Alio, Revl, Wex, Howler, Matriarch, Omen; }
 
     /// <summary>
     /// FROZEN at 15: assets are now the source of truth, so changes go into the assets and no new versions are added. New
@@ -43,8 +43,9 @@ public static class SquadAssets
     /// 14: Subjugate is Unstoppable while it winds up.
     /// 15: statuses store their bonuses as modifier lists and flags (StatusSpec): no data changes, but every ability asset is
     ///    re-saved so the old one-field-per-bonus layout is converted on disk (StatusSpec.OnAfterDeserialize reads it).
+    /// 16: the Forsaken's Entropy is Strain again (its unit's StrainName and description); its new abilities are granted.
     /// </summary>
-    public const int DataVersion = 15;
+    public const int DataVersion = 16;
 
     /// <summary>The first version with a patch: assets from before it can't be patched and are rebuilt in full.</summary>
     public const int PatchBaseline = 7;
@@ -94,6 +95,7 @@ public static class SquadAssets
             Paradigm = CreateParadigm(viewPrefab),
             Strategist = CreateStrategist(viewPrefab),   // after the Paradigm User: it takes two of the abilities made there
             Duelist = CreateDuelist(viewPrefab),
+            Forsaken = CreateForsaken(viewPrefab),
         };
     }
 
@@ -854,7 +856,19 @@ public static class SquadAssets
             a.CanTranscend = true; a.TranscendStrain = 40f;
             a.Params = new List<BehaviorParam> { new BehaviorParam("target_strain_bonus", 0.01f), new BehaviorParam("own_strain_bonus", 0.01f) };
         });
+        var vipers = Action(c, "Vipers", a =>
+        {
+            // A burst of 5 homing barbs, all at once (Needlestorm's volley with no interval): 9 damage and a 0.1s stun each.
+            a.Id = "vipers"; a.DisplayName = "Vipers"; a.BehaviorId = "volley";
+            a.Targeting = TargetType.Self; a.IsRanged = true; a.Range = 0f;
+            a.Windup = 0.7f; a.Recovery = 0.3f; a.Cooldown = 3f; a.StrainOnSelf = 15f;
+            a.Impact = ImpactType.Light; a.Damage = 9f; a.BaseAccuracy = 1f; a.StunDuration = 0.1f; a.StrainOnTarget = 3f;   // per barb (as Needlestorm: every damaging ability strains)
+            a.ProjectileSpeed = 7f; a.ProjectileAcceleration = 16f; a.ProjectileMaxSpeed = 26f; a.ProjectileRadius = 0.3f;
+            a.ProjectileLifetime = 4f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("count", 5f), new BehaviorParam("every", 0f) };
+        });
         Grant(paradigm, null, withering, splinters, domain, mindshatter);
+        Grant(paradigm, null, vipers);
         sharedMadness = madness; sharedWrinkles = wrinkles; sharedSecondMind = secondMind;   // the Strategist's now (CreateStrategist)
         return paradigm;
     }
@@ -997,6 +1011,60 @@ public static class SquadAssets
             a.DisplaceDistance = 6f;
             a.CanTranscend = true; a.TranscendStrain = 5f;
         });
+        // Its works: a reflecting shield, a slow composition that explodes when displaced, an axis that turns harm into strain,
+        // and a wall.
+        var reflection = Action(c, "WrathfulReflection", a =>
+        {
+            a.Id = "wrathful_reflection"; a.DisplayName = "Wrathful Reflection"; a.BehaviorId = "reflect_shield";
+            a.Targeting = TargetType.Ally; a.Range = 15f; a.IsRanged = true; a.PiercesTerrain = true;
+            a.Windup = 0.2f; a.Recovery = 0.3f; a.Cooldown = 16f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.TargetStatusesOnHit = new List<StatusSpec>
+            {
+                new StatusSpec { Id = StatusIds.WrathfulReflection, Duration = 3f, Shield = 35f, ReflectShare = 0.5f, ReflectDelay = 0.25f, AppliesTo = StatusTarget.Allies,
+                                 Look = new StatusLook { Name = "Wrathful Reflection", Word = "REFLECTION", Color = new Color(1f, 0.45f, 0.3f) } },
+            };
+        });
+        var composition = CreateComposition(viewPrefab);
+        var compositions = Action(c, "CompositionsOfDestruction", a =>
+        {
+            a.Id = "compositions_of_destruction"; a.DisplayName = "Compositions of Destruction"; a.BehaviorId = "composition";
+            a.Targeting = TargetType.Position; a.Range = 24f; a.IsRanged = true; a.PiercesTerrain = true;
+            a.Windup = 0.7f; a.Recovery = 0.1f; a.Cooldown = 8f;
+            a.Impact = ImpactType.Light; a.Damage = 18f; a.BaseAccuracy = 1f; a.StunDuration = 0.8f;
+            a.SummonUnit = composition;
+            a.Params = new List<BehaviorParam>
+            {
+                new BehaviorParam("speed", 3f), new BehaviorParam("impact_radius", 2f), new BehaviorParam("blast_radius", 8f),
+                new BehaviorParam("blast_delay", 0.5f), new BehaviorParam("lifetime", 8f),
+            };
+        });
+        var axis = Action(c, "StrangeAxis", a =>
+        {
+            // A 6m zone at the point for 2.5s: damage on anyone inside takes no health, 75% of it comes as strain instead.
+            a.Id = "strange_axis"; a.DisplayName = "Strange Axis"; a.BehaviorId = "aura";
+            a.Targeting = TargetType.Position; a.Range = 12f; a.IsRanged = true; a.PiercesTerrain = true;
+            a.Windup = 0.5f; a.Recovery = 0.7f; a.Cooldown = 12f; a.StrainOnSelf = 10f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.Shape = AreaShape.Circle; a.AreaRadius = 6f; a.AuraSeconds = 2.5f; a.AuraAtTarget = true;
+            a.AuraStatuses = new List<StatusSpec>
+            {
+                new StatusSpec { Id = StatusIds.StrangeAxis, Duration = 2.5f, DamageAsStrain = 0.75f, AppliesTo = StatusTarget.Any,
+                                 Look = new StatusLook { Name = "Strange Axis", Word = "AXIS", Color = new Color(0.75f, 0.55f, 1f) } },
+            };
+        });
+        var obstruction = Action(c, "Obstruction", a =>
+        {
+            a.Id = "obstruction"; a.DisplayName = "Obstruction"; a.BehaviorId = "wall";
+            a.Targeting = TargetType.Position; a.Range = 16f; a.IsRanged = true; a.PiercesTerrain = true;
+            a.Windup = 0.5f; a.Recovery = 0.6f; a.Cooldown = 14f; a.StrainOnSelf = 10f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.TargetStatusesOnHit = new List<StatusSpec>
+            {
+                new StatusSpec { Id = StatusIds.Crippled, Duration = 1.5f, AppliesTo = StatusTarget.Enemies }.Mult(StatId.MoveSpeed, 0.5f).Mult(StatId.DashDistance, 0.5f).With(StatusFlags.NoDash),
+            };
+            a.Params = new List<BehaviorParam> { new BehaviorParam("length", 10f), new BehaviorParam("height", 5f), new BehaviorParam("seconds", 4f), new BehaviorParam("thickness", 0.6f) };
+        });
         var strategist = Unit(c, u =>
         {
             u.DisplayName = "Strategist"; u.MaxHealth = 90f; u.MaxStrain = 75f; u.BaseDodge = 0.1f; u.MoveSpeed = 4f;
@@ -1008,8 +1076,24 @@ public static class SquadAssets
             u.ViewPrefab = viewPrefab;
         });
         Grant(strategist, null, monolithCall, hedronCall, convextion, gift, perfection, mindmeld, displacement);   // an asset made before them gets them too
+        Grant(strategist, null, reflection, compositions, axis, obstruction);
         if (!strategist.Passives.Contains(StrategistPassives.ConscienceFlows)) { strategist.Passives.Add(StrategistPassives.ConscienceFlows); CombatTestSceneBuilder.MarkDirty(strategist); }
         return strategist;
+    }
+
+    /// <summary>Compositions of Destruction's projectile: a small unit that does nothing by itself (InertAI; CompositionState
+    /// moves it). Enemies can't target it, so only its own side's displacements reach it.</summary>
+    private static UnitDefinition CreateComposition(GameObject viewPrefab)
+    {
+        return Unit("Composition", u =>
+        {
+            u.DisplayName = "Composition"; u.MaxHealth = 1f; u.MaxStrain = 100f; u.BaseDodge = 0f; u.MoveSpeed = 0f;
+            u.BodyRadius = 0.3f; u.BodyHeight = 0.8f; u.StrainRecoveryPerSecond = 0f;
+            u.MaxEnergy = 0f; u.StartingEnergy = 0f;
+            u.BasicAttack = null;
+            u.Actions = new List<ActionDefinition>();
+            u.ViewPrefab = viewPrefab;
+        });
     }
 
     /// <summary>The Monolith: a Makina that only crashes down. Its strain climbs on its own; at 50 it breaks.</summary>
@@ -1218,9 +1302,46 @@ public static class SquadAssets
             Attack(a, "a_duet", "A Duet", "duet", range: 6f, windup: 0.6f, recovery: 0.2f, damage: 13f, accuracy: 1f, stun: 0.5f, strain: 6f, melee: true);
             a.Cooldown = 4f;
         });
+        // The next ability within 4s has no windup (a status its next ability spends: StatusFlags.SpentOnAbility).
         var steady = Action(c, "ClearAndSteady", a =>
-            SelfBuff(a, "clear_and_steady", "Clear and Steady", "self_buff", windup: 0.5f, recovery: 0f, cooldown: 10f,
-                new StatusSpec { Id = StatusIds.ClearAndSteady, Duration = 4f, StrainOnWeakpointBreak = -20f }.Mult(StatId.ActionSpeed, 0.7f)));
+            SelfBuff(a, "clear_and_steady", "Clear and Steady", "self_buff", windup: 0.5f, recovery: 0f, cooldown: 10f, NextAbilities(StatusIds.ClearAndSteady, 4f, 1, ActionStat.Windup,
+                new StatusLook { Name = "Clear and Steady", Word = "STEADY", Color = new Color(0.6f, 0.9f, 1f), Important = true })));
+        var feint = Action(c, "Feint", a =>
+        {
+            // A feint: the target Blocks at once, or takes 25 strain if it can't act or can't Block (FeintBehavior).
+            a.Id = "feint"; a.DisplayName = "Feint"; a.BehaviorId = "feint";
+            a.Targeting = TargetType.Enemy; a.Range = 2.5f; a.IsRanged = false;
+            a.Windup = 0.3f; a.Recovery = 0.4f; a.Cooldown = 8f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("strain", 25f) };
+        });
+        var intention = Action(c, "ThirdIntention", a =>
+            SelfBuff(a, "third_intention", "Third Intention", "self_buff", windup: 0.7f, recovery: 0.1f, cooldown: 14f, NextAbilities(StatusIds.Intention, 2f, 2, ActionStat.Recovery,
+                new StatusLook { Name = "Intention", Word = "INTENTION", Color = new Color(1f, 0.8f, 0.45f), Important = true })));
+        var breakthrough = Action(c, "Breakthrough", a =>
+        {
+            Attack(a, "breakthrough", "Breakthrough", "area_attack", range: 6f, windup: 0.6f, recovery: 0.4f, damage: 17f, accuracy: 1f, stun: 0.5f, strain: 0f, heavy: true, melee: true);
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 1.2f;
+            a.Cooldown = 7f;
+        });
+        var contempt = Action(c, "Contempt", a =>
+        {
+            a.Id = "contempt"; a.DisplayName = "Contempt"; a.BehaviorId = "contempt";
+            a.Targeting = TargetType.Enemy; a.Range = 9f; a.IsRanged = false;
+            a.Windup = 0.6f; a.Recovery = 0.5f; a.Cooldown = 9f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.TargetStatusesOnHit = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Immobilized, Duration = 1f, AppliesTo = StatusTarget.Enemies }.With(StatusFlags.Rooted) };
+            a.Params = new List<BehaviorParam> { new BehaviorParam("nemesis_duration", 1.5f) };
+        });
+        var countersign = Action(c, "Countersign", a =>
+        {
+            // No range was given: 12m.
+            a.Id = "countersign"; a.DisplayName = "Countersign"; a.BehaviorId = "countersign";
+            a.Targeting = TargetType.Enemy; a.Range = 12f; a.IsRanged = true; a.PiercesTerrain = true;
+            a.Windup = 0.3f; a.Recovery = 0.3f; a.Cooldown = 10f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("seconds", 3f) };
+        });
         // Opening Theorem -> Conjecture: the theorem's landing opens the conjecture for a moment (SelfStatuses + RequiredStatus);
         // FollowUps brings it along.
         var conjecture = Action(c, "Conjecture", a =>
@@ -1272,8 +1393,332 @@ public static class SquadAssets
             u.ViewPrefab = viewPrefab;
         });
         Grant(duelist, null, monostep, demise, duet, steady, theorem, vindication, quell);   // an asset made before them gets them too
+        Grant(duelist, null, feint, intention, breakthrough, contempt, countersign);
         return duelist;
     }
+
+    // ------------------------------------------------------------------ Forsaken: two forms
+
+    /// <summary>How a straight projectile leaves: no spread, level (with ProjectileHoming None: no homing).</summary>
+    private static List<BehaviorParam> Straight()
+    {
+        return new List<BehaviorParam>
+        {
+            new BehaviorParam("launch_spread", 0f), new BehaviorParam("launch_min_pitch", -89f),
+        };
+    }
+
+    /// <summary>
+    /// The Forsaken (ForsakenAbilities.cs): Composed, a slumped caster; at maximum Strain Entropy Beast casts NEUROSIS and
+    /// it is Diverged, a four-armed beast, until its Strain runs out and REGRESSION brings it back. Its first four abilities
+    /// each have a Diverged form (ActionDefinition.DivergedVersion); the second set (ForsakenPsycheAbilities.cs) adds three
+    /// more pairs and abilities of one form only, all learnable. Target strain wasn't given for its damaging
+    /// abilities; every damaging ability strains (Phase 2's rule), so they have a little.
+    /// </summary>
+    public static UnitDefinition CreateForsaken(GameObject viewPrefab)
+    {
+        const string c = "Forsaken";
+        // Divulge / Devour: the basic attack.
+        var devour = Action(c, "Devour", a =>
+        {
+            Attack(a, "devour", "Devour", "basic_attack", range: 2f, windup: 0.2f, recovery: 0.2f, damage: 19f, accuracy: 1f, stun: 0.5f, strain: 10f, heavy: true, melee: true);
+            a.HysteriaOnUse = 1;
+            a.Form = FormLock.Diverged;
+        });
+        var divulge = Action(c, "Divulge", a =>
+        {
+            Attack(a, "divulge", "Divulge", "projectile_shot", range: 15f, windup: 0.4f, recovery: 0.3f, damage: 14f, accuracy: 1f, stun: 0.5f, strain: 5f);
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 1f;   // aimed as a direction, its path shown (Pierce The Veil's indicator)
+            a.ProjectileSpeed = 10f; a.ProjectileAcceleration = 0f; a.ProjectileMaxSpeed = 10f; a.ProjectileRadius = 0.5f; a.ProjectileLifetime = 1.5f;   // 15m at 10 m/s
+            a.Params = Straight(); a.ProjectileHoming = ProjectileHoming.None;
+            a.DivergedVersion = devour;
+        });
+        // Overcompute / Repress.
+        var repress = Action(c, "Repress", a =>
+        {
+            Attack(a, "repress", "Repress", "area_attack", range: 7f, windup: 0.3f, recovery: 0.3f, damage: 16f, accuracy: 1f, stun: 0.5f, strain: 8f, heavy: true, melee: true);
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Cone; a.AreaRadius = 7f; a.ConeAngle = 90f;
+            a.Displace = DisplaceMode.AwayFromSource; a.DisplaceDistance = 5f;
+            a.Cooldown = 7f; a.Form = FormLock.Diverged;
+        });
+        var overcompute = Action(c, "Overcompute", a =>
+        {
+            // Five barbs at once, each locked on the target (ProjectileHoming Target: it, and only it).
+            a.Id = "overcompute"; a.DisplayName = "Overcompute"; a.BehaviorId = "volley";
+            a.Targeting = TargetType.Enemy; a.Range = 12f; a.IsRanged = true;
+            a.Windup = 0.3f; a.Recovery = 0.6f; a.Cooldown = 7f;
+            a.Impact = ImpactType.Light; a.Damage = 5f; a.BaseAccuracy = 1f; a.StunDuration = 0.2f; a.StrainOnTarget = 2f;   // per barb
+            a.ProjectileSpeed = 7f; a.ProjectileAcceleration = 16f; a.ProjectileMaxSpeed = 26f; a.ProjectileRadius = 0.3f; a.ProjectileLifetime = 4f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("count", 5f), new BehaviorParam("every", 0f) };
+            a.ProjectileHoming = ProjectileHoming.Target;
+            a.DivergedVersion = repress;
+        });
+        // Measurement / Unleash.
+        var unleash = Action(c, "Unleash", a =>
+        {
+            Attack(a, "unleash", "Unleash", "area_attack", range: 0f, windup: 0.5f, recovery: 0.2f, damage: 0f, accuracy: 1f, stun: 0.8f, strain: 30f, melee: true);
+            a.Targeting = TargetType.Self; a.Shape = AreaShape.Circle; a.AreaRadius = 9f;
+            a.StrainOnSelf = -30f; a.Cooldown = 9f; a.Form = FormLock.Diverged;
+        });
+        var measurement = Action(c, "Measurement", a =>
+        {
+            a.Id = "measurement"; a.DisplayName = "Measurement"; a.BehaviorId = "status_spell";
+            a.Targeting = TargetType.Enemy; a.Range = 16f; a.IsRanged = true;
+            a.Windup = 0.5f; a.Recovery = 0.2f; a.Cooldown = 9f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.TargetStatusesOnHit = new List<StatusSpec>
+            {
+                new StatusSpec { Id = StatusIds.Marked, Duration = 2f, AppliesTo = StatusTarget.Enemies }.Add(StatId.IncomingAccuracy, 0.25f).Add(StatId.Dodge, -0.25f),
+                new StatusSpec { Id = StatusIds.Measured, Duration = 2f, AppliesTo = StatusTarget.Enemies, Look = new StatusLook { Name = "Measured", Word = "SLOWED", Color = new Color(0.55f, 0.6f, 0.9f) } }.Mult(StatId.MoveSpeed, 0.25f),
+            };
+            a.DivergedVersion = unleash;
+        });
+        // Fray The Mind / Rampage.
+        var rampage = Action(c, "Rampage", a =>
+        {
+            Attack(a, "rampage", "Rampage", "rampage", range: 6f, windup: 0.2f, recovery: 0.2f, damage: 23f, accuracy: 1f, stun: 0.6f, strain: 8f, heavy: true, melee: true);
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 5f;
+            a.Cooldown = 1f; a.Form = FormLock.Diverged;
+        });
+        var fray = Action(c, "FrayTheMind", a =>
+        {
+            Attack(a, "fray_the_mind", "Fray The Mind", "fray", range: 10f, windup: 0.3f, recovery: 0.3f, damage: 15f, accuracy: 1f, stun: 0.7f, strain: 6f);
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 1.1f;   // aimed as a direction, its path shown
+            a.ProjectileSpeed = 7f; a.ProjectileAcceleration = 0f; a.ProjectileMaxSpeed = 7f; a.ProjectileRadius = 0.55f; a.ProjectileLifetime = 10f / 7f;   // 10m at 7 m/s
+            a.Params = Straight(); a.ProjectileHoming = ProjectileHoming.None;
+            a.DisplaceDistance = 5f;   // the user, knocked back the other way
+            a.StrainOnSelf = 20f; a.Cooldown = 1f;
+            a.DivergedVersion = rampage;
+        });
+        // ---- the second set: three more pairs, and abilities of one form only (ForsakenPsycheAbilities.cs)
+        // Perplexity / Collapse.
+        var collapse = Action(c, "Collapse", a =>
+        {
+            Attack(a, "collapse", "Collapse", "outburst", range: 10f, windup: 0.9f, recovery: 0.3f, damage: 0f, accuracy: 1f, stun: 2f, strain: 8f, heavy: true, melee: true);
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Circle; a.AreaRadius = 5f;
+            a.Cooldown = 9f; a.Form = FormLock.Diverged;
+        });
+        var perplexity = Action(c, "Perplexity", a =>
+        {
+            Attack(a, "perplexity", "Perplexity", "projectile_shot", range: 12f, windup: 0.7f, recovery: 0.3f, damage: 10f, accuracy: 1f, stun: 2f, strain: 5f);
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 3f;   // aimed as a direction, its 1.5m-radius path shown
+            a.ProjectileSpeed = 5f; a.ProjectileAcceleration = 0f; a.ProjectileMaxSpeed = 5f; a.ProjectileRadius = 1.5f; a.ProjectileLifetime = 12f / 5f;   // slow: 12m at 5 m/s
+            a.Params = Straight(); a.ProjectileHoming = ProjectileHoming.None;
+            a.Cooldown = 5f;
+            a.DivergedVersion = collapse;
+        });
+        // Paranoia / Exort.
+        var exort = Action(c, "Exort", a =>
+        {
+            a.Id = "exort"; a.DisplayName = "Exort"; a.BehaviorId = "aura";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.Range = 0f;
+            a.Windup = 0.5f; a.Recovery = 0.1f; a.Cooldown = 7f; a.Damage = 0f; a.StunDuration = 0f;
+            a.Shape = AreaShape.Circle; a.AreaRadius = 5f; a.AuraSeconds = 3f; a.AuraStrainPerSecond = 10f;   // enemies inside gain strain
+            a.SelfStatuses = new List<StatusSpec> { new StatusSpec { Id = "exort", Duration = 3f, StrainPerSecond = -10f, Look = new StatusLook { Name = "Exort", Word = "EXORT", Color = new Color(0.55f, 0.3f, 0.7f) } } };
+            a.Form = FormLock.Diverged;
+        });
+        var paranoia = Action(c, "Paranoia", a =>
+        {
+            a.Id = "paranoia"; a.DisplayName = "Paranoia"; a.BehaviorId = "strain_siphon";
+            a.Targeting = TargetType.Enemy; a.IsRanged = true; a.Range = 11f;
+            a.Windup = 0.5f; a.Recovery = 0f; a.Cooldown = 6f; a.Damage = 0f; a.StunDuration = 0f;
+            a.ChannelSeconds = 1.5f; a.ChannelNeedsSight = true;
+            a.TargetStatusesOnHit = new List<StatusSpec>
+            {
+                new StatusSpec { Id = StatusIds.Crippled, Duration = 1.5f, AppliesTo = StatusTarget.Enemies }.Mult(StatId.MoveSpeed, 0.5f).Mult(StatId.DashDistance, 0.5f).With(StatusFlags.NoDash),
+                new StatusSpec { Id = "paranoia", Duration = 1.5f, AppliesTo = StatusTarget.Enemies, StrainPerSecond = 20f, Look = new StatusLook { Name = "Paranoia", Word = "PARANOIA", Color = new Color(0.6f, 0.35f, 0.75f) } },
+            };
+            a.SelfStatuses = new List<StatusSpec> { new StatusSpec { Id = "paranoia_relief", Duration = 1.5f, StrainPerSecond = -20f, Look = new StatusLook { Name = "Paranoia" } } };
+            a.DivergedVersion = exort;
+        });
+        // Controlled Burst / Howling End.
+        var howling = Action(c, "HowlingEnd", a =>
+        {
+            Attack(a, "howling_end", "Howling End", "howling_end", range: 5f, windup: 0f, recovery: 0.75f, damage: 12f, accuracy: 1f, stun: 0.75f, strain: 6f, heavy: true, melee: true);
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 4f;
+            a.IsCharge = true; a.MaxChargeSeconds = 2f;
+            a.DisplaceDistance = 4f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("max_scale", 3f) };
+            a.Cooldown = 7f; a.Form = FormLock.Diverged;
+        });
+        var burst = Action(c, "ControlledBurst", a =>
+        {
+            Attack(a, "controlled_burst", "Controlled Burst", "burst_volley", range: 10f, windup: 0.5f, recovery: 0.3f, damage: 5f, accuracy: 1f, stun: 0.1f, strain: 2f);
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 1f;   // aimed as a direction
+            a.ProjectileSpeed = 12f; a.ProjectileAcceleration = 0f; a.ProjectileMaxSpeed = 12f; a.ProjectileRadius = 0.3f; a.ProjectileLifetime = 10f / 12f;
+            a.ProjectileHoming = ProjectileHoming.ClosestEnemy; a.ProjectileHomingDelay = 0.1f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("count", 5f), new BehaviorParam("spread", 60f) };
+            a.StrainOnSelf = 15f; a.Cooldown = 3f;
+            a.DivergedVersion = howling;
+        });
+        // Diverged only.
+        var blind = Action(c, "BlindRampage", a =>
+        {
+            Attack(a, "blind_rampage", "Blind Rampage", "blind_rampage", range: 5f, windup: 0.3f, recovery: 0.5f, damage: 13f, accuracy: 1f, stun: 0.3f, strain: 6f, heavy: true, melee: true);
+            a.Targeting = TargetType.Position; a.Shape = AreaShape.Line; a.LineWidth = 4f;
+            a.Form = FormLock.Diverged;
+        });
+        var berserk = Action(c, "Berserk", a =>
+        {
+            a.Id = "berserk"; a.DisplayName = "Berserk"; a.BehaviorId = "berserk";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.Range = 0f;
+            a.Windup = 0.7f; a.Recovery = 0f; a.Cooldown = 8f; a.Damage = 0f; a.StunDuration = 0f;
+            a.AreaRadius = 9f; a.LinkedAction = blind;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("casts", 5f) };
+            a.SelfStatusesDuringWindup = new List<StatusSpec> { UnstoppableWindup() };
+            a.Form = FormLock.Diverged;
+        });
+        var withdrawal = Action(c, "Withdrawal", a =>
+        {
+            a.Id = "withdrawal"; a.DisplayName = "Withdrawal"; a.BehaviorId = "withdrawal";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.Range = 0f;
+            a.Windup = 0.4f; a.Recovery = 0f; a.Cooldown = 7f; a.Damage = 0f; a.StunDuration = 0f;
+            a.ChannelSeconds = 3f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("weakpoints", 4f) };
+            a.SelfStatuses = new List<StatusSpec> { new StatusSpec { Id = "withdrawal", Duration = 3f, StrainPerSecond = -50f, Look = new StatusLook { Name = "Withdrawal", Word = "WITHDRAWN", Color = new Color(0.45f, 0.45f, 0.6f) } } };   // -5 every 0.1s
+            a.Form = FormLock.Diverged;
+        });
+        var madnessSpills = Action(c, "MadnessSpillsForth", a =>
+        {
+            a.Id = "madness_spills_forth"; a.DisplayName = "Madness Spills Forth"; a.BehaviorId = "madness_spills";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.Range = 15f;
+            a.Windup = 0.9f; a.Recovery = 0f; a.Cooldown = 8f; a.Damage = 0f; a.StunDuration = 0f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("hysteria", 5f), new BehaviorParam("strikes", 3f) };
+            a.SelfStatuses = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Frenzied, Duration = 10f, Look = new StatusLook { Name = "Frenzied", Word = "FRENZIED", Color = new Color(0.8f, 0.25f, 0.3f) } }.Mult(StatId.ActionSpeed, 2f) };   // +100%, until the strikes are done
+            a.Form = FormLock.Diverged;
+        });
+        var feast = Action(c, "Feast", a =>
+        {
+            Attack(a, "feast", "Feast", "feast", range: 2f, windup: 0.4f, recovery: 0.4f, damage: 15f, accuracy: 1f, stun: 0f, strain: 8f, heavy: true, melee: true);
+            a.Params = new List<BehaviorParam> { new BehaviorParam("missing_share", 0.25f), new BehaviorParam("heal_on_kill", 35f), new BehaviorParam("hysteria_on_kill", 5f) };
+            a.Cooldown = 9f; a.Form = FormLock.Diverged;
+        });
+        var shatter = Action(c, "ShatterTheFoundations", a =>
+        {
+            Attack(a, "shatter_the_foundations", "Shatter The Foundations", "shatter_foundations", range: 2.5f, windup: 0.6f, recovery: 0.3f, damage: 30f, accuracy: 1f, stun: 0.6f, strain: 10f, heavy: true, melee: true);
+            a.StrainOnSelf = 50f; a.CanTranscend = true; a.TranscendStrain = 15f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("hysteria", 3f), new BehaviorParam("transcend_damage", 30f), new BehaviorParam("transcend_hysteria", 6f) };
+            a.Cooldown = 4f; a.Form = FormLock.Diverged;
+        });
+        // Composed only.
+        var cacophony = Action(c, "MiserableCacophony", a =>
+        {
+            a.Id = "miserable_cacophony"; a.DisplayName = "Miserable Cacophony"; a.BehaviorId = "cacophony";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.Range = 0f;
+            a.Windup = 0.1f; a.Recovery = 0.1f; a.Cooldown = 6f; a.Damage = 0f; a.StunDuration = 0f;
+            a.Heal = 30f; a.StrainOnSelf = 15f; a.AreaRadius = 6f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("ally_strain", 15f) };
+            a.Form = FormLock.Composed;
+        });
+        System.Action<ActionDefinition, string, string, float> porcupineInit = (a, id, name, channel) =>
+        {
+            Attack(a, id, name, "channel_barrage", range: 10f, windup: 0.2f, recovery: 0f, damage: 5f, accuracy: 1f, stun: 0.1f, strain: 2f);
+            a.Targeting = TargetType.Self; a.Range = 0f;
+            a.ChannelSeconds = channel;
+            a.ProjectileSpeed = 12f; a.ProjectileAcceleration = 0f; a.ProjectileMaxSpeed = 12f; a.ProjectileRadius = 0.3f; a.ProjectileLifetime = 10f / 12f;
+            a.ProjectileHoming = ProjectileHoming.ClosestEnemy; a.ProjectileHomingDelay = 0.1f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("every", 0.2f), new BehaviorParam("aim", 0f) };
+            a.Form = FormLock.Composed;
+        };
+        var porcupineAgain = Action(c, "PorcupineRecast", a =>
+        {
+            porcupineInit(a, "porcupine_recast", "Porcupine (recast)", 4f);
+            a.RequiresLink = true; a.Cooldown = 0f;   // once, straight after Porcupine: twice as long
+        });
+        var porcupine = Action(c, "Porcupine", a =>
+        {
+            porcupineInit(a, "porcupine", "Porcupine", 2f);
+            a.Cooldown = 10f; a.LinkedAbilities = new List<ActionDefinition> { porcupineAgain };
+        });
+        var visions = Action(c, "WretchedVisions", a =>
+        {
+            a.Id = "wretched_visions"; a.DisplayName = "Wretched Visions"; a.BehaviorId = "wretched_visions";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.Range = 0f;
+            a.Windup = 0f; a.Recovery = 0f; a.Cooldown = 13f;
+            a.Impact = ImpactType.Light; a.Damage = 0f; a.BaseAccuracy = 1f; a.StunDuration = 0.75f;
+            a.Shape = AreaShape.Circle; a.AreaRadius = 20f;
+            a.IsCharge = true; a.MaxChargeSeconds = 3f; a.ChargeStrainPerSecond = 50f;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("hysteria_per_second", 3f) };
+            a.Form = FormLock.Composed;
+        });
+        var simplicity = Action(c, "Simplicity", a =>
+        {
+            a.Id = "simplicity"; a.DisplayName = "Simplicity"; a.BehaviorId = "self_buff";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.Range = 0f;
+            a.Windup = 0.3f; a.Recovery = 0f; a.Cooldown = 10f; a.Damage = 0f; a.StunDuration = 0f;
+            a.SelfStatuses = new List<StatusSpec>
+            {
+                new StatusSpec { Id = "simplicity", Duration = 3f, StrainPerSecond = -20f, Look = new StatusLook { Name = "Simplicity", Word = "HASTE", Color = new Color(0.6f, 0.85f, 0.95f) } }
+                    .Mult(StatId.ActionSpeed, 1.5f).With(StatusFlags.BasicAttackOnly),
+            };
+            a.Form = FormLock.Composed;
+        });
+        var agitation = Action(c, "Agitation", a =>
+        {
+            Attack(a, "agitation", "Agitation", "channel_barrage", range: 9f, windup: 0.7f, recovery: 0.5f, damage: 6f, accuracy: 1f, stun: 0.5f, strain: 3f);
+            a.ChannelSeconds = 2.5f;
+            a.ProjectileSpeed = 15f; a.ProjectileAcceleration = 0f; a.ProjectileMaxSpeed = 15f; a.ProjectileRadius = 0.3f; a.ProjectileLifetime = 11f / 15f;   // 11m
+            a.ProjectileHoming = ProjectileHoming.None;
+            a.Params = new List<BehaviorParam> { new BehaviorParam("launch_spread", 0f), new BehaviorParam("launch_min_pitch", -89f), new BehaviorParam("every", 0.2f), new BehaviorParam("aim", 1f) };
+            a.Cooldown = 13f; a.Form = FormLock.Composed;
+        });
+        var psyche = new[] { perplexity, paranoia, burst, berserk, withdrawal, madnessSpills, feast, shatter, cacophony, porcupine, visions, simplicity, agitation };
+
+        // NEUROSIS and REGRESSION: cast for it by Entropy Beast, never ordered.
+        var unstoppable = new StatusSpec { Id = StatusIds.Unstoppable, Duration = 1.5f }.With(StatusFlags.Unstoppable);
+        var neurosis = Action(c, "Neurosis", a =>
+        {
+            a.Id = "neurosis"; a.DisplayName = "NEUROSIS"; a.BehaviorId = "forsaken_form";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.Range = 0f;
+            a.Windup = 1.5f; a.Recovery = 0f; a.Cooldown = 0f; a.Damage = 0f; a.StunDuration = 0f;
+            a.SelfStatusesDuringWindup = new List<StatusSpec> { unstoppable };
+            a.SelfStatuses = new List<StatusSpec>
+            {
+                new StatusSpec { Id = StatusIds.Diverged, Duration = 100000f, Look = new StatusLook { Name = "Diverged", Word = "DIVERGED", Color = new Color(0.55f, 0.2f, 0.65f), Important = true } }
+                    .Add(StatId.MoveSpeed, 5f).Add(StatId.Block, 0.5f),
+            };
+            a.Params = new List<BehaviorParam>
+            {
+                new BehaviorParam("diverge", 1f), new BehaviorParam("drain", 15f), new BehaviorParam("frenzied_drain", 30f),
+                new BehaviorParam("hysteria_every", 1f), new BehaviorParam("hysteria_limit", 20f), new BehaviorParam("hysteria_damage", 1f),
+            };
+        });
+        var regression = Action(c, "Regression", a =>
+        {
+            a.Id = "regression"; a.DisplayName = "REGRESSION"; a.BehaviorId = "forsaken_form";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.Range = 0f;
+            a.Windup = 1.5f; a.Recovery = 0f; a.Cooldown = 0f; a.Damage = 0f; a.StunDuration = 0f;
+            a.SelfStatusesDuringWindup = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Unstoppable, Duration = 1.5f }.With(StatusFlags.Unstoppable) };
+            a.Params = new List<BehaviorParam> { new BehaviorParam("diverge", 0f) };
+        });
+        var shattered = Action(c, "ShatteredMind", a =>
+        {
+            a.Id = "shattered_mind"; a.DisplayName = "SHATTERED MIND"; a.BehaviorId = "shattered_mind";
+            a.Targeting = TargetType.Self; a.IsRanged = false; a.Range = 0f;
+            a.Windup = 0.75f; a.Recovery = 0f; a.Cooldown = 0f; a.Damage = 0f; a.StunDuration = 0f;
+            a.SelfStatusesDuringWindup = new List<StatusSpec> { new StatusSpec { Id = StatusIds.Unstoppable, Duration = 0.75f }.With(StatusFlags.Unstoppable) };
+        });
+        var forsaken = Unit(c, u =>
+        {
+            u.DisplayName = "Forsaken"; u.MaxHealth = 120f; u.MaxStrain = 100f; u.BaseDodge = 0f; u.MoveSpeed = 5f; u.DashDistance = 3f;
+            u.MaxEnergy = 0f; u.StartingEnergy = 0f;
+            u.StrainName = "";
+            u.BasicAttack = divulge;
+            u.Actions = new List<ActionDefinition> { overcompute, measurement, fray };
+            u.Passives = new List<string> { ForsakenRules.EntropyBeast };
+            u.DivergeAction = neurosis; u.RegressAction = regression; u.InsanityAction = shattered;
+            u.ExcludedEtchings = new List<string> { "suffer_beyond_your_limits", "untethered_to_sanity", "desecrate_your_being" };
+            u.Description = ForsakenDescription;
+            u.ViewPrefab = viewPrefab;
+        }, new Dictionary<int, System.Action<UnitDefinition>>
+        {
+            { 16, u => { u.StrainName = ""; u.Description = ForsakenDescription; } },   // Entropy is Strain again
+        });
+        Grant(forsaken, null, psyche);   // an asset made before them gets them too (learnable: not in the starting set)
+        return forsaken;
+    }
+
+    private const string ForsakenDescription = "A mind split in two. Composed, it harries from range; at maximum Strain it is torn into its Diverged form, a fast, heavily guarded beast that rips through enemies until its Strain runs dry.";
 
     // ------------------------------------------------------------------ Enemy types (each with its own AI profile, see UnitAIs)
     // Their abilities are their own assets, even where they copy a squad ability, so each can be tuned on its own.
@@ -1292,8 +1737,36 @@ public static class SquadAssets
             Caster = CreateCaster(viewPrefab), Brutebeast = CreateBrutebeast(viewPrefab),
             Wraith = wraith, Monarch = CreateMonarch(viewPrefab, wraith), Zola = CreateZola(viewPrefab), Primavaeran = CreatePrimavaeran(viewPrefab), Exemplar = CreateExemplar(viewPrefab),
             Deliverance = CreateDeliverance(viewPrefab, syne, alio, revl, wex), Syne = syne, Alio = alio, Revl = revl, Wex = wex,
-            Howler = CreateHowler(viewPrefab), Matriarch = CreateMatriarch(viewPrefab),
+            Howler = CreateHowler(viewPrefab), Matriarch = CreateMatriarch(viewPrefab), Omen = CreateOmen(viewPrefab),
         };
+    }
+
+    // ------------------------------------------------------------------ map objectives (the mission builder stands them on MapTemplate.ObjectiveSpawns)
+
+    /// <summary>
+    /// The Omen: a map objective. It stands where the map puts it and can't walk, Block, Dash or dodge (ObjectiveAI); it
+    /// casts CONVERGE REALITIES again and again, each bringing Temperance 5s sooner, UNSTOPPABLE through the 10s windup (an
+    /// Unravel still breaks it: 50 strain). It doesn't count toward victory.
+    /// </summary>
+    public static UnitDefinition CreateOmen(GameObject viewPrefab)
+    {
+        const string c = "Omen";
+        var converge = Action(c, "ConvergeRealities", a =>
+        {
+            a.Id = "converge_realities"; a.DisplayName = "Converge Realities"; a.BehaviorId = "converge_realities";
+            a.Targeting = TargetType.Self; a.IsRanged = false;
+            a.Windup = 10f; a.Recovery = 0f; a.Cooldown = 0f;
+            a.Damage = 0f; a.StunDuration = 0f;
+            a.SelfStatusesDuringWindup = new List<StatusSpec> { UnstoppableWindup() };
+            a.Params = new List<BehaviorParam> { new BehaviorParam("hasten_seconds", 5f) };
+        });
+        return Unit(c, u =>
+        {
+            u.DisplayName = "Omen"; u.MaxHealth = 75f; u.MaxStrain = 50f; u.BaseDodge = 0f; u.MoveSpeed = 0f; u.AIProfile = ObjectiveAI.Style;
+            u.CannotMove = true; u.CannotBlock = true; u.CannotDash = true; u.CannotDodge = true; u.CannotFocus = true; u.MapObjective = true;
+            u.Actions = new List<ActionDefinition> { converge };
+            u.ViewPrefab = viewPrefab;
+        });
     }
 
     // ------------------------------------------------------------------ Howler, Matriarch
@@ -2133,7 +2606,46 @@ public static class SquadAssets
         { "ADuet", "Dash up to 6m to an enemy, straight through walls and cover, and strike them. If the strike breaks a weakpoint, this ability's cooldown resets." },
         { "OpeningTheorem", "Dash up to 6m to an enemy, straight through walls and cover, strike them, then bound into the air past them. Follow up with Conjecture within 1.5 seconds." },
         { "Conjecture", "Follow-up to Opening Theorem: dash 9m through enemies, walls and cover, making each enemy in the way FATED for 1 second and slashing them once every 0.2 seconds for each weakpoint they have. Each slash breaks a weakpoint." },
-        { "ClearAndSteady", "For 4 seconds your actions are 30% slower, but every weakpoint you break sheds 20 strain." },
+        { "ClearAndSteady", "Steady yourself: the next ability you use within 4 seconds has no windup." },
+        { "Feint", "Feint at a target, making them Block. If they can't act or can't Block when it lands, they gain 25 strain instead." },
+        { "ThirdIntention", "Gain INTENTION: your next two abilities within 2 seconds have no recovery." },
+        { "Breakthrough", "Stab in a line, damaging enemies." },
+        { "Contempt", "Dash to an enemy and IMMOBILIZE them. Against your NEMESIS, it lasts longer." },
+        { "Countersign", "Apply COUNTERSIGN to an enemy. The next time they deal damage to an ally, you blink in front of that ally and take the hit instead. Against your NEMESIS, the hit meets your free parry." },
+        { "WrathfulReflection", "Shield an ally or yourself. While the shield holds, half of the damage and stun they take is reflected back at the attacker after 0.25 seconds." },
+        { "CompositionsOfDestruction", "Send out a slow projectile that damages the first enemy it meets. If it is teleported or displaced, it explodes in a wide area once the move is over." },
+        { "StrangeAxis", "Inscribe an area into a new axis of reality: damage anyone inside takes costs no health, but 75% of it is added as strain." },
+        { "Obstruction", "Raise a wall that blocks line of sight and CRIPPLES enemies passing through it. Hold R to turn it while placing it." },
+        { "Vipers", "Release a burst of homing barbs all at once." },
+        { "Divulge", "Fire a projectile that travels in a straight line and deals damage." },
+        { "Devour", "Rip into the target, dealing damage. Gives 1 HYSTERIA." },
+        { "Overcompute", "Fire a swarm of homing projectiles at a target. They home onto that target only." },
+        { "Repress", "Unleash a cone-shaped shockwave, dealing damage and knocking enemies back." },
+        { "Measurement", "MARK an enemy and slow their movement by 75%." },
+        { "Unleash", "Shunt Strain into a shockwave around you, stunning enemies and adding strain to them." },
+        { "FrayTheMind", "Fire a projectile in a direction while knocking yourself the opposite way." },
+        { "Rampage", "Dash in a direction, damaging every enemy in your path. Each enemy struck gives 1 HYSTERIA." },
+        { "Neurosis", "At maximum Strain, become UNSTOPPABLE and transform into Diverged form." },
+        { "ShatteredMind", "At maximum HYSTERIA, as soon as you can act: become UNSTOPPABLE, then INSANE until Composed again." },
+        { "Regression", "At 0 Strain in Diverged form, become UNSTOPPABLE and transform back into Composed form." },
+        { "Perplexity", "Fire a slow, large projectile that damages and stuns." },
+        { "Collapse", "Dash to a location and stun enemies in an area." },
+        { "Paranoia", "Channel on an enemy, raising their strain while lowering yours and CRIPPLING them for the duration of the channel." },
+        { "Exort", "Gain an aura that lowers your strain and raises the strain of nearby enemies." },
+        { "ControlledBurst", "Fire a shotgun blast of homing projectiles in a direction." },
+        { "HowlingEnd", "Charge up a blast, increasing its range, damage, knockback and stun by up to 200%. Release it to damage enemies in a line and knock them back." },
+        { "Berserk", "Become UNSTOPPABLE during the windup, then perform Blind Rampage several times at random in the area around you." },
+        { "BlindRampage", "Dash in a direction, damaging enemies and allies hit. Gain 1 HYSTERIA per unit hit." },
+        { "Withdrawal", "Channel, exposing 4 weakpoints on yourself while you do, and shed strain." },
+        { "MadnessSpillsForth", "Gain 5 HYSTERIA during the windup, then dash at the nearest target, ally or enemy, and strike them three times with your basic attack at increased action speed, chasing them as you go." },
+        { "Feast", "Take a massive bite out of an enemy, dealing more damage the more health they are missing. If you kill them, you heal and gain 5 HYSTERIA." },
+        { "ShatterTheFoundations", "Perform a strong melee attack and gain 3 HYSTERIA. Transcend to deal more damage and gain 6 HYSTERIA." },
+        { "MiserableCacophony", "Heal and raise your strain and the strain of nearby allies. Casts itself when you take damage while it is off cooldown." },
+        { "Porcupine", "Channel and continually release homing projectiles. Follow up once to cast it again with double the channel time." },
+        { "PorcupineRecast", "Follow-up to Porcupine: channel and release homing projectiles for twice as long." },
+        { "WretchedVisions", "Charge, raising your strain and gaining HYSTERIA over time. Release a huge shockwave that stuns enemies. At maximum strain it releases itself and NEUROSIS follows." },
+        { "Simplicity", "Enter a meditative state: shed strain over time and gain HASTE, but every ability except your basic attack is disabled." },
+        { "Agitation", "Channel a barrage of projectiles that fly in a straight line at an enemy's current position." },
         { "ScepterOfTyranny", "Blink an ally or enemy to a point within 5m of where they stand. Follow up within 1.5 seconds for the next effect instead: first, as Scepter of Neglect, 50% faster actions for 1.5 seconds and 2 weakpoints; then, as Scepter of Insanity, MADNESS for 2 seconds, after which the ability is on cooldown for 2 seconds. Focusing starts it over." },
         { "SpatialChrysalis", "Apply VOIDED to an ally or enemy and channel for up to 3 seconds: they can do nothing and nothing can touch them. When the channel ends or is broken, they return and are stunned." },
         { "CrossBeyondThresholds", "Blink up to 27m and mark where you stood. Gain 50% action speed for 4 seconds; taking damage or dashing in that time sends you back to the mark." },
@@ -2199,6 +2711,7 @@ public static class SquadAssets
         { "Zola/Stomp", "Stomps the ground around it, damaging and stunning everyone within 7m and flinging them into the air." },
         { "Zola/MentalOverload", "Unstoppable while it winds up, then emits a huge pulse that damages, stuns and strains every enemy within 15m." },
         { "Howler/RavenousJaws", "Bite the target, dealing damage and stunning." },
+        { "ConvergeRealities", "UNSTOPPABLE through a long windup (an Unravel still breaks it), then TEMPERANCE arrives 5 seconds sooner." },
         { "Howler/HowlingLament", "Only the pack's leader howls. Slows every enemy within 30m and marks the target as FATED (its actions slowed), setting the pack on it." },
         { "Matriarch/Needlestorm", "Summons a swarm of 10 barbs that shoot out in random directions, then home in on the closest enemy, gaining speed as they travel." },
         { "Matriarch/Carapace", "Gain a shield and bonus movement speed for 3 seconds, firing a Needlestorm barb every 0.4 seconds meanwhile." },
@@ -2453,6 +2966,27 @@ public static class SquadAssets
         { "ravenous_jaws", new ActionVisuals(VfxKind.Slash, new Color(0.95f, 0.55f, 0.35f), 0.12f) },
         { "howling_lament", new ActionVisuals(VfxKind.Shockwave, new Color(0.6f, 0.65f, 1f), 0.1f) },
         { "needlestorm", new ActionVisuals(VfxKind.Buff, new Color(0.85f, 0.5f, 1f)) },
+        { "vipers", new ActionVisuals(VfxKind.Buff, new Color(0.55f, 1f, 0.6f)) },
+        { "divulge", new ActionVisuals(VfxKind.Bolt, new Color(0.8f, 0.85f, 1f), 0.06f) { Orb = true } },
+        { "devour", new ActionVisuals(VfxKind.Slash, new Color(0.35f, 0.1f, 0.4f), 0.14f) },
+        { "overcompute", new ActionVisuals(VfxKind.Buff, new Color(0.7f, 0.8f, 1f)) },
+        { "repress", new ActionVisuals(VfxKind.Shockwave, new Color(0.4f, 0.15f, 0.5f), 0.14f) },
+        { "measurement", new ActionVisuals(VfxKind.Bolt, new Color(0.6f, 0.7f, 1f), 0.04f) },
+        { "unleash", new ActionVisuals(VfxKind.Shockwave, new Color(0.55f, 0.2f, 0.65f), 0.14f) },
+        { "fray_the_mind", new ActionVisuals(VfxKind.Bolt, new Color(0.85f, 0.7f, 1f), 0.08f) { Orb = true } },
+        { "rampage", new ActionVisuals(VfxKind.Slash, new Color(0.3f, 0.08f, 0.35f), 0.18f) },
+        { "neurosis", new ActionVisuals(VfxKind.Buff, new Color(0.3f, 0.05f, 0.35f), 0.08f) },
+        { "regression", new ActionVisuals(VfxKind.Buff, new Color(0.7f, 0.75f, 0.9f), 0.06f) },
+        { "shattered_mind", new ActionVisuals(VfxKind.Buff, new Color(0.85f, 0.15f, 0.25f), 0.08f) },
+        { "feint", new ActionVisuals(VfxKind.Slash, new Color(0.85f, 0.9f, 1f), 0.05f) },
+        { "third_intention", new ActionVisuals(VfxKind.Buff, new Color(1f, 0.8f, 0.45f), 0.06f) },
+        { "breakthrough", new ActionVisuals(VfxKind.Slash, new Color(1f, 0.55f, 0.35f), 0.12f) },
+        { "contempt", new ActionVisuals(VfxKind.Slash, new Color(0.7f, 0.5f, 1f), 0.08f) },
+        { "countersign", new ActionVisuals(VfxKind.Bolt, new Color(1f, 0.85f, 0.4f), 0.05f) },
+        { "wrathful_reflection", new ActionVisuals(VfxKind.Buff, new Color(1f, 0.45f, 0.3f), 0.06f) },
+        { "compositions_of_destruction", new ActionVisuals(VfxKind.Shockwave, new Color(1f, 0.5f, 0.85f), 0.1f) },
+        { "strange_axis", new ActionVisuals(VfxKind.Shockwave, new Color(0.75f, 0.55f, 1f), 0.08f) },
+        { "obstruction", new ActionVisuals(VfxKind.Buff, new Color(0.6f, 0.65f, 0.8f), 0.06f) },
         { "carapace", new ActionVisuals(VfxKind.Buff, new Color(0.55f, 0.95f, 0.9f)) },
         { "captivate", new ActionVisuals(VfxKind.Beam, new Color(0.95f, 0.45f, 0.95f), 0.08f) },
         { "stomp", new ActionVisuals(VfxKind.Shockwave, new Color(0.45f, 0.75f, 1f), 0.2f) },
@@ -2470,6 +3004,9 @@ public static class SquadAssets
     // description above changes, add the text it had here.
     private static readonly Dictionary<string, string[]> OldDescriptions = new Dictionary<string, string[]>
     {
+        { "Unleash", new[] { "Shunt Entropy into a shockwave around you, stunning enemies and adding strain to them." } },
+        { "Neurosis", new[] { "Entropy Beast: at maximum Entropy, become UNSTOPPABLE and transform into Diverged form." } },
+        { "Regression", new[] { "At 0 Entropy in Diverged form, become UNSTOPPABLE and transform back into Composed form." } },
         { "TermoulsMonolith", new[] { "Summon a Makina, The Monolith, which drops from the sky onto the target point at once, crashing down on enemies within 5m. Targeted abilities used on a Makina go on half their cooldown." } },
         { "Monolith/CrashDown", new[] { "The Monolith rises into the air, then crashes down at the target point, damaging and stunning enemies within 5m and knocking them 1.5m into the air. Damage while it is up knocks it out of the air." } },
         { "Monostep", new[] { "A fast 4m dash, then 75% more movement speed for 1 second." } },
@@ -2567,6 +3104,17 @@ public static class SquadAssets
         a.Impact = heavy ? ImpactType.Heavy : ImpactType.Light;
         a.Damage = damage; a.BaseAccuracy = accuracy; a.StunDuration = stun;
         a.StrainOnTarget = strain;   // every attack builds strain on what it hits: roughly half its damage, more for heavy blows
+    }
+
+    /// <summary>A status the holder's next 'uses' abilities spend within 'seconds' (StatusFlags.SpentOnAbility), taking 'stat' to
+    /// nothing on each (Clear and Steady: Windup; Third Intention: Recovery).</summary>
+    private static StatusSpec NextAbilities(string id, float seconds, int uses, ActionStat stat, StatusLook look)
+    {
+        return new StatusSpec
+        {
+            Id = id, Duration = seconds, Uses = uses, Flags = StatusFlags.SpentOnAbility, Look = look,
+            ActionModifiers = new List<ActionModifier> { new ActionModifier("", stat, ModOp.Multiply, 0f) },
+        };
     }
 
     private static void SelfBuff(ActionDefinition a, string id, string name, string behavior, float windup, float recovery, float cooldown, StatusSpec status)

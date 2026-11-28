@@ -169,7 +169,8 @@ namespace TacticsGame.Presentation
         }
 
         private static Texture2D vignette;
-        private static Texture2D Vignette()
+        /// <summary>A screen vignette: clear in the middle, black toward the corners (also DodgeMoment's).</summary>
+        public static Texture2D Vignette()
         {
             if (vignette != null) return vignette;
             const int size = 64;

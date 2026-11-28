@@ -41,6 +41,8 @@ namespace TacticsGame.Presentation
         public List<Vector3> PlayerSpawns = new List<Vector3>();
         [Tooltip("Enemy start points, in order. Enemies past the last one are lined up in rows behind the first.")]
         public List<Vector3> EnemySpawns = new List<Vector3>();
+        [Tooltip("Where map objectives (the Omen) can stand: the mission builder puts the objectives it picks on these. Add them with the Map Builder.")]
+        public List<Vector3> ObjectiveSpawns = new List<Vector3>();
         [Header("Blockout (Map Builder: Convert Blockout)")]
         [Tooltip("Freeform level geometry built into the map as it is: its Climbable part can be stood and climbed on, its Cover part (BlockoutCover) only blocks sight and walking. Made from a ProBuilder blockout by the Map Builder.")]
         public GameObject Blockout;

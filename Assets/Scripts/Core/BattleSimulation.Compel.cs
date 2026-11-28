@@ -48,7 +48,7 @@ namespace TacticsGame.Core
             if (s == null || IsCompelled(u)) return false;
             var toward = GetUnit(s.SourceId);
             float seconds; if (!compelSeconds.TryGetValue(u.Id, out seconds)) seconds = 1.5f;
-            if (toward == null || !toward.IsAlive || u.IsRooted || u.IsUnstoppable || u.IsMakina || IsVoided(u))
+            if (toward == null || !toward.IsAlive || u.IsRooted || u.IsUnstoppable || u.CannotMove || IsVoided(u))
             {
                 RemoveStatus(u, StatusIds.Beckoned);   // spent: nothing to walk to, or it can't be made to
                 return false;

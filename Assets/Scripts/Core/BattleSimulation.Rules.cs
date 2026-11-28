@@ -16,7 +16,9 @@ namespace TacticsGame.Core
             ClearWindupStatuses(a);
             if (u.HoverEndsAfterAction && a.Actor == u) EndHover(u, false, null);
             u.ActiveAction = null;
+            bool walking = u.Phase == UnitPhase.Charging && u.Move != null;   // a charge broken mid-walk: the walk goes on, at its own speed
             if (u.Phase == UnitPhase.Windup || u.Phase == UnitPhase.Charging) u.Phase = UnitPhase.Ready;
+            if (walking) { u.Phase = UnitPhase.Moving; RestartWalk(u, u.EffectiveMoveSpeed()); }
             Emit(EventType.ActionInterrupted, u.Id, null, new InterruptInfo { Reason = reason });
             if (emitReady && u.Phase == UnitPhase.Ready)
             {
@@ -65,19 +67,19 @@ namespace TacticsGame.Core
             Triggers.Fire(new TriggerContext { Type = TriggerType.Stunned, Sim = this, Subject = target, Other = source, Amount = duration });
         }
 
-        /// <summary>Strain drains on its own once a unit has gone StrainRecoveryDelay without gaining any, in StrainRecoveryTicks
-        /// steps so the timeline gets a few events per second rather than one per tick. In Clear Mind, it drains FocusStrainOf on
-        /// top (even right after a strain gain), in finer FocusDrainTicks steps.</summary>
+        /// <summary>Strain drains on its own once a unit has gone StrainRecoveryDelay without gaining any, in RateTicks steps so
+        /// the timeline gets a few events per second rather than one per tick. In Clear Mind, it drains FocusStrainOf on top
+        /// (even right after a strain gain), in the same steps.</summary>
         private void RecoverStrain()
         {
-            bool recover = tick % StrainRecoveryTicks == 0, focus = tick % FocusDrainTicks == 0;
-            if (!recover && !focus) return;
+            if (tick % RateTicks != 0) return;
+            float step = RateTicks * TickLength;
             foreach (var u in State.Units)
             {
                 if (!u.IsAlive || u.Strain <= 0f) continue;
                 float drain = 0f;
-                if (focus && u.HasStatus(StatusIds.ClearMind)) drain += FocusStrainOf(u) * FocusDrainTicks * TickLength;
-                if (recover && u.StrainRecoveryPerSecond > 0f && Now - u.LastStrainGainAt >= u.StrainRecoveryDelay) drain += u.StrainRecoveryPerSecond * StrainRecoveryTicks * TickLength;
+                if (u.HasStatus(StatusIds.ClearMind)) drain += FocusStrainOf(u) * step;
+                if (u.StrainRecoveryPerSecond > 0f && Now - u.LastStrainGainAt >= u.StrainRecoveryDelay) drain += u.StrainRecoveryPerSecond * step;
                 if (drain > 0f) AddStrain(u, -drain);
             }
         }
@@ -112,10 +114,11 @@ namespace TacticsGame.Core
         }
 
         /// <summary>Add (or, negative, relieve) strain, clamped to 0..MaxStrain.</summary>
-        public void AddStrain(Unit u, float delta)
+        /// <param name="delaysRecovery">A gain holds off strain recovery (StrainRecoveryDelay); a steady drain (Overburdened) doesn't.</param>
+        public void AddStrain(Unit u, float delta, bool delaysRecovery = true)
         {
             if (delta > 0f && u.HasFlag(StatusFlags.InvertsStrainGain)) delta = -delta;   // True Inversion: gains become losses
-            if (delta > 0f) u.LastStrainGainAt = Now;
+            if (delta > 0f && delaysRecovery) u.LastStrainGainAt = Now;
             float before = u.Strain;
             u.Strain = Mathf.Clamp(u.Strain + delta, 0f, u.MaxStrain);
             if (Mathf.Abs(u.Strain - before) < 1e-4f) return;
@@ -140,18 +143,20 @@ namespace TacticsGame.Core
                 if (u.Phase == UnitPhase.Windup && u.ActiveAction != null) u.ActiveAction.ResolveAt = newEnd;
             }
 
-            if (moveChanged && u.Phase == UnitPhase.Moving && u.Move != null)
-            {
-                u.Move.Speed = newMove;
-                if (!u.IsJumping)   // mid-jump, the landing re-sends the rest of the walk at the new speed
-                {
-                    var rest = new List<Vector3> { u.Position };
-                    for (int i = u.Move.NextIndex; i < u.Move.Path.Count; i++) rest.Add(u.Move.Path[i]);
-                    Emit(EventType.MoveStarted, u.Id, null, new MoveInfo { Path = rest, Speed = newMove });
-                }
-            }
+            if (moveChanged && IsWalking(u)) RestartWalk(u, WalkSpeedOf(u));
 
             Emit(EventType.SpeedChanged, u.Id, null, new SpeedInfo { ActionSpeed = newAction, MoveSpeed = newMove });
+        }
+
+        /// <summary>A walk in progress goes on from here at 'speed' (the view is sent the rest of it).</summary>
+        private void RestartWalk(Unit u, float speed)
+        {
+            if (u.Move == null) return;
+            u.Move.Speed = speed;
+            if (u.IsJumping) return;   // mid-jump, the landing re-sends the rest of the walk at the new speed
+            var rest = new List<Vector3> { u.Position };
+            for (int i = u.Move.NextIndex; i < u.Move.Path.Count; i++) rest.Add(u.Move.Path[i]);
+            Emit(EventType.MoveStarted, u.Id, null, new MoveInfo { Path = rest, Speed = speed, Fly = u.Move.Flying });
         }
 
         private void Emit(EventType type, string actorId, string targetId, object payload = null)

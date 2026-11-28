@@ -66,6 +66,7 @@ namespace TacticsGame.Core
     /// <summary>Trap: toss a trap at the target point. It arms after TrapArmDelay and applies TargetStatusesOnHit (rooted + marked).</summary>
     public class TrapBehavior : ActionBehavior
     {
+        public override bool UsesAreaRadius(ActionDefinition def) { return true; }   // what springs it
         public override void Describe(AbilityTip tip) { base.Describe(tip); tip.TargetStatusesTitle = "SPRUNG BY"; }
 
         public override void OnResolve(BattleSimulation sim, ActionInstance a, List<SimEffect> effects)

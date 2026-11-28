@@ -235,6 +235,7 @@ namespace TacticsGame.Core
             if (forced && !CanDisplace(unit, source)) return;     // Unstoppable: shoves, pulls and knockbacks don't move it
             if (forced && Withstands(unit, to, source)) return;    // Transcended Block: nothing knocks it back
             foreach (var s in unit.States.ToArray()) s.OnShoved(this);   // shoved out of a grip (HeldState)
+            if (forced && source != unit) foreach (var s in unit.States.ToArray()) s.OnDisplaced(this);
             if (unit.IsJumping)
             {
                 if (forced) { BreakJump(unit, source); return; }
@@ -244,7 +245,7 @@ namespace TacticsGame.Core
             unit.GlideFollowId = null;   // a new move: any dash it was following a unit with is over
             to = Paths.ClampDash(phaseFrom ?? from, to);   // a slide or shove stops at the map's edge, whoever picked the spot
             to = Terrain.OnGround(FreeSpotNear(unit, to, phaseFrom ?? from, false));
-            if (unit.Phase == UnitPhase.Moving) EndMove(unit, false);   // assumption: being relocated ends a walk in progress
+            if (IsWalking(unit)) EndMove(unit, false);   // assumption: being relocated ends a walk in progress (charging or not)
             float drop = from.y - to.y;
             if (forced && drop > TerrainMap.StepHeight)
             {

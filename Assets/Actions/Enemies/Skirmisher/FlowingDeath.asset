@@ -18,6 +18,9 @@ MonoBehaviour:
   Roles: 0
   Description: A melee attack. Each one used in a row winds up 0.1s faster, down
     to 0.1s.
+  Details: 
+  TipOverrides: []
+  WindupName: 
   Targeting: 2
   Range: 1.8
   IsRanged: 0
@@ -30,26 +33,46 @@ MonoBehaviour:
   EnergyGain: 0
   RequiredStatus: 
   ConsumesRequiredStatus: 0
+  RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 0
+  WindupDisplay: 0
   Damage: 8
   BaseAccuracy: 1
   StunDuration: 0.2
   StrainOnTarget: 4
   StrainOnSelf: 5
   HealthCost: 0
+  HysteriaOnUse: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
   BlockPierce: 0
   StunnedDamageMultiplier: 1
+  DivergedVersion: {fileID: 0}
+  Form: 0
   Shape: 0
+  ConeAngle: 90
   AreaRadius: 0
   LineWidth: 1
   AreaHeight: 0
   AuraStatuses: []
   AuraSeconds: 0
+  AuraAtTarget: 0
+  AuraDamagePerSecond: 0
+  AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
+  InnatePassive: 0
+  SummonUnit: {fileID: 0}
+  SummonUnits: []
+  RandomStatusesOnHit: []
+  SummonCount: 0
+  SummonAIStyle: 
+  GuardBreakSeconds: 0
+  StartsOnCooldown: 0
   ChannelSeconds: 0
+  MissingHealthDamage: 0
   ChannelNeedsSight: 0
+  ChannelIgnoresDamage: 0
   AirRiseSeconds: 0.75
   AirHoldSeconds: 0.75
   AirSlamSeconds: 0.5
@@ -59,6 +82,7 @@ MonoBehaviour:
   SelfStatuses: []
   SelfStatusesOnWindup: 0
   TargetStatusesOnHit: []
+  SelfStatusesOnHit: []
   TargetStatusesDuringWindup: []
   SelfStatusesDuringWindup: []
   TrapArmDelay: 1
@@ -71,20 +95,40 @@ MonoBehaviour:
   ChargeDamageMultiplier: 1
   ChargeStunMultiplier: 1
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
+  FollowUps: []
   IsFollowup: 1
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  ProjectileSpeed: 7
+  ProjectileAcceleration: 16
+  ProjectileMaxSpeed: 26
+  ProjectileRadius: 0.3
+  ProjectileLifetime: 4
+  ProjectileHoming: 2
+  ProjectileHomingDelay: 0.25
+  ProjectileTurnRate: 200
+  ProjectileTurnGrowth: 500
+  LinkedAbilities: []
+  RequiresLink: 0
   CanTranscend: 0
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
+  TranscendCooldown: -1
   ExtraCinematic: 0
   Visuals:
     Kind: 3
     Color: {r: 1, g: 0.45, b: 0.35, a: 1}
     Width: 0.07
     Pierce: 0
+    Orb: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
   Params: []
-  DataVersion: 15
+  DataVersion: 16

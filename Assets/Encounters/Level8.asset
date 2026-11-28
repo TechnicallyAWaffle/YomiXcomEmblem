@@ -28,8 +28,8 @@ MonoBehaviour:
       Upgrades: []
       ArriveAfter: 15
       Side: 1
-    - Unit: {fileID: 11400000, guid: e95ee1d8a76adb142a7fb71940391e01, type: 2}
-      Count: 1
+    - Unit: {fileID: 11400000, guid: 41c12fa6ba1a286488b5a76fc28cb6f9, type: 2}
+      Count: 6
       Upgrades: []
       ArriveAfter: 15
       Side: 1

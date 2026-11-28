@@ -144,7 +144,7 @@ namespace TacticsGame.Presentation
             defs.Clear();
             if (Director.Timeline == null || Director.Timeline.InitialState == null) return;
             foreach (var u in Director.Timeline.InitialState.Units)
-                foreach (var a in u.Actions)
+                foreach (var a in u.KnownActions())
                     for (var d = a; d != null && !defs.ContainsKey(d.Id); d = d.LinkedAction) defs[d.Id] = d;
         }
 
@@ -161,7 +161,7 @@ namespace TacticsGame.Presentation
                 case TacticsGame.Core.EventType.UnitSpawned:
                 {
                     var s = (SpawnInfo)evt.Payload;   // a summon's abilities, for its signature moves
-                    if (s.Unit != null) foreach (var a in s.Unit.Actions) for (var d = a; d != null && !defs.ContainsKey(d.Id); d = d.LinkedAction) defs[d.Id] = d;
+                    if (s.Unit != null) foreach (var a in s.Unit.KnownActions()) for (var d = a; d != null && !defs.ContainsKey(d.Id); d = d.LinkedAction) defs[d.Id] = d;
                     break;
                 }
             }
@@ -210,7 +210,7 @@ namespace TacticsGame.Presentation
                     case TacticsGame.Core.EventType.UnitSpawned:
                     {
                         var s = (SpawnInfo)e.Payload;
-                        if (s.Unit != null) foreach (var a in s.Unit.Actions) for (var d = a; d != null && !defs.ContainsKey(d.Id); d = d.LinkedAction) defs[d.Id] = d;
+                        if (s.Unit != null) foreach (var a in s.Unit.KnownActions()) for (var d = a; d != null && !defs.ContainsKey(d.Id); d = d.LinkedAction) defs[d.Id] = d;
                         AddBeat(e, e.TargetId, e.ActorId, false);
                         break;
                     }
@@ -314,15 +314,19 @@ namespace TacticsGame.Presentation
         {
             if (!slowed) return;
             if (current == null && zoom <= 0f) { Unslow(); return; }
-            Director.SetPlaybackSpeed(baseSpeed * Mathf.Lerp(1f, slowTarget, eased));
+            Director.SetPlaybackSpeed(BaseSpeed * Mathf.Lerp(1f, slowTarget, eased));
         }
 
         private void Unslow()
         {
             if (!slowed) return;
             slowed = false;
-            if (Director != null) Director.SetPlaybackSpeed(baseSpeed);
+            if (Director != null) Director.SetPlaybackSpeed(BaseSpeed);
         }
+
+        /// <summary>The speed a moment slows from and goes back to: in a replay, the one its viewer picked (it may change
+        /// mid-moment, ReplayControls); otherwise the speed playing when the moment began.</summary>
+        private float BaseSpeed { get { return Director != null && Director.IsReplay ? Director.ReplaySpeed : baseSpeed; } }
 
         // ------------------------------------------------------------------ framing
 

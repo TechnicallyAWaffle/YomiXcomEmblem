@@ -160,7 +160,7 @@ public class MapBuilderWindow : EditorWindow
         if (scale && inScene)
         {
             // The scene's layout is the one being edited: move it there (Save writes it into the template).
-            foreach (var t in loader.Root.GetComponentsInChildren<MapPieceTag>().Select(x => x.transform).Concat(loader.Root.GetComponentsInChildren<MapSpawnPoint>().Select(x => x.transform)))
+            foreach (var t in loader.Root.GetComponentsInChildren<MapPieceTag>().Select(x => x.transform).Concat(loader.Root.GetComponentsInChildren<MapSpawnPoint>().Select(x => x.transform)).Concat(loader.Root.GetComponentsInChildren<MapObjectiveMarker>().Select(x => x.transform)))
             {
                 Undo.RecordObject(t, "Resize map");
                 t.position = spread(t.position);
@@ -171,6 +171,7 @@ public class MapBuilderWindow : EditorWindow
             foreach (var p in map.Pieces) p.Position = spread(p.Position);
             for (int i = 0; i < map.PlayerSpawns.Count; i++) map.PlayerSpawns[i] = spread(map.PlayerSpawns[i]);
             for (int i = 0; i < map.EnemySpawns.Count; i++) map.EnemySpawns[i] = spread(map.EnemySpawns[i]);
+            for (int i = 0; i < map.ObjectiveSpawns.Count; i++) map.ObjectiveSpawns[i] = spread(map.ObjectiveSpawns[i]);
         }
         if (map.Blockout != null)
             map.Heights = SampleHeights(ClimbableMesh(map.Blockout), size, map.Heights != null && map.Heights.Cell > 0f ? map.Heights.Cell : heightCell);
@@ -304,6 +305,17 @@ public class MapBuilderWindow : EditorWindow
         if (GUILayout.Button("Squad Spawn")) AddSpawn(loader, Team.Player);
         if (GUILayout.Button("Enemy Spawn")) AddSpawn(loader, Team.Enemy);
         EditorGUILayout.EndHorizontal();
+        EditorGUILayout.LabelField("Objective spawns: where the mission builder can stand the objectives it picks (the Omen)", EditorStyles.miniLabel);
+        if (GUILayout.Button("Objective Spawn")) AddObjectiveSpawn(loader);
+    }
+
+    private void AddObjectiveSpawn(MapLoader loader)
+    {
+        int index = loader.Root.GetComponentsInChildren<MapObjectiveMarker>().Length;
+        var go = loader.CreateObjectiveSpawn(loader.Root, index, DropPoint());
+        Undo.RegisterCreatedObjectUndo(go, "Add objective spawn");
+        Selection.activeGameObject = go;
+        EditorSceneManager.MarkSceneDirty(loader.gameObject.scene);
     }
 
     private void PresetRow(MapLoader loader, Preset[] presets)
@@ -344,7 +356,7 @@ public class MapBuilderWindow : EditorWindow
     {
         EditorGUILayout.LabelField("Edit", EditorStyles.boldLabel);
         snap = Mathf.Max(0f, EditorGUILayout.FloatField(new GUIContent("Snap (m)", "Ground grid for new pieces, Snap Selection and Save. 0 = off."), snap));
-        var selected = Selection.gameObjects.Where(g => g.GetComponent<MapPieceTag>() != null || g.GetComponent<MapSpawnPoint>() != null).ToList();
+        var selected = Selection.gameObjects.Where(g => g.GetComponent<MapPieceTag>() != null || g.GetComponent<MapSpawnPoint>() != null || g.GetComponent<MapObjectiveMarker>() != null).ToList();
         var elevation = Selection.activeGameObject != null ? Selection.activeGameObject.GetComponent<MapPieceTag>() : null;
         if (elevation != null && elevation.Kind != MapPieceKind.Elevation) elevation = null;
 

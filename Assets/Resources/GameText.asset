@@ -1,0 +1,275 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76fc4e87696fef541a5530321b5fcfd7, type: 3}
+  m_Name: GameText
+  m_EditorClassIdentifier: Core::TacticsGame.Core.GameText
+  Lines:
+  - Key: controls.camera
+    Text: Camera
+  - Key: controls.camera.center_on_hovered
+    Text: Center Unit
+  - Key: controls.camera.center_on_hovered.key
+    Text: Hover timeline
+  - Key: controls.camera.center_on_orders
+    Text: Center on currently active unit
+  - Key: controls.camera.center_on_orders.key
+    Text: Z
+  - Key: controls.camera.pan
+    Text: Pan
+  - Key: etch.back
+    Text: Back
+  - Key: etch.compare
+    Text: '{0} {1} -> {2}'
+  - Key: etch.compare_per_second
+    Text: '{0} {1:0.#}/s -> {2:0.#}/s'
+  - Key: etch.compare_separator
+    Text: '    '
+  - Key: etch.grant
+    Text: 'Transcend (+{0:0} strain): {1}'
+  - Key: etch.grant.break_weakpoints
+    Text: breaks up to {0:0} weakpoints on each enemy hit
+  - Key: etch.grant.crit_chance
+    Text: '{0:0}% critical strike chance'
+  - Key: etch.grant.dodge_on_cast
+    Text: +{0:0}% dodge for {1} on cast
+  - Key: etch.grant.expose_weakpoints
+    Text: exposes {0:0} weakpoints on enemies hit for {1}
+  - Key: etch.grant.no_cooldown
+    Text: Cooldown {0} -> 0s
+  - Key: etch.grant.no_recovery
+    Text: Recovery {0} -> 0s
+  - Key: etch.grant.quick_windup
+    Text: 'Windup: {0} -> {1} | Recovery: {2} -> {3}'
+  - Key: etch.grant.shield_on_cast
+    Text: grants {0:0} shield for {1}
+  - Key: etch.grant.unstoppable_windup
+    Text: Unstoppable windup ({0})
+  - Key: etch.pick
+    Text: Choose an ability to Etch
+  - Key: etch.pick_first
+    Text: Choose an ability to Etch
+  - Key: etch.pick_second
+    Text: Link {0} to another ability
+  - Key: orders.button.again_tag
+    Text: again
+  - Key: orders.button.back
+    Text: Back
+  - Key: orders.button.cant_use
+    Text: 'Can''t use now: {0}'
+  - Key: orders.button.cooldown
+    Text: Cooldown {0:0.00}s
+  - Key: orders.button.energy
+    Text: '{0:0} energy'
+  - Key: orders.button.focus
+    Text: Focus
+  - Key: orders.button.focus_strain
+    Text: Reduces {0:0} strain per second during Clear Mind
+  - Key: orders.button.focus_tile
+    Text: "{0:0.00}s \xB7 hold Space: keep going"
+  - Key: orders.button.focus_tip
+    Text: Stand still and focus for {0:0.00}s. After focusing for {1:0.###}s enter
+      Clear Mind, draining strain rapidly
+  - Key: orders.button.followup_tag
+    Text: Follow-up
+  - Key: orders.button.linked_tag
+    Text: Linked
+  - Key: orders.button.move
+    Text: Move
+  - Key: orders.button.move_speed
+    Text: Speed {0:0.#} m/s
+  - Key: orders.button.move_tip
+    Text: Move to a point. Hold SHIFT to set waypoints
+  - Key: orders.button.rooted
+    Text: Rooted
+  - Key: orders.button.stop_other
+    Text: Stop {0}
+  - Key: orders.button.wait_tip
+    Text: Wait for {0:0.00}s
+  - Key: orders.header.energy
+    Text: '   Energy {0:0}/{1:0}'
+  - Key: orders.header.move
+    Text: Select a destination to move to
+  - Key: orders.header.move_carrying
+    Text: Select a destination to move to while carrying {1}
+  - Key: orders.header.orders
+    Text: '{0} | Health: {1:0}/{2:0}  | Strain: {3:0}/{4:0}{5}'
+  - Key: orders.header.pick_destination
+    Text: '{0}: click where {1} goes for {2}'
+  - Key: orders.header.pick_second
+    Text: Select a unit to swap {1} with ({2})
+  - Key: orders.header.pick_point
+    Text: '{0}: click a point for {1} (range {2:0.#}m)'
+  - Key: orders.header.pick_target
+    Text: '{0}: Select a target for {1} | (range {2:0.#}m)'
+  - Key: orders.hint.charging
+    Text: Hold SPACE to continue charging. CLICK to release the charge
+  - Key: orders.hint.choose
+    Text: 
+  - Key: orders.hint.dodge_dash
+    Text: Dodge in a direction
+  - Key: orders.hint.followup
+    Text: Press {0} to follow-up with {1} on the same target
+  - Key: orders.hint.followup_open
+    Text: Press {0} to follow-up with {1}
+  - Key: orders.hint.grapple
+    Text: 
+  - Key: orders.hint.mesmer
+    Text: 
+  - Key: orders.hint.pick
+    Text: Shift-click to lay waypoints. Right-click or Esc to go back.
+  - Key: orders.hint.pick_destination
+    Text: Select a point within range. Right-click or Esc to pick another unit.
+  - Key: orders.hint.pick_second
+    Text: Select the second target. Right-click or Esc to pick another first unit.
+  - Key: orders.hint.redirect
+    Text: Redirect the bullet to another target. ESC to cancel the ability early
+  - Key: orders.hint.waypoints
+    Text: 
+  - Key: orders.notice.cant
+    Text: 'Action Failed: {0}'
+  - Key: orders.notice.cant_from_there
+    Text: 'Targeting Failed: {0}'
+  - Key: orders.notice.cant_get_there
+    Text: Invalid Destination
+  - Key: orders.notice.cant_transcend
+    Text: 'Transcend Failed: {1}'
+  - Key: orders.notice.cant_use
+    Text: 'Action Failed: {1}'
+  - Key: orders.notice.click_ground
+    Text: Select target destination
+  - Key: orders.notice.click_second
+    Text: Select a target
+  - Key: orders.notice.counter_stopped
+    Text: 
+  - Key: orders.notice.focus_stopped
+    Text: '{0} is ready'
+  - Key: orders.notice.hold_away
+    Text: Hold toward a direction away from the unit.
+  - Key: orders.notice.immobilized
+    Text: Immobilized
+  - Key: orders.notice.makina_cant_move
+    Text: 
+  - Key: orders.notice.no_sight
+    Text: No line of sight
+  - Key: orders.notice.order_failed
+    Text: 'Action Failed: {0}'
+  - Key: orders.notice.out_of_range
+    Text: Out of Range
+  - Key: orders.notice.stopped_other
+    Text: Stopped {0}
+  - Key: orders.notice.too_far
+    Text: Target point out of range
+  - Key: orders.popup.charge_note
+    Text: Taking damage breaks focus
+  - Key: orders.popup.charging
+    Text: 'Charging {1} : {2:0.00}s | ({3:0}%)'
+  - Key: orders.popup.dodged
+    Text: '{0} dodged {1}'
+  - Key: orders.popup.grab_up
+    Text: Select a direction to throw {1}
+  - Key: orders.popup.grapple_headbutt
+    Text: Continue attacking
+  - Key: orders.popup.grapple_headbutt_tip
+    Text: 
+  - Key: orders.popup.grapple_hold_tip
+    Text: Continue holding
+  - Key: orders.popup.grapple_hold
+    Text: 
+  - Key: orders.popup.grapple_move
+    Text: F Move
+  - Key: orders.popup.grapple_move_headbutt_tip
+    Text: Move to a location while attacking your grappled target
+  - Key: orders.popup.grapple_move_tip
+    Text: Move to a location
+  - Key: orders.popup.grapple_throw
+    Text: Throw target
+  - Key: orders.popup.grapple_throw_tip
+    Text: Wind up a throw and hurl your target in the target direction
+  - Key: orders.popup.holding
+    Text: '{0} is grappling {1} for {3:0.00} more seconds'
+  - Key: orders.popup.mesmer
+    Text: Strike {1} with a rapid cut. {2}/{3} strikes remaining
+  - Key: orders.popup.mesmer_strike
+    Text: 1  Strike ({0} left)
+  - Key: orders.popup.redirect
+    Text: Redirect the soul bullet | {2} remaining
+  - Key: orders.preview.chase
+    Text: Select to chase and use this ability once in range
+  - Key: orders.popup.transcended
+    Text: TRANSCENDED {0}  for +{1:0} Strain
+  - Key: orders.popup.transcending
+    Text: Transcending {0}
+  - Key: orders.preview.combo
+    Text: 
+  - Key: orders.preview.combo_tag
+    Text: COMBO
+  - Key: orders.preview.focusing
+    Text: Focusing +{0:0.00}s
+  - Key: orders.preview.high_ground
+    Text: 'HIGH GROUND: +{0:0}% hit'
+  - Key: orders.preview.hit
+    Text: '{0}: {1:0}% to land
+
+      hit {2:0}%  (exposure {3:0}%)  dodge {4:0}%'
+  - Key: orders.preview.in_sight
+    Text: 'In sight: {0} enem{1}, {2} all{3}'
+  - Key: orders.preview.no_combo
+    Text: Stun wears off {0:0.00}s before this ability lands
+  - Key: orders.preview.queue
+    Text: Target out of range. Select to queue ability for {1:0}s to automatically
+      fire once in range
+  - Key: orders.preview.walk
+    Text: Move {0:0.00}s
+  - Key: status.basic_attack_only
+    Text: Can only use basic attacks
+  - Key: status.inverts_strain_gain
+    Text: Incoming Strain is instead reduced
+  - Key: status.untargetable
+    Text: Untargetable
+  - Key: status.unravels_on_expire
+    Text: Unravels when this status expires
+  - Key: status.unstoppable
+    Text: Cannot be interrupted by anything except Unravel
+  - Key: status.redirects_hits
+    Text: Redirect attacks on this target to yourself instead
+  - Key: status.negates_damage
+    Text: Hits deal no damage and do not raise Strain
+  - Key: status.keeps_block
+    Text: Hits don't wear its block down.
+  - Key: controls.orders.free_aim
+    Text: Aim a single-target ability in a set direction
+  - Key: controls.orders.free_aim.key
+    Text: Hold LEFT-CLICK
+  - Key: status.desc.blocking
+    Text: Reduces incoming damage and stun duration by 50%
+  - Key: status.desc.braced
+    Text: Gains bonus Block and immunity to stun
+  - Key: status.desc.carapace
+    Text: Gain a shield, bonus movement speed, and continually fire barbs
+  - Key: status.desc.conjecture_ready
+    Text: Conjecture can be used
+  - Key: upgrades.cognition_text
+    Text: Choose an Etching for {0} Grasp
+  - Key: upgrades.destroy_hint
+    Text: Hold CLICK on an ability or Etching to destroy it, freeing its Grasp cost
+      but reducing your maximum Grasp by {1}.
+  - Key: upgrades.form_text
+    Text: Select a ritual to perform
+  - Key: upgrades.knowledge_text
+    Text: Learning an ability for {0} Grasp
+  - Key: upgrades.ritual_effect_lock
+    Text: Perpetuity, cannot be changed
+  - Key: upgrades.ritual_locked_text
+    Text: '    {0} is Perpetuated and cannot be modified'
+  - Key: upgrades.grasp_over
+    Text: 'Grasp {0} / {1}   <color=#FF7A6A><b>OVERBURDENED</b>: {2} over, +{3:0.#}
+      strain/second while in combat</color>'

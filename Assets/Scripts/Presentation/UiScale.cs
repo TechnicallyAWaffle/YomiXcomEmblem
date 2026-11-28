@@ -69,5 +69,15 @@ namespace TacticsGame.Presentation
             if (Event.current == null) return true;
             return (Event.current.mousePosition - CursorGui).sqrMagnitude <= 4f * 4f;
         }
+
+        /// <summary>
+        /// Whether the cursor is really over 'rect' (GUI units, outside any group): HoverIsReal and the event's mouse inside
+        /// it. Every hover popup and hover state goes through this, so none sticks when the event's position goes stale
+        /// (standalone builds with a touchpad, or the cursor leaving the window, keep the last position the GUI saw).
+        /// </summary>
+        public static bool Hovering(Rect rect)
+        {
+            return Event.current != null && rect.Contains(Event.current.mousePosition) && HoverIsReal();
+        }
     }
 }

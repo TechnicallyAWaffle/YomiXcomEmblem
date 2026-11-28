@@ -65,6 +65,12 @@ namespace TacticsGame.Presentation
         public float TranscendHoldSeconds = 0.4f;
         public Color TranscendColor = new Color(0.85f, 0.6f, 1f, 1f);
 
+        [Header("Impact")]
+        [Tooltip("The stripe down the right edge of a damaging ability's button: light impact.")]
+        public Color LightImpactColor = new Color(0.35f, 0.6f, 1f, 1f);
+        [Tooltip("The stripe down the right edge of a damaging ability's button: heavy impact.")]
+        public Color HeavyImpactColor = new Color(1f, 0.3f, 0.25f, 1f);
+
         // Mesmer: strike again or stop a Mesmerize counter. Grapple: holding someone with Subjugate (keep headbutting, throw,
         // or move carrying them). PickDestination: the point an ability with a DestinationRange sends its target to, after the unit.
         private enum Mode { ChooseAction, PickTarget, PickMove, PickDash, Mesmer, Grapple, PickDestination }
@@ -165,7 +171,7 @@ namespace TacticsGame.Presentation
             selected = releasing ? current.ActiveAction.Definition : redirecting ? current.Channel.Action.Definition : null;
             selectedTranscend = false;
             holdDef = null;
-            message = pending[0].Reason != null ? "Last order failed: " + pending[0].Reason : null;
+            message = pending[0].Reason != null ? GameText.Format("orders.notice.order_failed", "Last order failed: {0}", pending[0].Reason) : null;
             if (FocusOnReadyUnit) FocusCurrent();
         }
 
@@ -198,7 +204,12 @@ namespace TacticsGame.Presentation
         {
             if (key == KeyCode.Z) { FocusCurrent(); return true; }
             if (mode == Mode.PickDash) return false;
-            if (releasing) return AbilitySlot(key) >= 0 || key == KeyCode.F;   // a charge can only be released or kept going
+            if (releasing)
+            {
+                // A charge can only be released, kept going, or walked on with (F: slowed, charging on until the walk ends).
+                if (key == KeyCode.F && mode != Mode.PickMove && !unit.IsRooted && !unit.IsMakina) { mode = Mode.PickMove; message = null; return true; }
+                return AbilitySlot(key) >= 0 || key == KeyCode.F;
+            }
             if (redirecting) return false;   // pick a target or stop (Esc)
             if (mode == Mode.Mesmer)
             {
@@ -225,7 +236,7 @@ namespace TacticsGame.Presentation
                 if (holdDef == def && holdKey == key) return true;   // the key repeating while it is held
                 bool usable; string why;
                 ActionDetail(unit, def, out usable, out why);
-                if (!usable) { message = def.DisplayName + ": can't use now (" + why + ")"; return true; }
+                if (!usable) { message = GameText.Format("orders.notice.cant_use", "{0}: can't use now ({1})", def.DisplayName, why); return true; }
                 if (CanTranscendNow(def)) { BeginHold(def, key); return true; }   // acts on release, or Transcends if held
                 PressAbility(unit, def);
                 return true;
@@ -233,8 +244,8 @@ namespace TacticsGame.Presentation
             switch (key)
             {
                 case KeyCode.F:
-                    if (unit.IsMakina) { message = "A Makina can't move."; return true; }
-                    if (plan.Count == 0 && unit.IsRooted) { message = "Can't move: immobilized"; return true; }
+                    if (unit.IsMakina) { message = GameText.Get("orders.notice.makina_cant_move", "A Makina can't move."); return true; }
+                    if (plan.Count == 0 && unit.IsRooted) { message = GameText.Get("orders.notice.immobilized", "Can't move: immobilized"); return true; }
                     mode = Mode.PickMove; selected = null; message = null;
                     return true;
                 case KeyCode.Backspace:
@@ -341,13 +352,13 @@ namespace TacticsGame.Presentation
         /// <summary>A Focus order (BattleSimulation.StartWait).</summary>
         private void OrderFocus(Unit unit)
         {
-            AddOrder(UnitCommand.Wait(unit.Id, WaitSeconds), string.Format(unit.IsMakina ? "Wait {0:0.00}s" : "Focus {0:0.00}s", WaitSeconds), PlannedPosition(unit));
+            AddOrder(UnitCommand.Wait(unit.Id, WaitSeconds), (unit.IsMakina ? GameText.Format("orders.plan.wait", "Wait {0:0.00}s", WaitSeconds) : GameText.Format("orders.plan.focus", "Focus {0:0.00}s", WaitSeconds)), PlannedPosition(unit));
         }
 
         private void Transcend(Unit unit, ActionDefinition def)
         {
             string why;
-            if (plan.Count == 0 && !sim.CanAfford(unit, def, out why, null, true)) { message = "Can't Transcend " + def.DisplayName + ": " + why; return; }
+            if (plan.Count == 0 && !sim.CanAfford(unit, def, out why, null, true)) { message = GameText.Format("orders.notice.cant_transcend", "Can't Transcend {0}: {1}", def.DisplayName, why); return; }
             transcendFlashUntil = Time.unscaledTime + 0.3f;
             mode = Mode.ChooseAction;
             ChooseAction(unit, def, true);
@@ -424,11 +435,11 @@ namespace TacticsGame.Presentation
             mode = Mode.ChooseAction;
             selected = null;
             var recast = sim.RecastOrder(unit);
-            if (recast != null && recast.Action == def) { AddOrder(recast, def.DisplayName + " (recast)", PlannedPosition(unit)); return; }   // Incessant: no aiming
+            if (recast != null && recast.Action == def) { AddOrder(recast, GameText.Format("orders.plan.recast", "{0} (recast)", def.DisplayName), PlannedPosition(unit)); return; }   // Incessant: no aiming
             if (FollowupOpen(unit, def) || ActionBehaviors.Get(def.BehaviorId).FollowupRetargets(def)) ChooseAction(unit, def);   // a fresh target each time (Scepter)
             else if (TargetsUnit(def) && !ActionBehaviors.Get(def.BehaviorId).PicksDestination(sim, PlannedUnit(unit), def) && !ActionBehaviors.Get(def.BehaviorId).PicksSecondUnit(def))
                 TryAddAction(unit, def, sim.GetUnit(unit.LastActionTargetId));
-            else if (def.Targeting == TargetType.Position) AddOrder(UnitCommand.UseActionAt(unit.Id, def, unit.LastActionPos), def.DisplayName + " (point)", PlannedPosition(unit));
+            else if (def.Targeting == TargetType.Position) AddOrder(UnitCommand.UseActionAt(unit.Id, def, unit.LastActionPos), GameText.Format("orders.plan.point", "{0} (point)", def.DisplayName), PlannedPosition(unit));
             else ChooseAction(unit, def);
         }
 
@@ -460,6 +471,7 @@ namespace TacticsGame.Presentation
         private void Back()
         {
             if (redirecting) { StopRedirect(); return; }
+            if (releasing && mode == Mode.PickMove) { mode = Mode.PickTarget; message = null; return; }   // back to releasing it
             if (releasing || mode == Mode.Mesmer || mode == Mode.Grapple) return;   // charges can't be cancelled; a counter or a hold has its own buttons
             if (mode == Mode.PickMove && Current != null && Current.Grapple != null) { mode = Mode.Grapple; message = null; return; }
             if (mode == Mode.PickDestination) { mode = Mode.PickTarget; destinationFor = null; pickingSecond = false; message = null; return; }
@@ -472,7 +484,7 @@ namespace TacticsGame.Presentation
         /// </summary>
         private void AddOrder(UnitCommand cmd, string label, Vector3 endPosition, List<Vector3> path = null)
         {
-            if (cmd.Transcend) label = "Transcended " + label;
+            if (cmd.Transcend) label = GameText.Format("orders.plan.transcended", "Transcended {0}", label);
             plan.Add(new PlannedOrder { Command = cmd, Label = label, EndPosition = endPosition, Path = path });
             selected = null;
             selectedTranscend = false;
@@ -504,8 +516,7 @@ namespace TacticsGame.Presentation
             if (unit == null || !unit.IsAlive) return;
             if (r.Kind == DecisionKind.DodgeDash)
             {
-                var attacker = sim.GetUnit(r.AttackerId);
-                sim.SubmitDodgeDash(unit.Id, attacker != null ? sim.BestDashDirection(unit, attacker) : 0);
+                sim.SubmitDodgeDash(unit.Id, sim.DodgeDirection(unit, r));
             }
             else if (r.Kind == DecisionKind.Redirect) sim.SubmitCommand(sim.AutoRedirect(unit));
             else sim.SubmitCommand(ai.Decide(sim, unit));
@@ -550,13 +561,13 @@ namespace TacticsGame.Presentation
             if (def.IsCharge)
             {
                 // Charges start at once; the target is picked when it is released.
-                AddOrder(UnitCommand.UseAction(unit.Id, def).Transcended(transcend), def.DisplayName + " (charge)", planned.Position);
+                AddOrder(UnitCommand.UseAction(unit.Id, def).Transcended(transcend), GameText.Format("orders.plan.charge", "{0} (charge)", def.DisplayName), planned.Position);
                 return;
             }
             if (FollowupOpen(unit, def))
             {
                 // Its follow-up is open (Baneful Domain, its zone up): no aiming, it goes straight in.
-                AddOrder(UnitCommand.UseActionAt(unit.Id, def, ActionBehaviors.Get(def.BehaviorId).FollowupPoint(sim, unit, def, planned.Position)).Transcended(transcend), def.DisplayName + " (follow-up)", planned.Position);
+                AddOrder(UnitCommand.UseActionAt(unit.Id, def, ActionBehaviors.Get(def.BehaviorId).FollowupPoint(sim, unit, def, planned.Position)).Transcended(transcend), GameText.Format("orders.plan.followup", "{0} (follow-up)", def.DisplayName), planned.Position);
                 return;
             }
             switch (def.Targeting)
@@ -573,6 +584,8 @@ namespace TacticsGame.Presentation
                     selected = def;
                     selectedTranscend = transcend;
                     mode = Mode.PickTarget;
+                    placeYaw = float.NaN;   // a wall starts across the line to the cursor (hold R to turn it)
+                    if (ActionBehaviors.Get(def.BehaviorId).Rotatable(def)) message = GameText.Get("orders.notice.rotate", "Hold R to turn it.");
                     break;
             }
         }
@@ -586,9 +599,9 @@ namespace TacticsGame.Presentation
             {
                 // Out of reach is fine. Melee: the unit chases the target and strikes once in range. Ranged: it is queued and fires
                 // when the target is in range, while the unit stays free to move or wait.
-                if (reason != "out of range") { message = (plan.Count > 0 ? "Can't from there: " : "Can't: ") + reason; return; }
+                if (reason != "out of range") { message = CantMessage(reason); return; }
                 bool chase = !def.IsRanged;
-                AddOrder(UnitCommand.UseActionWhenInRange(unit.Id, def, target.Id).Transcended(transcend), label + (chase ? " (chase)" : " (queued)"), chase ? target.Position : planned.Position);
+                AddOrder(UnitCommand.UseActionWhenInRange(unit.Id, def, target.Id).Transcended(transcend), (chase ? GameText.Format("orders.plan.chase", "{0} (chase)", label) : GameText.Format("orders.plan.queued", "{0} (queued)", label)), chase ? target.Position : planned.Position);
                 return;
             }
             AddOrder(UnitCommand.UseActionWhenInRange(unit.Id, def, target.Id).Transcended(transcend), label, planned.Position);
@@ -733,7 +746,7 @@ namespace TacticsGame.Presentation
                     {
                         if (clickedUnit == null) return;
                         string cant;
-                        if (!sim.CanRedirect(unit, clickedUnit, out cant)) { message = "Can't: " + cant; return; }
+                        if (!sim.CanRedirect(unit, clickedUnit, out cant)) { message = GameText.Format("orders.notice.cant", "Can't: {0}", cant); return; }
                         sim.SubmitCommand(UnitCommand.Redirect(unit.Id, clickedUnit.Id));
                         Next();
                         return;
@@ -743,7 +756,7 @@ namespace TacticsGame.Presentation
                         if (selected.Targeting == TargetType.Position) sim.SubmitCommand(UnitCommand.ReleaseCharge(unit.Id, null, AimPoint(unit, screenPos, hit, clickedUnit)));
                         else if (clickedUnit != null)
                         {
-                            if (!sim.HasSightOf(unit, selected, clickedUnit)) { message = "Can't: no line of sight"; return; }
+                            if (!sim.HasSightOf(unit, selected, clickedUnit)) { message = GameText.Get("orders.notice.no_sight", "Can't: no line of sight"); return; }
                             sim.SubmitCommand(UnitCommand.ReleaseCharge(unit.Id, clickedUnit.Id, clickedUnit.Position));
                         }
                         else return;
@@ -754,8 +767,10 @@ namespace TacticsGame.Presentation
                     {
                         bool dash = selected.BehaviorId == "dash";
                         Vector3 point = dash ? Floor(hit) : AimPoint(unit, screenPos, hit, clickedUnit);
-                        if (selected.Shape != AreaShape.Line && Vector3.Distance(from, point) > unit.ActionStat(selected, ActionStat.Range)) { message = "Out of range."; return; }
-                        AddOrder(UnitCommand.UseActionAt(unit.Id, selected, point).Transcended(selectedTranscend), selected.DisplayName + (dash ? "" : " (point)"),
+                        if (selected.Shape != AreaShape.Line && selected.Shape != AreaShape.Cone && Vector3.Distance(from, point) > unit.ActionStat(selected, ActionStat.Range)) { message = GameText.Get("orders.notice.out_of_range", "Out of range."); return; }
+                        var at = UnitCommand.UseActionAt(unit.Id, selected, point).Transcended(selectedTranscend);
+                        if (ActionBehaviors.Get(selected.BehaviorId).Rotatable(selected)) at.Facing = PlaceYaw(from, point);   // Obstruction: as the preview showed it
+                        AddOrder(at, (dash ? selected.DisplayName : GameText.Format("orders.plan.point", "{0} (point)", selected.DisplayName)),
                             dash ? sim.DashDestination(PlannedUnit(unit), point, selectedTranscend) : from);
                     }
                     else if (clickedUnit != null && ActionBehaviors.Get(selected.BehaviorId).PicksSecondUnit(selected)) { BeginDestination(unit, clickedUnit); pickingSecond = mode == Mode.PickDestination; }
@@ -770,17 +785,17 @@ namespace TacticsGame.Presentation
                     if (pickingSecond)
                     {
                         // The other unit of the pair (Supersede).
-                        if (clickedUnit == null || clickedUnit.Id == who.Id) { message = "Click the second unit."; return; }
+                        if (clickedUnit == null || clickedUnit.Id == who.Id) { message = GameText.Get("orders.notice.click_second", "Click the second unit."); return; }
                         var two = UnitCommand.UseActionOnTwo(unit.Id, selected, who.Id, clickedUnit.Id).Transcended(selectedTranscend);
                         string why;
-                        if (!ActionBehaviors.Get(selected.BehaviorId).CanStart(sim, PlannedUnit(unit), two, out why)) { message = "Can't: " + why; return; }
+                        if (!ActionBehaviors.Get(selected.BehaviorId).CanStart(sim, PlannedUnit(unit), two, out why)) { message = GameText.Format("orders.notice.cant", "Can't: {0}", why); return; }
                         destinationFor = null; pickingSecond = false;
-                        AddOrder(two, selected.DisplayName + " > " + who.DisplayName + " and " + clickedUnit.DisplayName, from);
+                        AddOrder(two, GameText.Format("orders.plan.pair", "{0} > {1} and {2}", selected.DisplayName, who.DisplayName, clickedUnit.DisplayName), from);
                         break;
                     }
                     Vector3 point = DestinationPoint(hit);
-                    if (FlatDistance(who.Position, point) > selected.DestinationRange) { message = string.Format("Too far: pick a point within {0:0}m of {1}.", selected.DestinationRange, who.DisplayName); return; }
-                    string label = selected.DisplayName + " > " + (who.Id == unit.Id ? "self" : who.DisplayName);
+                    if (FlatDistance(who.Position, point) > selected.DestinationRange) { message = GameText.Format("orders.notice.too_far", "Too far: pick a point within {0:0}m of {1}.", selected.DestinationRange, who.DisplayName); return; }
+                    string label = GameText.Format("orders.plan.on", "{0} > {1}", selected.DisplayName, who.Id == unit.Id ? GameText.Get("orders.plan.self", "self") : who.DisplayName);
                     destinationFor = null;
                     AddOrder(UnitCommand.UseActionOn(unit.Id, selected, who.Id, point).Transcended(selectedTranscend), label, who.Id == unit.Id ? point : from);
                     break;
@@ -788,16 +803,19 @@ namespace TacticsGame.Presentation
 
                 case Mode.PickMove:
                 {
-                    if (clickedUnit != null) { message = "Click open ground."; return; }
+                    if (clickedUnit != null) { message = GameText.Get("orders.notice.click_ground", "Click open ground."); return; }
                     var path = new List<Vector3>();
                     Vector3 to = Floor(hit);   // the exact point: under a floating platform, that ground; on it, its top
-                    if (!sim.PlanPath(unit, from, sim.FreeSpotNear(unit, to, from, true), path)) { message = "Can't get there."; return; }
-                    AddOrder(UnitCommand.MoveTo(unit.Id, to), "Move", path[path.Count - 1], path);
+                    if (!sim.PlanPath(unit, from, sim.FreeSpotNear(unit, to, from, true), path)) { message = GameText.Get("orders.notice.cant_get_there", "Can't get there."); return; }
+                    if (releasing) { sim.SubmitCommand(UnitCommand.MoveTo(unit.Id, to)); Next(); return; }   // walking on charging: one walk, sent now
+                    AddOrder(UnitCommand.MoveTo(unit.Id, to), GameText.Get("orders.plan.move", "Move"), path[path.Count - 1], path);
                     break;
                 }
 
                 case Mode.PickDash:
-                    sim.SubmitDodgeDashTo(unit.Id, clickedUnit != null && clickedUnit.Id == unit.Id ? unit.Position : Floor(hit));
+                    // A dodge is a dash out of the attack's way: it has to go somewhere (no dodging in place).
+                    if (clickedUnit != null && clickedUnit.Id == unit.Id) { message = GameText.Get("orders.notice.dodge_somewhere", "Pick a spot to dash to: a dodge has to get out of the way."); return; }
+                    sim.SubmitDodgeDashTo(unit.Id, Floor(hit));
                     Next();
                     break;
 
@@ -816,7 +834,7 @@ namespace TacticsGame.Presentation
             string reason;
             if (!CanTarget(PlannedUnit(unit), selected, target, out reason) && reason != "out of range")
             {
-                message = (plan.Count > 0 ? "Can't from there: " : "Can't: ") + reason;
+                message = CantMessage(reason);
                 return;
             }
             destinationFor = target;
@@ -884,8 +902,8 @@ namespace TacticsGame.Presentation
             if (!CanTarget(planned, def, target, out reason))
                 return reason == "out of range"
                     ? (def.IsRanged
-                        ? string.Format("{0}: out of range\nClick to queue it: fires once in range while you keep moving (up to {1:0}s)", target.DisplayName, sim.MaxRangeWait)
-                        : string.Format("{0}: out of reach\nClick to chase: walks at them and strikes once in range", target.DisplayName))
+                        ? GameText.Format("orders.preview.queue", "{0}: out of range\nClick to queue it: fires once in range while you keep moving (up to {1:0}s)", target.DisplayName, sim.MaxRangeWait)
+                        : GameText.Format("orders.preview.chase", "{0}: out of reach\nClick to chase: walks at them and strikes once in range", target.DisplayName))
                     : target.DisplayName + ": " + reason;
             if (def.Targeting != TargetType.Enemy) return target.DisplayName;
 
@@ -898,13 +916,13 @@ namespace TacticsGame.Presentation
             // Dodge at the moment it lands: none if the target is still stunned then (a combo).
             float? combo = ComboMargin(planned, def, target);
             float dodge = combo.HasValue && combo.Value >= 0f ? 0f : target.UnstunnedDodge();
-            string text = string.Format("{0}: {1:0}% to land\nhit {2:0}%  (exposure {3:0}%)  dodge {4:0}%",
+            string text = GameText.Format("orders.preview.hit", "{0}: {1:0}% to land\nhit {2:0}%  (exposure {3:0}%)  dodge {4:0}%",
                 target.DisplayName, hitChance * (1f - dodge) * 100f, hitChance * 100f, exposure * 100f, dodge * 100f);
-            if (height > 0f) text += string.Format("\nHIGH GROUND: +{0:0}% hit", height * 100f);
+            if (height > 0f) text += GameText.Format("orders.preview.high_ground", "\nHIGH GROUND: +{0:0}% hit", height * 100f);
             if (combo.HasValue)
                 text += combo.Value >= 0f
-                    ? string.Format("\nCOMBO: still stunned when it lands ({0:0.00}s to spare), can't dodge", combo.Value)
-                    : string.Format("\nNo combo: the stun wears off {0:0.00}s before it lands", -combo.Value);
+                    ? GameText.Format("orders.preview.combo", "\nCOMBO: still stunned when it lands ({0:0.00}s to spare), can't dodge", combo.Value)
+                    : GameText.Format("orders.preview.no_combo", "\nNo combo: the stun wears off {0:0.00}s before it lands", -combo.Value);
             return text;
         }
 
@@ -927,7 +945,7 @@ namespace TacticsGame.Presentation
             {
                 EndHoldWait();
                 holdBlocked = true;
-                message = "Stopped focusing: " + Current.DisplayName + " is ready. Release and hold Space again to keep focusing.";
+                message = GameText.Format("orders.notice.focus_stopped", "Stopped focusing: {0} is ready. Release and hold Space again to keep focusing.", Current.DisplayName);
             }
             if (holdBlocked) return;
             // A charging unit keeps charging for as long as Space is held.
@@ -974,7 +992,7 @@ namespace TacticsGame.Presentation
             if (!holding || Dir == null) return;
             var style = new GUIStyle(GUI.skin.box) { fontSize = 18, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             style.normal.textColor = new Color(1f, 0.9f, 0.5f);
-            string text = string.Format("Focusing (Space)   +{0:0.00}s", Dir.PlaybackClock - holdStartClock);
+            string text = GameText.Format("orders.preview.focusing", "Focusing (Space)   +{0:0.00}s", Dir.PlaybackClock - holdStartClock);
             GUI.Box(new Rect(UiScale.Width / 2f - 150f, 110f, 300f, 34f), text, style);
         }
 
@@ -989,6 +1007,7 @@ namespace TacticsGame.Presentation
             if (!Suspended) UpdateHold(unit);
             if (unit != null) UpdateHover();
             if (unit != null && !Suspended) UpdateFreeAim(unit);
+            if (unit != null && !Suspended) UpdatePlaceTurn(unit);
             if (unit != null) Highlight(unit, SelectionColor, true);   // the unit being commanded pulses
             if (unit != null) DrawMarkers(unit);
             // The unit glows violet while an ability is held toward a Transcend, and while a Transcended one is aimed.
@@ -1032,9 +1051,9 @@ namespace TacticsGame.Presentation
             aimHoldStart = -1f;
             Vector3 from = PlannedPosition(unit);
             Vector3 d = hoverPoint - from; d.y = 0f;
-            if (d.sqrMagnitude < 0.04f) { message = "Hold toward a direction away from the unit."; return; }
+            if (d.sqrMagnitude < 0.04f) { message = GameText.Get("orders.notice.hold_away", "Hold toward a direction away from the unit."); return; }
             Vector3 toward = from + d.normalized * Mathf.Max(1f, unit.ActionStat(selected, ActionStat.Range));
-            AddOrder(UnitCommand.UseActionToward(unit.Id, selected, toward).Transcended(selectedTranscend), selected.DisplayName + " (aimed)", from);
+            AddOrder(UnitCommand.UseActionToward(unit.Id, selected, toward).Transcended(selectedTranscend), GameText.Format("orders.plan.aimed", "{0} (aimed)", selected.DisplayName), from);
         }
 
         /// <summary>The free-aim cone toward the cursor, filling as the button is held; the unit it would take now is lit.</summary>
@@ -1266,7 +1285,7 @@ namespace TacticsGame.Presentation
             var cam = Cam;
             Vector2 at;
             if (moveSeconds < 0f || cam == null || !UiScale.WorldToGui(cam, moveLabelAt + Vector3.up * 0.6f, out at)) return;
-            string text = string.Format("{0:0.00}s walk", moveSeconds);
+            string text = GameText.Format("orders.preview.walk", "{0:0.00}s walk", moveSeconds);
             var style = new GUIStyle(GUI.skin.box) { fontSize = 13, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             style.normal.textColor = SelectionColor;
             float w = style.CalcSize(new GUIContent(text)).x + 12f;
@@ -1301,7 +1320,7 @@ namespace TacticsGame.Presentation
         private void DrawSightLabel(Vector2 mouse)
         {
             if (sightEnemies < 0) return;
-            string text = string.Format("In sight: {0} enem{1}, {2} all{3}", sightEnemies, sightEnemies == 1 ? "y" : "ies", sightAllies, sightAllies == 1 ? "y" : "ies");
+            string text = GameText.Format("orders.preview.in_sight", "In sight: {0} enem{1}, {2} all{3}", sightEnemies, sightEnemies == 1 ? "y" : "ies", sightAllies, sightAllies == 1 ? "y" : "ies");
             GUI.Box(new Rect(mouse.x + 18f, mouse.y + 4f, 220f, 24f), text);
         }
 
@@ -1334,9 +1353,47 @@ namespace TacticsGame.Presentation
             }
         }
 
+        // ------------------------------------------------------------------ turning what is placed (Obstruction's wall: hold R)
+
+        private const float PlaceTurnSpeed = 120f;   // degrees a second while R is held
+        private float placeYaw = float.NaN;           // NaN: not turned yet (across the line from the unit to the cursor)
+
+        /// <summary>Which way the placed shape runs, in degrees: as turned with R, else across the line from 'from' to 'at'.</summary>
+        private float PlaceYaw(Vector3 from, Vector3 at) { return float.IsNaN(placeYaw) ? WallBehavior.DefaultFacing(from, at) : placeYaw; }
+
+        /// <summary>While a rotatable ability is being aimed, holding R turns it (unscaled time: it turns while the battle is paused).</summary>
+        private void UpdatePlaceTurn(Unit unit)
+        {
+            if (mode != Mode.PickTarget || selected == null || !ActionBehaviors.Get(selected.BehaviorId).Rotatable(selected) || !Input.GetKey(KeyCode.R)) return;
+            placeYaw = Mathf.Repeat(PlaceYaw(PlannedPosition(unit), hoverPoint) + PlaceTurnSpeed * Time.unscaledDeltaTime, 360f);
+        }
+
+        /// <summary>Obstruction's wall where it would stand: its length across the point, turned as R left it.</summary>
+        private void DrawWallPreview(Unit unit, Vector3 from)
+        {
+            bool inRange = Vector3.Distance(from, hoverPoint) <= unit.ActionStat(selected, ActionStat.Range);
+            Color c = inRange ? SelectionColor : InvalidTargetColor;
+            var b = ActionBehaviors.Get(selected.BehaviorId);
+            float half = b.Param(selected, "length") / 2f, thick = Mathf.Max(0.2f, b.Param(selected, "thickness") / 2f);
+            Vector3 dir = WallBehavior.Direction(from, hoverPoint, PlaceYaw(from, hoverPoint));
+            Vector3 side = new Vector3(-dir.z, 0f, dir.x) * thick;
+            Vector3 a = hoverPoint - dir * half, e = hoverPoint + dir * half;
+            markers.Polyline(new[] { a + side, e + side, e - side, a - side, a + side }, c, 0.06f);
+            markers.Circle(a, 0.35f, c, 0.05f, 16);
+            markers.Circle(e, 0.35f, c, 0.05f, 16);
+        }
+
         private void DrawAreaPreview(Unit unit, Vector3 from)
         {
-            if (selected.Shape == AreaShape.Line)
+            if (ActionBehaviors.Get(selected.BehaviorId).Rotatable(selected)) { DrawWallPreview(unit, from); return; }
+            if (selected.Shape == AreaShape.Cone)
+            {
+                // A cone from the unit toward the cursor (Repress): its reach is its radius, wherever the cursor is.
+                var edge = WorldMarkers.ConeOutline(from, hoverPoint - from, unit.ActionStat(selected, ActionStat.AreaRadius), selected.ConeAngle);
+                var loop = new Vector3[edge.Length + 1]; System.Array.Copy(edge, loop, edge.Length); loop[edge.Length] = edge[0];
+                markers.Polyline(loop, SelectionColor, 0.06f);
+            }
+            else if (selected.Shape == AreaShape.Line)
             {
                 Vector3 dir = hoverPoint - from; dir.y = 0f;
                 if (dir.sqrMagnitude < 1e-4f) return;
@@ -1476,43 +1533,46 @@ namespace TacticsGame.Presentation
             {
                 case Mode.PickTarget:
                     if (redirecting)
-                        return string.Format("{0}: {1}, redirect the bullet ({2} left)", unit.DisplayName, selected.DisplayName, sim.RedirectsLeft(unit));
+                        return GameText.Format("orders.popup.redirect", "{0}: {1}, redirect the bullet ({2} left)", unit.DisplayName, selected.DisplayName, sim.RedirectsLeft(unit));
                     if (releasing)
-                        return string.Format("{0}: charging {1}  {2:0.00}s ({3:0}%)", unit.DisplayName, selected.DisplayName,
+                        return GameText.Format("orders.popup.charging", "{0}: charging {1}  {2:0.00}s ({3:0}%)", unit.DisplayName, selected.DisplayName,
                             unit.ActiveAction != null ? sim.Now - unit.ActiveAction.StartedAt : 0f, sim.ChargeLevel(unit) * 100f);
                 {
-                    string name = (selectedTranscend ? "TRANSCENDED " : "") + selected.DisplayName;
+                    string name = selectedTranscend ? GameText.Format("orders.header.transcended", "TRANSCENDED {0}", selected.DisplayName) : selected.DisplayName;
                     float range = selected.BehaviorId == "dash" ? sim.DashReach(PlannedUnit(unit), selectedTranscend) : unit.ActionStat(selected, ActionStat.Range);
                     return selected.Targeting == TargetType.Position
-                        ? string.Format("{0}: click a point for {1} (range {2:0.#}m)", unit.DisplayName, name, range)
-                        : string.Format("{0}: click a target for {1} (range {2:0.#}m)", unit.DisplayName, name, range);
+                        ? GameText.Format("orders.header.pick_point", "{0}: click a point for {1} (range {2:0.#}m)", unit.DisplayName, name, range)
+                        : GameText.Format("orders.header.pick_target", "{0}: click a target for {1} (range {2:0.#}m)", unit.DisplayName, name, range);
                 }
                 case Mode.PickMove:
-                    return unit.Grapple != null ? unit.DisplayName + ": click the ground to move there, carrying " + HeldName(unit)
-                                                : unit.DisplayName + ": click the ground to move there (lit units: in sight from there)";
+                    if (releasing) return GameText.Format("orders.header.move_charging", "{0}: click the ground to walk there charging ({1:0}% speed)", unit.DisplayName, sim.ChargeMoveSpeedMultiplier * 100f);
+                    return unit.Grapple != null ? GameText.Format("orders.header.move_carrying", "{0}: click the ground to move there, carrying {1}", unit.DisplayName, HeldName(unit))
+                                                : GameText.Format("orders.header.move", "{0}: click the ground to move there (lit units: in sight from there)", unit.DisplayName);
                 case Mode.PickDestination:
-                    if (pickingSecond) return string.Format("{0}: click the unit to swap {1} with ({2})", unit.DisplayName, destinationFor != null ? destinationFor.DisplayName : "it", selected.DisplayName);
-                    return string.Format("{0}: click where {1} {2} for {3}", unit.DisplayName, destinationFor != null && destinationFor.Id == unit.Id ? "you" : destinationFor != null ? destinationFor.DisplayName : "it",
-                        destinationFor != null && destinationFor.Id == unit.Id ? "go" : "goes", (selectedTranscend ? "TRANSCENDED " : "") + selected.DisplayName);
+                    if (pickingSecond) return GameText.Format("orders.header.pick_second", "{0}: click the unit to swap {1} with ({2})", unit.DisplayName, destinationFor != null ? destinationFor.DisplayName : "it", selected.DisplayName);
+                    bool self = destinationFor != null && destinationFor.Id == unit.Id;
+                    string named = selectedTranscend ? GameText.Format("orders.header.transcended", "TRANSCENDED {0}", selected.DisplayName) : selected.DisplayName;
+                    return self ? GameText.Format("orders.header.pick_destination_self", "{0}: click where you go for {1}", unit.DisplayName, named)
+                                : GameText.Format("orders.header.pick_destination", "{0}: click where {1} goes for {2}", unit.DisplayName, destinationFor != null ? destinationFor.DisplayName : "it", named);
                 case Mode.Grapple:
                 {
                     var g = unit.Grapple;
-                    if (g != null && g.AwaitingThrow) return string.Format("{0}: the grab is up! Click where to throw {1} (2: toward the cursor, or the way you face)", unit.DisplayName, HeldName(unit));
-                    return g == null ? unit.DisplayName : string.Format("{0}: holding {1}!  next headbutt in {2:0.00}s, thrown in {3:0.00}s (click to aim it)", unit.DisplayName, HeldName(unit),
+                    if (g != null && g.AwaitingThrow) return GameText.Format("orders.popup.grab_up", "{0}: the grab is up! Click where to throw {1} (2: toward the cursor, or the way you face)", unit.DisplayName, HeldName(unit));
+                    return g == null ? unit.DisplayName : GameText.Format("orders.popup.holding", "{0}: holding {1}!  next headbutt in {2:0.00}s, thrown in {3:0.00}s (click to aim it)", unit.DisplayName, HeldName(unit),
                         Mathf.Max(0f, g.NextHeadbuttAt - sim.Now), Mathf.Max(0f, g.EndsAt - sim.Now));
                 }
                 case Mode.Mesmer:
-                    return string.Format("{0}: Mesmerize counter on {1}! {2} strike{3} left", unit.DisplayName,
+                    return GameText.Format("orders.popup.mesmer", "{0}: Mesmerize counter on {1}! {2} strike{3} left", unit.DisplayName,
                         sim.GetUnit(unit.MesmerTargetId) != null ? sim.GetUnit(unit.MesmerTargetId).DisplayName : "?", unit.MesmerStrikesLeft, unit.MesmerStrikesLeft == 1 ? "" : "s");
                 case Mode.PickDash:
                 {
                     var attacker = sim.GetUnit(pending[0].AttackerId);
-                    return string.Format("{0} dodged {1}! Pick where to dash", unit.DisplayName, attacker != null ? attacker.DisplayName : "an attack");
+                    return GameText.Format("orders.popup.dodged", "{0} dodged {1}! Pick where to dash", unit.DisplayName, attacker != null ? attacker.DisplayName : GameText.Get("orders.popup.dodged_unknown", "an attack"));
                 }
                 default:
-                    return string.Format("Orders for {0}    HP {1:0}/{2:0}   Strain {3:0}/{4:0}{5}",
+                    return GameText.Format("orders.header.orders", "Orders for {0}    HP {1:0}/{2:0}   Strain {3:0}/{4:0}{5}",
                         unit.DisplayName, unit.Health, unit.MaxHealth, unit.Strain, unit.MaxStrain,
-                        unit.MaxEnergy > 0f ? string.Format("   Energy {0:0}/{1:0}", unit.Energy, unit.MaxEnergy) : "");
+                        unit.MaxEnergy > 0f ? GameText.Format("orders.header.energy", "   Energy {0:0}/{1:0}", unit.Energy, unit.MaxEnergy) : "");
             }
         }
 
@@ -1520,21 +1580,22 @@ namespace TacticsGame.Presentation
         {
             switch (mode)
             {
-                case Mode.PickDash: return "Click a point inside the ring to dash there, or click the unit to stand firm.";
+                case Mode.PickDash: return GameText.Get("orders.hint.dodge_dash", "Click a point inside the ring to dash there: out of the attack's reach, or it lands anyway.");
                 case Mode.ChooseAction:
                 {
-                    if (plan.Count > 0) return "Shift-click more waypoints, click without Shift to finish, or Confirm / Enter to send it.";
+                    if (plan.Count > 0) return GameText.Get("orders.hint.waypoints", "Shift-click more waypoints, click without Shift to finish, or Confirm / Enter to send it.");
                     var followup = Current != null ? Followup(Current) : null;
-                    if (followup != null) return "Press " + FollowupKeyName(Current, followup) + (FollowupOpen(Current, followup) ? ": " + followup.DisplayName + " again, no aiming." : " again: " + followup.DisplayName + " on the same target.") + " Hold Space to focus.";
-                    return "Keys 1-0, - = [ ] abilities, G dash; hold one to Transcend it. Shift-click moves for waypoints. Hold Space to focus (sheds strain).";
+                    if (followup != null) return FollowupOpen(Current, followup) ? GameText.Format("orders.hint.followup_open", "Press {0}: {1} again, no aiming. Hold Space to focus.", FollowupKeyName(Current, followup), followup.DisplayName)
+                                                                  : GameText.Format("orders.hint.followup", "Press {0} again: {1} on the same target. Hold Space to focus.", FollowupKeyName(Current, followup), followup.DisplayName);
+                    return GameText.Get("orders.hint.choose", "Keys 1-0, - = [ ] abilities, G dash; hold one to Transcend it. Shift-click moves for waypoints. Hold Space to focus (sheds strain).");
                 }
-                case Mode.Mesmer: return "Keep striking, or stop and give a normal order. Any other order ends the counter.";
-                case Mode.Grapple: return "1 keep headbutting, click or 2 throw now (toward the cursor), F move while carrying them.";
-                case Mode.PickDestination: return pickingSecond ? "Click the second unit. Right-click or Esc to pick another first unit." : "Click a point inside the ring. Right-click or Esc to pick another unit.";
+                case Mode.Mesmer: return GameText.Get("orders.hint.mesmer", "Keep striking, or stop and give a normal order. Any other order ends the counter.");
+                case Mode.Grapple: return GameText.Get("orders.hint.grapple", "1 keep headbutting, click or 2 throw now (toward the cursor), F move while carrying them.");
+                case Mode.PickDestination: return pickingSecond ? GameText.Get("orders.hint.pick_second", "Click the second unit. Right-click or Esc to pick another first unit.") : GameText.Get("orders.hint.pick_destination", "Click a point inside the ring. Right-click or Esc to pick another unit.");
                 default:
-                    return redirecting ? "Click an enemy the bullet can see (green) to send it on. Esc or Stop ends it."
-                         : releasing ? "Hold Space to keep charging (time runs slowly). Click to release it there."
-                                     : "Shift-click to lay waypoints. Right-click or Esc to go back.";
+                    return redirecting ? GameText.Get("orders.hint.redirect", "Click an enemy the bullet can see (green) to send it on. Esc or Stop ends it.")
+                         : releasing ? GameText.Get("orders.hint.charging", "Hold Space to keep charging (time runs slowly). Click to release it there. F walks on charging (slowed).")
+                                     : GameText.Get("orders.hint.pick", "Shift-click to lay waypoints. Right-click or Esc to go back.");
             }
         }
 
@@ -1616,14 +1677,15 @@ namespace TacticsGame.Presentation
         /// <summary>
         /// One ability button. Abilities that can be Transcended act on release (or Transcend when held, see UpdateHold), so
         /// their press is caught on mouse-down instead of the button's own click; a violet stripe marks them, and a bar
-        /// fills along the bottom while one is held. Returns true if the panel changed.
+        /// fills along the bottom while one is held. A damaging one has a stripe on the right for its impact (blue light,
+        /// red heavy). Returns true if the panel changed.
         /// </summary>
         private bool AbilityButton(Unit unit, ActionDefinition def, Rect rect, string key, ActionDefinition followup)
         {
             bool usable; string why;
             string detail = ActionDetail(unit, def, out usable, out why);
             string name = ActionBehaviors.Get(def.BehaviorId).NameFor(unit, def);   // a staged follow-up goes by its stage's name (Scepter Of Tyranny)
-            SetActionTip(rect, def, usable ? null : "Can't use now: " + why);
+            SetActionTip(rect, def, usable ? null : GameText.Format("orders.button.cant_use", "Can't use now: {0}", why));
             var e = Event.current;
             if (usable && CanTranscendNow(def) && e.type == UnityEngine.EventType.MouseDown && e.button == 0 && rect.Contains(e.mousePosition))
             {
@@ -1636,7 +1698,7 @@ namespace TacticsGame.Presentation
             bool linkedNow = usable && sim.LinkedOpenFor(unit, def);   // a linked ability (cyan), stage of a chain or not
             if (!linkedNow && (def == followup || chainStage || openFollowup))
             {
-                string tag = chainStage || openFollowup ? "follow-up" : "again";
+                string tag = chainStage || openFollowup ? GameText.Get("orders.button.followup_tag", "follow-up") : GameText.Get("orders.button.again_tag", "again");
                 detail = string.IsNullOrEmpty(detail) ? tag : tag + " · " + detail;
                 // The follow-up its key would re-cast: a gold frame and tint so it stands out.
                 Fill(new Rect(rect.x - 3f, rect.y - 3f, rect.width + 6f, rect.height + 6f), FollowupColor);
@@ -1645,7 +1707,8 @@ namespace TacticsGame.Presentation
             else if (linkedNow)
             {
                 // A linked ability, open until another ability is used: a cyan frame, apart from the follow-ups' gold.
-                detail = string.IsNullOrEmpty(detail) ? "linked" : "linked · " + detail;
+                string linkedTag = GameText.Get("orders.button.linked_tag", "linked");
+                detail = string.IsNullOrEmpty(detail) ? linkedTag : linkedTag + " · " + detail;
                 Fill(new Rect(rect.x - 3f, rect.y - 3f, rect.width + 6f, rect.height + 6f), LinkedColor);
                 GUI.backgroundColor = LinkedColor;
             }
@@ -1656,6 +1719,12 @@ namespace TacticsGame.Presentation
             // No cooldown pie while a follow-up of it is still there to use (its chain ignores the cooldown).
             bool followupLeft = def == followup || chainStage || openFollowup || ActionBehaviors.Get(def.BehaviorId).IgnoresCooldown(sim, unit, def, null);
             if (!followupLeft) DrawCooldownWipe(unit, def, rect);
+            if (unit.ActionStat(def, ActionStat.Damage) > 0f)
+            {
+                // A damaging ability's impact: a blue (light) or red (heavy) stripe down its right edge.
+                var c = def.Impact == ImpactType.Heavy ? HeavyImpactColor : LightImpactColor;
+                Fill(new Rect(rect.xMax - 4f, rect.y + 3f, 3f, rect.height - 6f), new Color(c.r, c.g, c.b, usable ? 0.9f : 0.35f));
+            }
             if (CanTranscendNow(def))
             {
                 Fill(new Rect(rect.x + 1f, rect.y + 3f, 3f, rect.height - 6f), new Color(TranscendColor.r, TranscendColor.g, TranscendColor.b, usable ? 0.9f : 0.35f));
@@ -1771,8 +1840,8 @@ namespace TacticsGame.Presentation
             if (def == null) return;
             var style = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             string text = Transcending
-                ? string.Format("TRANSCENDED {0}   (+{1:0} strain)", def.DisplayName.ToUpperInvariant(), TranscendStrainNow(def))
-                : string.Format("Transcending {0}...", def != null ? def.DisplayName : "Focus");
+                ? GameText.Format("orders.popup.transcended", "TRANSCENDED {0}   (+{1:0} strain)", def.DisplayName.ToUpperInvariant(), TranscendStrainNow(def))
+                : GameText.Format("orders.popup.transcending", "Transcending {0}...", def != null ? def.DisplayName : "Focus");
             var r = new Rect(0f, 150f, UiScale.Width, 34f);
             style.normal.textColor = new Color(0f, 0f, 0f, 0.8f * Mathf.Max(k, 0.3f));
             GUI.Label(new Rect(r.x + 2f, r.y + 2f, r.width, r.height), text, style);
@@ -1792,15 +1861,15 @@ namespace TacticsGame.Presentation
             usable = true; why = null;
             var parts = new List<string>();
             float cost = sim.EnergyCostOf(unit, def);
-            if (cost > 0f) parts.Add(string.Format("{0:0} energy", cost));
+            if (cost > 0f) parts.Add(GameText.Format("orders.button.energy", "{0:0} energy", cost));
             float strain = sim.StrainCostOf(unit, def, unit.LastActionTargetId);   // follow-up discounts are against the last target
-            if (Mathf.Abs(strain) > 0.5f) parts.Add(string.Format("{0:+0;-0} strain", strain));
+            if (Mathf.Abs(strain) > 0.5f) parts.Add(GameText.Format("orders.button.strain", "{0:+0;-0} {1}", strain, StrainWord(unit)));
             string detail = string.Join(" · ", parts.ToArray());
             if (plan.Count > 0) return detail;   // a later order's resources are only known when it starts
             usable = sim.CanAfford(unit, def, out why);
             float readyAt;
             if (!usable && why == "cooldown" && unit.CooldownReadyAt.TryGetValue(def.Id, out readyAt))
-                detail = string.Format("cooldown {0:0.00}s", readyAt - sim.Now);
+                detail = GameText.Format("orders.button.cooldown", "cooldown {0:0.00}s", readyAt - sim.Now);
             return detail;
         }
 
@@ -1816,19 +1885,19 @@ namespace TacticsGame.Presentation
             public void Add(string label, string value) { Cells.Add(new KeyValuePair<string, string>(label, value)); }
         }
 
-        private static string Secs(float s) { return s <= 0f ? "instant" : string.Format("{0:0.###}s", s); }
+        private static string Secs(float s) { return s <= 0f ? GameText.Get("tip.instant", "instant") : string.Format("{0:0.###}s", s); }
 
         /// <summary>What the ability is aimed at, in a word or two (no range: the targeting rings show that).</summary>
         private static string TargetKind(ActionDefinition def)
         {
             switch (def.Targeting)
             {
-                case TargetType.Self: return def.Shape == AreaShape.Circle ? "Around you" : "Self";
-                case TargetType.Enemy: return def.IsRanged ? "Ranged enemy" : "Melee enemy";
-                case TargetType.Ally: return def.CannotTargetSelf ? "Another ally" : "Ally";
-                case TargetType.AnyUnit: return def.CannotTargetSelf ? "Ally or enemy" : "Any unit";
-                case TargetType.Position: return def.BehaviorId == "dash" ? "Point" : def.Shape == AreaShape.Line ? "Line" : def.Shape == AreaShape.Circle ? "Area" : "Point";
-                default: return "None";
+                case TargetType.Self: return def.Shape == AreaShape.Circle ? GameText.Get("tip.target.around_you", "Around you") : GameText.Get("tip.target.self", "Self");
+                case TargetType.Enemy: return def.IsRanged ? GameText.Get("tip.target.ranged_enemy", "Ranged enemy") : GameText.Get("tip.target.melee_enemy", "Melee enemy");
+                case TargetType.Ally: return def.CannotTargetSelf ? GameText.Get("tip.target.another_ally", "Another ally") : GameText.Get("tip.target.ally", "Ally");
+                case TargetType.AnyUnit: return def.CannotTargetSelf ? GameText.Get("tip.target.ally_or_enemy", "Ally or enemy") : GameText.Get("tip.target.any_unit", "Any unit");
+                case TargetType.Position: return def.Shape == AreaShape.Line && def.BehaviorId != "dash" ? GameText.Get("tip.target.line", "Line") : def.Shape == AreaShape.Circle && def.BehaviorId != "dash" ? GameText.Get("tip.target.area", "Area") : GameText.Get("tip.target.point", "Point");
+                default: return GameText.Get("tip.target.none", "None");
             }
         }
 
@@ -1839,15 +1908,15 @@ namespace TacticsGame.Presentation
         /// <param name="durationScale">What its Duration is scaled by (the user's: Unit.DurationScale).</param>
         private static TipSection StatusSection(string who, StatusSpec s, bool duringWindup = false, string lasts = null, float durationScale = 1f)
         {
-            string whom = s.AppliesTo == StatusTarget.Allies ? " (ally)" : s.AppliesTo == StatusTarget.Enemies ? " (enemy)" : "";
+            string whom = s.AppliesTo == StatusTarget.Allies ? GameText.Get("tip.status.allies", " (ally)") : s.AppliesTo == StatusTarget.Enemies ? GameText.Get("tip.status.enemies", " (enemy)") : "";
             var sec = new TipSection { Title = string.Format("{0}{1}: {2}", who, whom, StatusDisplay.NameOf(s.Id).ToUpperInvariant()) };
-            sec.Add("Lasts", lasts ?? (duringWindup ? "the windup" : Secs(s.Duration * durationScale)));
+            sec.Add(GameText.Get("tip.status.lasts", "Lasts"), lasts ?? (duringWindup ? GameText.Get("tip.status.the_windup", "the windup") : Secs(s.Duration * durationScale)));
             if (s.Modifiers != null) foreach (var m in s.Modifiers) sec.Add(StatText.Name(m.Stat), StatText.Change(m));
             if (s.ActionModifiers != null) foreach (var m in s.ActionModifiers) sec.Add(StatText.Label(m, id => id.Replace('_', ' ')), StatText.Change(m));
             var flagCells = new List<KeyValuePair<string, string>>();
             StatText.Describe(s.Flags, flagCells, sec.Notes);
             foreach (var c in flagCells) sec.Add(c.Key, c.Value);
-            if (s.ForbidsActions != null && s.ForbidsActions.Count > 0) sec.Notes.Add("Can't use meanwhile: " + string.Join(", ", s.ForbidsActions.Select(id => id.Replace('_', ' ')).ToArray()) + ".");
+            if (s.ForbidsActions != null && s.ForbidsActions.Count > 0) sec.Notes.Add(GameText.Format("tip.status.forbids", "Can't use meanwhile: {0}.", string.Join(", ", s.ForbidsActions.Select(id => id.Replace('_', ' ')).ToArray())));
             return sec;
         }
 
@@ -1861,57 +1930,76 @@ namespace TacticsGame.Presentation
             System.Func<ActionStat, float> V = s => who != null ? who.ActionStat(def, s) : Stats.Base(def, s);
             float lasts = who != null ? who.DurationScale(def) : 1f;
             var sections = new List<TipSection>();
-            var use = new TipSection { Title = "USE" };
-            use.Add("Target", TargetKind(def));
-            if (def.Shape == AreaShape.Circle && V(ActionStat.AreaRadius) > 0f) use.Add("Radius", string.Format("{0:0.#}m", V(ActionStat.AreaRadius)));
-            if (def.Shape == AreaShape.Line && def.Targeting == TargetType.Position) use.Add("Width", string.Format("{0:0.#}m", def.LineWidth));
-            if (def.Shape == AreaShape.Circle && def.AreaHeight > 0f) use.Add("Dome height", string.Format("{0:0.#}m", def.AreaHeight));
-            if (def.IsCharge) use.Add("Charge", "up to " + Secs(def.MaxChargeSeconds));
-            if (def.ChannelSeconds > 0f) use.Add("Channel", "up to " + Secs(def.ChannelSeconds));
-            else if (def.AuraSeconds > 0f) use.Add("Dome lasts", Secs(def.AuraSeconds * lasts));
-            use.Add("Windup", Secs(V(ActionStat.Windup)));
-            use.Add("Recovery", Secs(V(ActionStat.Recovery)));
-            if (V(ActionStat.Cooldown) > 0f) use.Add("Cooldown", Secs(V(ActionStat.Cooldown)));
+            var use = new TipSection { Title = GameText.Get("tip.section.use", "USE") };
+            use.Add(GameText.Get("tip.target", "Target"), TargetKind(def));
+            if (def.Shape == AreaShape.Circle && V(ActionStat.AreaRadius) > 0f) use.Add(GameText.Get("tip.radius", "Radius"), string.Format("{0:0.#}m", V(ActionStat.AreaRadius)));
+            if (def.Shape == AreaShape.Cone) use.Add(GameText.Get("tip.cone", "Cone"), string.Format("{0:0}°, {1:0.#}m", def.ConeAngle, V(ActionStat.AreaRadius)));
+            if (def.Shape == AreaShape.Line && def.Targeting == TargetType.Position) use.Add(GameText.Get("tip.width", "Width"), string.Format("{0:0.#}m", def.LineWidth));
+            if (def.Shape == AreaShape.Circle && def.AreaHeight > 0f) use.Add(GameText.Get("tip.dome_height", "Dome height"), string.Format("{0:0.#}m", def.AreaHeight));
+            if (def.IsCharge) use.Add(GameText.Get("tip.charge", "Charge"), GameText.Format("tip.up_to", "up to {0}", Secs(def.MaxChargeSeconds)));
+            if (def.ChannelSeconds > 0f) use.Add(GameText.Get("tip.channel", "Channel"), GameText.Format("tip.up_to", "up to {0}", Secs(def.ChannelSeconds)));
+            else if (def.AuraSeconds > 0f) use.Add(GameText.Get("tip.dome_lasts", "Dome lasts"), Secs(def.AuraSeconds * lasts));
+            use.Add(GameText.Get("tip.windup", "Windup"), Secs(V(ActionStat.Windup)));
+            use.Add(GameText.Get("tip.recovery", "Recovery"), Secs(V(ActionStat.Recovery)));
+            if (V(ActionStat.Cooldown) > 0f) use.Add(GameText.Get("tip.cooldown", "Cooldown"), Secs(V(ActionStat.Cooldown)));
             sections.Add(use);
 
             // What it does, in numbers (ActionBehavior.DescribeNumbers); the rest is the asset's Details text, below.
             var behavior = ActionBehaviors.Get(def.BehaviorId);
             var tip = new AbilityTip(def, who, sim);
             ActionBehavior.DescribeNumbers(tip, behavior);
-            var effect = new TipSection { Title = "EFFECT" };
+            var effect = new TipSection { Title = GameText.Get("tip.section.effect", "EFFECT") };
             foreach (var c in tip.Effect) effect.Add(c.Key, c.Value);
             if (effect.Cells.Count > 0) sections.Add(effect);
 
-            var cost = new TipSection { Title = "COST" };
-            if (V(ActionStat.StrainOnSelf) > 0f) cost.Add("Strain", "+" + V(ActionStat.StrainOnSelf).ToString("0"));
-            if (V(ActionStat.StrainOnSelf) < 0f) cost.Add("Strain", "sheds " + (-V(ActionStat.StrainOnSelf)).ToString("0"));
-            if (V(ActionStat.EnergyCost) > 0f) cost.Add("Energy", V(ActionStat.EnergyCost).ToString("0"));
-            if (def.EnergyGain > 0f) cost.Add("Energy gain", "+" + def.EnergyGain.ToString("0"));
-            if (def.IsCharge && def.ChargeStrainPerSecond > 0f) cost.Add("Charging", string.Format("+{0:0} strain/s", def.ChargeStrainPerSecond));
-            if (V(ActionStat.HealthCost) > 0f) cost.Add("Health", "-" + V(ActionStat.HealthCost).ToString("0"));
-            if (CanTranscendNow(def)) cost.Add("Transcend", string.Format("+{0:0} strain", TranscendStrainNow(def)));
+            var cost = new TipSection { Title = GameText.Get("tip.section.cost", "COST") };
+            string strainLabel = who != null && !string.IsNullOrEmpty(who.StrainName) ? who.StrainName : GameText.Get("tip.strain", "Strain");   // the Forsaken: Entropy
+            if (V(ActionStat.StrainOnSelf) > 0f) cost.Add(strainLabel, "+" + V(ActionStat.StrainOnSelf).ToString("0"));
+            if (V(ActionStat.StrainOnSelf) < 0f) cost.Add(strainLabel, GameText.Format("tip.sheds", "sheds {0:0}", -V(ActionStat.StrainOnSelf)));
+            if (V(ActionStat.EnergyCost) > 0f) cost.Add(GameText.Get("tip.energy", "Energy"), V(ActionStat.EnergyCost).ToString("0"));
+            if (def.EnergyGain > 0f) cost.Add(GameText.Get("tip.energy_gain", "Energy gain"), "+" + def.EnergyGain.ToString("0"));
+            if (def.IsCharge && def.ChargeStrainPerSecond > 0f) cost.Add(GameText.Get("tip.charging", "Charging"), GameText.Format("tip.strain_per_second", "+{0:0} strain/s", def.ChargeStrainPerSecond));
+            if (V(ActionStat.HealthCost) > 0f) cost.Add(GameText.Get("tip.health", "Health"), "-" + V(ActionStat.HealthCost).ToString("0"));
+            if (def.HysteriaOnUse > 0) cost.Add(GameText.Get("tip.hysteria", "HYSTERIA"), "+" + def.HysteriaOnUse);
+            if (CanTranscendNow(def)) cost.Add(GameText.Get("tip.transcend", "Transcend"), GameText.Format("tip.strain_amount", "+{0:0} {1}", TranscendStrainNow(def), StrainWord(who)));
             if (cost.Cells.Count > 0) sections.Add(cost);
 
-            foreach (var s in def.SelfStatuses) if (s != null) sections.Add(StatusSection("YOU", s, false, null, lasts));
+            foreach (var s in def.SelfStatuses) if (s != null) sections.Add(StatusSection(GameText.Get("tip.section.you", "YOU"), s, false, null, lasts));
             foreach (var s in def.TargetStatusesOnHit) if (s != null) sections.Add(StatusSection(tip.TargetStatusesTitle, s, false, null, lasts));
             if (def.TargetStatusesDuringWindup != null)
-                foreach (var s in def.TargetStatusesDuringWindup) if (s != null) sections.Add(StatusSection("TARGET", s, true));
+                foreach (var s in def.TargetStatusesDuringWindup) if (s != null) sections.Add(StatusSection(GameText.Get("tip.section.target", "TARGET"), s, true));
             if (def.SelfStatusesDuringWindup != null)
-                foreach (var s in def.SelfStatusesDuringWindup) if (s != null) sections.Add(StatusSection("YOU", s, true));
+                foreach (var s in def.SelfStatusesDuringWindup) if (s != null) sections.Add(StatusSection(GameText.Get("tip.section.you", "YOU"), s, true));
             if (def.AuraStatuses != null)
-                foreach (var s in def.AuraStatuses) if (s != null) sections.Add(StatusSection("IN DOME", s, false, "while inside"));
+                foreach (var s in def.AuraStatuses) if (s != null) sections.Add(StatusSection(GameText.Get("tip.section.in_dome", "IN DOME"), s, false, GameText.Get("tip.status.while_inside", "while inside")));
+
+            // What each of those statuses does, in words (StatusGlossary: edited in Tuning & Text > Statuses).
+            var glossary = new TipSection { Title = GameText.Get("tip.section.status_effects", "STATUS EFFECTS") };
+            foreach (var g in StatusGlossary.For(def))
+                if (!StatusDisplay.IsHidden(g.Key)) glossary.Notes.Add(StatusDisplay.NameOf(g.Key).ToUpperInvariant() + " - " + g.Value);
+            if (glossary.Notes.Count > 0) sections.Add(glossary);
 
             // The asset's own extra information (ActionDefinition.Details), under the stats.
-            if (!string.IsNullOrEmpty(def.Details)) sections.Add(new TipSection { Title = "DETAILS", Text = def.Details.Trim() });
+            if (!string.IsNullOrEmpty(def.Details)) sections.Add(new TipSection { Title = GameText.Get("tip.section.details", "DETAILS"), Text = def.Details.Trim() });
 
             // The Etchings on this ability, last. Unit-wide ones (even those that change every ability) are in UnitPanel's list.
             if (who != null && who.Etchings != null)
             {
-                var etched = new TipSection { Title = "ETCHED" };
+                var etched = new TipSection { Title = GameText.Get("tip.section.etched", "ETCHED") };
+                var composed = who.KnownActions().FirstOrDefault(a => a.DivergedVersion == def);   // the Forsaken: a Diverged form's Etchings are its Composed one's
                 foreach (var n in EtchingStacks.Of(who.Etchings))
-                    if (n.Key.ActionId == def.Id) etched.Notes.Add(n.Key.Name + EtchingStacks.Times(n.Value) + ": " + n.Key.Description);
+                    if (n.Key.ActionId == def.Id || (composed != null && n.Key.ActionId == composed.Id)) etched.Notes.Add(n.Key.Name + EtchingStacks.Times(n.Value) + ": " + n.Key.Description);
                 if (etched.Notes.Count > 0) sections.Add(etched);
             }
+            // The ability's own wording changes (ActionDefinition.TipOverrides) on the panel's lines too; empty sections go.
+            foreach (var sec in sections)
+                for (int i = sec.Cells.Count - 1; i >= 0; i--)
+                {
+                    string label = sec.Cells[i].Key, value = sec.Cells[i].Value;
+                    if (!def.ApplyTipOverride(ref label, ref value)) sec.Cells.RemoveAt(i);
+                    else sec.Cells[i] = new KeyValuePair<string, string>(label, value);
+                }
+            sections.RemoveAll(sec => sec.Cells.Count == 0 && sec.Notes.Count == 0 && string.IsNullOrEmpty(sec.Text));
             return sections;
         }
 
@@ -1922,23 +2010,36 @@ namespace TacticsGame.Presentation
         private List<TipSection> tipSections;
         private Rect tipAnchor;
 
+        /// <summary>The notice for an order that can't be given: "Can't from there: ..." with a plan queued, else "Can't: ...".</summary>
+        /// <summary>What 'u''s strain is called in a cost, lower case: "strain", or its own name for it (the Forsaken: "entropy").</summary>
+        private static string StrainWord(Unit u)
+        {
+            return u != null && !string.IsNullOrEmpty(u.StrainName) ? u.StrainName.ToLowerInvariant() : GameText.Get("orders.word.strain", "strain");
+        }
+
+        private string CantMessage(string reason)
+        {
+            return plan.Count > 0 ? GameText.Format("orders.notice.cant_from_there", "Can't from there: {0}", reason) : GameText.Format("orders.notice.cant", "Can't: {0}", reason);
+        }
+
         private void SetTip(Rect button, string title, string body, string stats = null, string warning = null)
         {
-            if (!button.Contains(Event.current.mousePosition)) return;
+            if (!UiScale.Hovering(button)) return;
             tipTitle = title; tipBody = body; tipStats = stats; tipSections = null; tipWarning = warning; tipAnchor = button;
         }
 
         private void SetActionTip(Rect button, ActionDefinition def, string warning)
         {
-            if (!button.Contains(Event.current.mousePosition)) return;
+            if (!UiScale.Hovering(button)) return;
             SetTip(button, def.DisplayName, string.IsNullOrEmpty(def.Description) ? null : def.Description, null, warning);
             tipSections = ActionStats(def, tipUnit);
         }
 
         private void ClearTip() { tipTitle = null; }
 
-        private const float TipWidth = 420f, TipPad = 9f, CellHeight = 34f, CellGap = 4f, SectionGap = 7f, SectionTitleHeight = 15f;
-        private const int CellsPerRow = 3;
+        private const float TipWidth = 420f, TipMaxWidth = 900f, TipPad = 9f, CellHeight = 34f, CellGap = 4f, SectionGap = 7f, SectionTitleHeight = 15f;
+        /// <summary>Stat cells per row in the tip being drawn: 3 at its usual width, more once it widens to fit (DrawTip).</summary>
+        private static int CellsPerRow = 3;
         private static GUIStyle tipTitleStyle, tipBodyStyle, tipStatsStyle, tipWarnStyle, tipSectionStyle, tipCellLabel, tipCellValue, tipNoteStyle;
 
         private static void TipStyles()
@@ -1976,18 +2077,30 @@ namespace TacticsGame.Presentation
         {
             if (string.IsNullOrEmpty(tipTitle)) return;
             TipStyles();
-            float inner = TipWidth - TipPad * 2f;
-            float hTitle = tipTitleStyle.CalcHeight(new GUIContent(tipTitle), inner);
-            float hBody = string.IsNullOrEmpty(tipBody) ? 0f : tipBodyStyle.CalcHeight(new GUIContent(tipBody), inner) + 4f;
-            float hStats = string.IsNullOrEmpty(tipStats) ? 0f : tipStatsStyle.CalcHeight(new GUIContent(tipStats), inner) + 2f;
-            float hWarn = string.IsNullOrEmpty(tipWarning) ? 0f : tipWarnStyle.CalcHeight(new GUIContent(tipWarning), inner) + 2f;
-            float hSections = 0f;
-            if (tipSections != null) foreach (var s in tipSections) hSections += SectionHeight(s, inner) + SectionGap;
-            float height = TipPad * 2f + hTitle + hBody + hStats + hWarn + hSections + 2f;
+            // A long tip (many stats, status effects, notes) doesn't fit above the panel on a shorter GUI canvas (a full-screen
+            // build has less height than a small Game view): it widens, a step at a time, until it does; if even the widest
+            // is too tall, it comes down over the panel, and at worst it starts at the top of the screen.
+            float above = Mathf.Min(tipAnchor.y, panelRect.y) - 10f;
+            float maxWidth = Mathf.Max(TipWidth, Mathf.Min(TipMaxWidth, UiScale.Width - 8f));
+            float width = TipWidth, inner, hTitle, hBody, hStats, hWarn, height;
+            while (true)
+            {
+                inner = width - TipPad * 2f;
+                CellsPerRow = Mathf.Max(3, Mathf.FloorToInt((inner + CellGap) / (128f + CellGap)));
+                hTitle = tipTitleStyle.CalcHeight(new GUIContent(tipTitle), inner);
+                hBody = string.IsNullOrEmpty(tipBody) ? 0f : tipBodyStyle.CalcHeight(new GUIContent(tipBody), inner) + 4f;
+                hStats = string.IsNullOrEmpty(tipStats) ? 0f : tipStatsStyle.CalcHeight(new GUIContent(tipStats), inner) + 2f;
+                hWarn = string.IsNullOrEmpty(tipWarning) ? 0f : tipWarnStyle.CalcHeight(new GUIContent(tipWarning), inner) + 2f;
+                float hSections = 0f;
+                if (tipSections != null) foreach (var s in tipSections) hSections += SectionHeight(s, inner) + SectionGap;
+                height = TipPad * 2f + hTitle + hBody + hStats + hWarn + hSections + 2f;
+                if (height <= above || width >= maxWidth - 0.5f) break;
+                width = Mathf.Min(maxWidth, width + 120f);
+            }
 
-            float x = Mathf.Clamp(tipAnchor.x, 4f, UiScale.Width - TipWidth - 4f);
-            float y = Mathf.Max(4f, Mathf.Min(tipAnchor.y, panelRect.y) - height - 6f);
-            var box = new Rect(x, y, TipWidth, height);
+            float x = Mathf.Clamp(tipAnchor.x, 4f, UiScale.Width - width - 4f);
+            float y = height <= above ? above + 4f - height : Mathf.Max(4f, UiScale.Height - height - 4f);
+            var box = new Rect(x, y, width, height);
             var old = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, 0.97f);
             GUI.Box(box, GUIContent.none);
@@ -2048,10 +2161,10 @@ namespace TacticsGame.Presentation
             if (!unit.IsMakina)   // a Makina can't move
             {
                 var moveRect = ButtonRect(index++, x, y);
-                SetTip(moveRect, "Move", "Walk to any point on the navmesh. Hold Shift to click waypoints to walk through on the way.",
-                    string.Format("speed {0:0.#} m/s", unit.EffectiveMoveSpeed()), rooted ? "Can't move: immobilized" : null);
+                SetTip(moveRect, GameText.Get("orders.button.move", "Move"), GameText.Get("orders.button.move_tip", "Walk to any point on the navmesh. Hold Shift to click waypoints to walk through on the way."),
+                    GameText.Format("orders.button.move_speed", "speed {0:0.#} m/s", unit.EffectiveMoveSpeed()), rooted ? GameText.Get("orders.notice.immobilized", "Can't move: immobilized") : null);
                 GUI.enabled = !rooted;
-                if (Tile(moveRect, "F", "Move", rooted ? "rooted" : string.Format("{0:0.#} m/s", unit.EffectiveMoveSpeed())))
+                if (Tile(moveRect, "F", GameText.Get("orders.button.move", "Move"), rooted ? GameText.Get("orders.button.rooted", "rooted") : GameText.Format("orders.button.move_tile", "{0:0.#} m/s", unit.EffectiveMoveSpeed())))
                 {
                     GUI.enabled = true; mode = Mode.PickMove; message = null; return true;
                 }
@@ -2061,23 +2174,22 @@ namespace TacticsGame.Presentation
             if (dash != null && AbilityButton(unit, dash, ButtonRect(index++, x, y), "G", followup)) return true;
             var waitRect = ButtonRect(index++, x, y);
             if (unit.IsMakina)
-                SetTip(waitRect, "Wait", string.Format("Stand still for {0:0.00}s, then ask for orders again. A Makina never enters Clear Mind: its strain only climbs, and it breaks at its maximum.", WaitSeconds),
-                    string.Format("+{0:0.#} strain/s", unit.StrainDrift), null);
+                SetTip(waitRect, GameText.Get("orders.button.wait", "Wait"), GameText.Format("orders.button.wait_tip", "Stand still for {0:0.00}s, then ask for orders again. A Makina never enters Clear Mind: its strain only climbs, and it breaks at its maximum.", WaitSeconds),
+                    GameText.Format("orders.button.wait_strain", "+{0:0.#} strain/s", unit.StrainDrift), null);
             else
-                SetTip(waitRect, "Focus", string.Format("Stand still and focus for {0:0.00}s, then ask for orders again. After {1:0.###}s of focus in a row " +
-                    "(back-to-back Focus orders, or hold Space to keep focusing with time running slowly) the unit enters Clear Mind: strain drains fast until it does anything else. A hit restarts the count.",
-                    WaitSeconds, sim.FocusDelayOf(unit)), string.Format("sheds {0:0} strain/s in Clear Mind", sim.FocusStrainOf(unit)));
-            if (Tile(waitRect, "Space", unit.IsMakina ? "Wait" : "Focus", string.Format("{0:0.00}s · hold Space: keep going", WaitSeconds))) { OrderFocus(unit); return true; }
+                SetTip(waitRect, GameText.Get("orders.button.focus", "Focus"), GameText.Format("orders.button.focus_tip", "Stand still and focus for {0:0.00}s, then ask for orders again. After {1:0.###}s of focus in a row (back-to-back Focus orders, or hold Space to keep focusing with time running slowly) the unit enters Clear Mind: strain drains fast until it does anything else. A hit restarts the count.",
+                    WaitSeconds, sim.FocusDelayOf(unit)), GameText.Format("orders.button.focus_strain", "sheds {0:0} strain/s in Clear Mind", sim.FocusStrainOf(unit)));
+            if (Tile(waitRect, "Space", unit.IsMakina ? GameText.Get("orders.button.wait", "Wait") : GameText.Get("orders.button.focus", "Focus"), GameText.Format("orders.button.focus_tile", "{0:0.00}s · hold Space: keep going", WaitSeconds))) { OrderFocus(unit); return true; }
             y += ButtonRows(unit) * (ButtonHeight + gap);
 
             if (plan.Count > 0)
             {
                 string steps = string.Join("   ", plan.Select((p, i) => (i + 1) + ". " + p.Label).ToArray());
-                GUI.Label(new Rect(x, y, panelRect.width - 20f, 20f), "Plan: " + steps);
+                GUI.Label(new Rect(x, y, panelRect.width - 20f, 20f), GameText.Format("orders.plan.row", "Plan: {0}", steps));
                 y += 20f;
-                if (GUI.Button(new Rect(x, y, bw, 24f), "Confirm (Enter)")) { ConfirmPlan(); return true; }
-                if (GUI.Button(new Rect(x + bw + gap, y, bw, 24f), "Undo (Bksp)")) { plan.RemoveAt(plan.Count - 1); return true; }
-                if (GUI.Button(new Rect(x + 2f * (bw + gap), y, bw, 24f), "Clear")) { plan.Clear(); return true; }
+                if (GUI.Button(new Rect(x, y, bw, 24f), GameText.Get("orders.plan.confirm", "Confirm (Enter)"))) { ConfirmPlan(); return true; }
+                if (GUI.Button(new Rect(x + bw + gap, y, bw, 24f), GameText.Get("orders.plan.undo", "Undo (Bksp)"))) { plan.RemoveAt(plan.Count - 1); return true; }
+                if (GUI.Button(new Rect(x + 2f * (bw + gap), y, bw, 24f), GameText.Get("orders.plan.clear", "Clear"))) { plan.Clear(); return true; }
                 y += 24f + gap;
             }
 
@@ -2087,10 +2199,10 @@ namespace TacticsGame.Presentation
             {
                 float cost; string reason;
                 if (!sim.CanCancelMove(other.Id, out cost, out reason)) continue;
-                if (GUI.Button(new Rect(sx, y, 180f, 22f), string.Format("Stop {0}", other.DisplayName)))
+                if (GUI.Button(new Rect(sx, y, 180f, 22f), GameText.Format("orders.button.stop_other", "Stop {0}", other.DisplayName)))
                 {
                     sim.CancelMove(other.Id);
-                    message = other.DisplayName + " stopped; it will ask for orders next.";
+                    message = GameText.Format("orders.notice.stopped_other", "{0} stopped; it will ask for orders next.", other.DisplayName);
                     return true;
                 }
                 sx += 186f;
@@ -2103,9 +2215,9 @@ namespace TacticsGame.Presentation
         {
             var old = GUI.backgroundColor;
             GUI.backgroundColor = FollowupColor;
-            bool strike = GUI.Button(new Rect(x, y, 220f, 28f), string.Format("1  Strike ({0} left)", unit.MesmerStrikesLeft));
+            bool strike = GUI.Button(new Rect(x, y, 220f, 28f), GameText.Format("orders.popup.mesmer_strike", "1  Strike ({0} left)", unit.MesmerStrikesLeft));
             GUI.backgroundColor = old;
-            bool stop = GUI.Button(new Rect(x + 230f, y, 160f, 28f), "2  Stop");
+            bool stop = GUI.Button(new Rect(x + 230f, y, 160f, 28f), GameText.Get("orders.popup.mesmer_stop", "2  Stop"));
             y += 34f;
             if (strike) { MesmerStrike(unit); return true; }
             if (stop) { MesmerStop(unit); return true; }
@@ -2122,7 +2234,7 @@ namespace TacticsGame.Presentation
         {
             sim.CancelMesmer(unit.Id);
             mode = Mode.ChooseAction;
-            message = "Counter stopped. Orders?";
+            message = GameText.Get("orders.notice.counter_stopped", "Counter stopped. Orders?");
         }
 
         private string HeldName(Unit unit)
@@ -2138,20 +2250,21 @@ namespace TacticsGame.Presentation
             var throwRect = new Rect(x + 230f, y, 170f, 28f);
             var moveRect = new Rect(x + 410f, y, 200f, 28f);
             bool headbutts = sim.HoldHeadbutts(unit);   // Subjugate headbutts; Grasp and Impel just holds
-            SetTip(holdRect, headbutts ? "Keep headbutting" : "Keep holding", headbutts ? "Stand and keep hold: headbutt again, then choose again." : "Stand and keep hold a moment, then choose again.");
+            SetTip(holdRect, headbutts ? GameText.Get("orders.popup.grapple_headbutt", "Keep headbutting") : GameText.Get("orders.popup.grapple_hold", "Keep holding"),
+                headbutts ? GameText.Get("orders.popup.grapple_headbutt_tip", "Stand and keep hold: headbutt again, then choose again.") : GameText.Get("orders.popup.grapple_hold_tip", "Stand and keep hold a moment, then choose again."));
             bool awaiting = sim.AwaitingThrow(unit);
-            SetTip(throwRect, "Throw now", "Wind up the throw and hurl them toward the cursor (or click the ground to throw that way).");
-            SetTip(moveRect, "Move", headbutts ? "Walk somewhere, carrying them. You keep headbutting on the way." : "Walk somewhere, carrying them.");
+            SetTip(throwRect, GameText.Get("orders.popup.grapple_throw", "Throw now"), GameText.Get("orders.popup.grapple_throw_tip", "Wind up the throw and hurl them toward the cursor (or click the ground to throw that way)."));
+            SetTip(moveRect, GameText.Get("orders.button.move", "Move"), headbutts ? GameText.Get("orders.popup.grapple_move_headbutt_tip", "Walk somewhere, carrying them. You keep headbutting on the way.") : GameText.Get("orders.popup.grapple_move_tip", "Walk somewhere, carrying them."));
             var old = GUI.backgroundColor;
             GUI.backgroundColor = FollowupColor;
             GUI.enabled = !awaiting;   // the grab is up: throwing is all that's left
-            bool hold = GUI.Button(holdRect, headbutts ? "1  Keep headbutting" : "1  Keep holding");
+            bool hold = GUI.Button(holdRect, "1  " + (headbutts ? GameText.Get("orders.popup.grapple_headbutt", "Keep headbutting") : GameText.Get("orders.popup.grapple_hold", "Keep holding")));
             GUI.backgroundColor = old;
             GUI.enabled = true;
             var throwDef = sim.ThrowActionOf(unit);   // a throw of its own (Impel) goes by its name
-            bool toss = GUI.Button(throwRect, "2  " + (throwDef != null && unit.Grapple != null && throwDef != unit.Grapple.Definition ? throwDef.DisplayName : "Throw"));
+            bool toss = GUI.Button(throwRect, "2  " + (throwDef != null && unit.Grapple != null && throwDef != unit.Grapple.Definition ? throwDef.DisplayName : GameText.Get("orders.popup.grapple_throw_button", "Throw")));
             GUI.enabled = !awaiting;
-            bool move = GUI.Button(moveRect, "F  Move (carrying)");
+            bool move = GUI.Button(moveRect, GameText.Get("orders.popup.grapple_move", "F  Move (carrying)"));
             GUI.enabled = true;
             y += 34f;
             if (hold) { GrappleHold(unit); return true; }
@@ -2162,13 +2275,13 @@ namespace TacticsGame.Presentation
 
         private bool DrawPicking(Unit unit, float x, ref float y)
         {
-            if (redirecting) { if (GUI.Button(new Rect(x, y, 120f, 28f), "Stop (Esc)")) { StopRedirect(); return true; } }
-            else if (releasing) GUI.Label(new Rect(x, y, panelRect.width - 20f, 28f), "Can't be cancelled. Any damage breaks the charge.");
-            else if (GUI.Button(new Rect(x, y, 100f, 28f), "Back")) { Back(); return true; }
+            if (redirecting) { if (GUI.Button(new Rect(x, y, 120f, 28f), GameText.Get("orders.popup.redirect_stop", "Stop (Esc)"))) { StopRedirect(); return true; } }
+            else if (releasing) GUI.Label(new Rect(x, y, panelRect.width - 20f, 28f), GameText.Get("orders.popup.charge_note", "Can't be cancelled. Any damage breaks the charge. F: walk on charging."));
+            else if (GUI.Button(new Rect(x, y, 100f, 28f), GameText.Get("orders.button.back", "Back"))) { Back(); return true; }
             y += 34f;
             if (plan.Count > 0)
                 GUI.Label(new Rect(x, y, panelRect.width - 20f, 20f),
-                    "Plan: " + string.Join("   ", plan.Select((p, i) => (i + 1) + ". " + p.Label).ToArray()));
+                    GameText.Format("orders.plan.row", "Plan: {0}", string.Join("   ", plan.Select((p, i) => (i + 1) + ". " + p.Label).ToArray())));
             return false;
         }
 
@@ -2202,9 +2315,9 @@ namespace TacticsGame.Presentation
                 if (!UiScale.WorldToGui(cam, view.transform.position + Vector3.up * 2.6f, out at)) continue;
                 var r = new Rect(at.x - 50f, at.y - 12f, 100f, 24f);
                 style.normal.textColor = new Color(0f, 0f, 0f, 0.8f);
-                GUI.Label(new Rect(r.x + 1f, r.y + 1f, r.width, r.height), "COMBO", style);
+                GUI.Label(new Rect(r.x + 1f, r.y + 1f, r.width, r.height), GameText.Get("orders.preview.combo_tag", "COMBO"), style);
                 style.normal.textColor = ComboColor;
-                GUI.Label(r, "COMBO", style);
+                GUI.Label(r, GameText.Get("orders.preview.combo_tag", "COMBO"), style);
             }
         }
 

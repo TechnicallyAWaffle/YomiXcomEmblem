@@ -203,6 +203,7 @@ namespace TacticsGame.Core
     {
         public override bool MovesUser { get { return true; } }
         public override float GatherRadius(Unit actor, ActionDefinition def) { return actor.ActionStat(def, ActionStat.AreaRadius); }
+        public override bool UsesAreaRadius(ActionDefinition def) { return true; }   // the allies it takes along
         public override bool RollsToHit(ActionDefinition def) { return false; }
 
         public override bool CanStart(BattleSimulation sim, Unit actor, UnitCommand cmd, out string reason)

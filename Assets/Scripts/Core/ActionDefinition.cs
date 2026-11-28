@@ -25,6 +25,8 @@ namespace TacticsGame.Core
         public float Width = 0.06f;
         [Tooltip("Tracer: carries on past the target (shots that pierce cover).")]
         public bool Pierce;
+        [Tooltip("Its projectiles are glowing balls (their size: ProjectileRadius) instead of barbs (the Forsaken's Divulge and Fray The Mind).")]
+        public bool Orb;
 
         public ActionVisuals() { }
         public ActionVisuals(VfxKind kind, Color color, float width = 0.06f, bool pierce = false) { Kind = kind; Color = color; Width = width; Pierce = pierce; }
@@ -41,7 +43,7 @@ namespace TacticsGame.Core
     {
         public string Id = "basic_attack";
         public string DisplayName = "Attack";
-        [Tooltip("See ActionBehaviors: basic_attack, self_buff, area_attack, heal_displace, snipe, take_aim, retaliate, trap, rapid_slices, steady_strikes, final_cut, block, dash, bash, phantom_strike, mesmerize, stutter, lance, subjugate, fatebreak, status_spell, teleport, levitate, blink, flowing_death, repel, charged_heal, charge, chain_attack, leap, arrival, aura, aerial_slam.")]
+        [Tooltip("See ActionBehaviors: basic_attack, self_buff, area_attack, heal_displace, snipe, take_aim, retaliate, trap, rapid_slices, steady_strikes, final_cut, block, dash, bash, phantom_strike, mesmerize, stutter, lance, subjugate, fatebreak, status_spell, teleport, levitate, blink, flowing_death, repel, charged_heal, charge, chain_attack, leap, arrival, aura, aerial_slam, feint, contempt, countersign, reflect_shield, wall, composition.")]
         public string BehaviorId = "basic_attack";
         [Tooltip("What the AI uses it for. Nothing ticked: worked out from its behavior and numbers (see AbilityRole).")]
         public AbilityRole Roles = AbilityRole.None;
@@ -51,6 +53,40 @@ namespace TacticsGame.Core
         [Tooltip("Extra information shown under the ability's stats when it is inspected (the battle popup and the campaign hover). Empty: nothing.")]
         [TextArea(2, 8)]
         public string Details = "";
+        [Tooltip("Changes to the lines its hover popup shows (Windup, Damage, and the lines its behavior words, like Howl or Blink), found by the line's label. New Label empty: the label stays. Text empty: the worked-out value stays; {value} in it stands for that value. Hide: the line is left out.")]
+        public List<TipOverride> TipOverrides = new List<TipOverride>();
+
+        /// <summary>One change to a line of the ability's hover popup (ActionDefinition.TipOverrides).</summary>
+        [System.Serializable]
+        public class TipOverride
+        {
+            [Tooltip("The label of the line to change, as the popup shows it before any change (Windup, Damage, Howl...).")]
+            public string Label = "";
+            [Tooltip("Its new label. Empty: unchanged.")]
+            public string NewLabel = "";
+            [Tooltip("Its new text. Empty: the worked-out value. {value} stands for that value (\"{value}, then it fades\").")]
+            [TextArea(1, 3)] public string Text = "";
+            [Tooltip("Leave the line out of the popup.")]
+            public bool Hide;
+        }
+
+        /// <summary>
+        /// A popup line with this ability's TipOverrides applied: false if it is hidden, else 'label' and 'value' as they are
+        /// to be shown. Every hover popup of an ability goes through this (AbilityTip.Add, the orders panel's own lines).
+        /// </summary>
+        public bool ApplyTipOverride(ref string label, ref string value)
+        {
+            if (TipOverrides == null || TipOverrides.Count == 0 || label == null) return true;
+            foreach (var o in TipOverrides)
+            {
+                if (o == null || string.IsNullOrEmpty(o.Label) || !string.Equals(o.Label.Trim(), label.Trim(), System.StringComparison.OrdinalIgnoreCase)) continue;
+                if (o.Hide) return false;
+                if (!string.IsNullOrEmpty(o.Text)) value = o.Text.Replace("{value}", value ?? "");
+                if (!string.IsNullOrEmpty(o.NewLabel)) label = o.NewLabel;
+                return true;
+            }
+            return true;
+        }
         [Tooltip("What its windup bar reads while it winds up (Grasp and Impel: Grasp). Empty: Display Name.")]
         public string WindupName = "";
 
@@ -84,6 +120,25 @@ namespace TacticsGame.Core
 
         [Header("Offense")]
         public ImpactType Impact = ImpactType.Light;
+        [Tooltip("How its windup shows (the bar and text over the unit, the ring at its feet). Auto: Heavy only for a Heavy attack that deals damage or stuns. Light / Heavy: shown that way whatever it does (flavour), its impact unchanged.")]
+        public WindupDisplay WindupDisplay = WindupDisplay.Auto;
+
+        /// <summary>Is it an attack on enemies (damage or a stun, at enemies or an area)? Its windup can show as Heavy (Auto).</summary>
+        public bool IsAttack
+        {
+            get
+            {
+                bool attack = Damage > 0f || StunDuration > 0f;
+                bool atEnemies = Targeting == TargetType.Enemy || Targeting == TargetType.Position || Targeting == TargetType.AnyUnit || (Targeting == TargetType.Self && Shape != AreaShape.None);
+                return attack && atEnemies;
+            }
+        }
+
+        /// <summary>Does its windup show as Heavy (the big orange bar, the reversed ring)? WindupDisplay, or with Auto a Heavy attack.</summary>
+        public bool ShowsHeavyWindup
+        {
+            get { return WindupDisplay == WindupDisplay.Heavy || (WindupDisplay == WindupDisplay.Auto && Impact == ImpactType.Heavy && IsAttack); }
+        }
         public float Damage = 10f;
         public float BaseAccuracy = 1f;
         public float StunDuration = 0.5f;
@@ -91,6 +146,8 @@ namespace TacticsGame.Core
         public float StrainOnSelf = 0f;       // strain the user gains for using it; negative relieves strain (behaviors may discount it)
         [Tooltip("Health the user pays to start it (Etching of Voracity). It can't be used with this much health or less.")]
         public float HealthCost = 0f;
+        [Tooltip("HYSTERIA the user gains each time it uses this (the Forsaken's Devour); nothing outside Diverged form.")]
+        [Min(0)] public int HysteriaOnUse = 0;
         [Tooltip("May be used past max strain; if its strain cost takes the user over max, the user Unravels as soon as it lands (Praa's Truth).")]
         public bool UnravelsOverMaxStrain = false;
         public bool PiercesTerrain = false;   // ignores cover exposure
@@ -98,8 +155,16 @@ namespace TacticsGame.Core
         [Tooltip("Damage multiplier against a target that is stunned when the hit lands (Lethal Prescience: 3). 1 = none.")]
         public float StunnedDamageMultiplier = 1f;
 
+        [Header("Forms (the Forsaken)")]
+        [Tooltip("The Forsaken's other form of this ability: while Diverged, this one is swapped for it (Divulge -> Devour). Empty: the same in both forms.")]
+        public ActionDefinition DivergedVersion;
+        [Tooltip("Only usable in this form of the Forsaken's (Any: either).")]
+        public FormLock Form = FormLock.Any;
+
         [Header("Area (area_attack / trap)")]
         public AreaShape Shape = AreaShape.None;
+        [Tooltip("Cone shape: how wide it opens, in degrees (AreaRadius is how far it reaches).")]
+        public float ConeAngle = 90f;
         public float AreaRadius = 0f;         // circle radius, or a trap's trigger radius
         public float LineWidth = 1f;          // line length is Range
         [Tooltip("Dome height for an aura (with AreaRadius as its radius): how far above the user's feet it reaches.")]
@@ -228,6 +293,14 @@ namespace TacticsGame.Core
         [Min(0.01f)] public float ProjectileRadius = 0.3f;
         [Tooltip("Seconds it flies before it falls apart unspent.")]
         [Min(0.05f)] public float ProjectileLifetime = 4f;
+        [Tooltip("What it steers toward: None flies straight; Target the unit it was fired at; Closest Enemy whichever enemy is nearest it, picked afresh as it flies. A homing one fizzles on cover and terrain.")]
+        public ProjectileHoming ProjectileHoming = ProjectileHoming.ClosestEnemy;
+        [Tooltip("Homing: seconds it flies as launched before it starts to steer.")]
+        [Min(0f)] public float ProjectileHomingDelay = 0.25f;
+        [Tooltip("Homing power: degrees a second it can turn toward what it homes on.")]
+        [Min(0f)] public float ProjectileTurnRate = 200f;
+        [Tooltip("Homing power gained: degrees a second added to its turn rate every second it steers (it locks on harder).")]
+        [Min(0f)] public float ProjectileTurnGrowth = 500f;
 
         [Header("Linked")]
         [Tooltip("Abilities this one links to. Once it lands, each can be used straight after it, at any target, with no time limit, as long as the unit uses no other ability first (walking, dashing and waiting don't count). Unlike Follow Ups, no window and no same-target rule. They come with it in any loadout. It may link to itself (Sever: each use in a row is stronger).")]

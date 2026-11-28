@@ -28,9 +28,21 @@ MonoBehaviour:
   EyeHeight: 1.6
   BodyHeight: 1.8
   BodyRadius: 0.4
+  ReactionSpeed: 0.25
   BasicAttack: {fileID: 11400000, guid: 754c68e13e66b2044bac1a9266681f57, type: 2}
   Makina: 0
+  CannotBlock: 0
+  CannotFocus: 0
+  CannotMove: 0
+  CannotDash: 0
+  CannotDodge: 0
+  MapObjective: 0
   StrainPerSecond: 0
+  StrainName: 
+  ExcludedEtchings: []
+  DivergeAction: {fileID: 0}
+  RegressAction: {fileID: 0}
+  InsanityAction: {fileID: 0}
   Description: "Wielding an artifact stolen from the grave of The Ogem Makina Prima,
     the Strategist molds and bends reality into inextricable mazes of madness. They
     specialize in controlling effects that displace and confound, setting up allies
@@ -55,6 +67,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 692e0b3768277ed4f9c2b9138d9920e5, type: 2}
   - {fileID: 11400000, guid: 3bfd2e5447764e0bbae757a5ddf01ca6, type: 2}
   - {fileID: 11400000, guid: 1775eb73f1884729adbab1feb319d5ce, type: 2}
+  - {fileID: 11400000, guid: b6bfbeb5c502d0e46a32cbb6f40f7699, type: 2}
+  - {fileID: 11400000, guid: 3d6d45dfa678a684f862b0dfa294c473, type: 2}
+  - {fileID: 11400000, guid: d85711cf520e28f43b8e0e584cf8fd07, type: 2}
   Passives:
   - conscience_flows_into_a_shell
   AIProfile: 
@@ -64,6 +79,8 @@ MonoBehaviour:
   Model: {fileID: 919132149155446097, guid: 02d193023ce8e144d80d60676cf3e665, type: 3}
   ModelAnimations: {fileID: 9100000, guid: 74bf782a84064b544b9f6761e58e8cd5, type: 2}
   ModelEtchings: {fileID: 0}
+  DivergedModel: {fileID: 0}
+  DivergedAnimations: {fileID: 0}
   Icon: {fileID: 0}
   GrantedActions:
   - termouls_monolith
@@ -73,4 +90,8 @@ MonoBehaviour:
   - monge_amperes_perfection
   - mindmeld
   - theory_of_displacement
-  DataVersion: 15
+  - wrathful_reflection
+  - compositions_of_destruction
+  - strange_axis
+  - obstruction
+  DataVersion: 16

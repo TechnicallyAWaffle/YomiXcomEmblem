@@ -85,6 +85,25 @@ Howler, which can't guard) and clips for its own abilities:
 | Howler | A canine quadruped with a plated spine, metal jaw, glowing eyes (own skeleton: on all fours, plus a tail) | `ravenous_jaws`, `howling_lament` |
 | Matriarch | A floating jellyfish: a bell of mismatched slabs and gems round a glowing core, six tentacles (own skeleton, plus two tentacle bones) | `needlestorm`, `carapace`, `captivate` |
 
+## The Forsaken: two models
+
+The Forsaken has a model for each form. `Art/Forsaken` is the **Composed** form: a tall, gaunt dark figure floating half a
+metre up, a pale spiral face, bird-skull masks on its cloak, bone crests, a glowing orb, a gold halo, smoke tendrils
+(`wisp.*` bones). `Art/ForsakenDiverged` is the **Diverged** form: a floating larva of pale segments bound in black,
+eyes everywhere (some on stalks), a black crown with two fans (`crown.*`), four tentacle arms (the arm and leg bones),
+ribbons (`ribbon.*`) and a twisting tail (`tail.*`). Build each with `build_unit.py` (`-- Forsaken`, `-- ForsakenDiverged`).
+
+| Form | Its own clips |
+|---|---|
+| Composed | `divulge`, `fray_the_mind`, `wretched_visions`, `simplicity`, `neurosis.Windup` (the change, clutching its head) |
+| Diverged | `devour`, `rampage`, `blind_rampage`, `unleash`, `howling_end`, `berserk.Windup`, `regression.Windup` (curling in) |
+
+**How Unity uses them:** a model in `Assets/Models/<Unit>Diverged/` is that unit's Diverged form. On import,
+`UnitModelImport` puts it in the unit's **Diverged Model** and **Diverged Animations** fields, not Model. In battle,
+`UnitLooks` builds both models under the view and shows the Composed one. On each form change, `ForsakenForm` swaps
+which model is shown and which Animator the view plays.
+
+
 **What the toolkit adds for them** (`common/unit_tools.py`):
 - `SKELETON = {bone: (head, tail)}` in a unit's script lays the same 15 bones out differently (a beast on all fours, a
   giant, a floating bell); `EXTRA_BONES = {bone: (head, tail, parent)}` adds bones of its own (wings, tentacles,
@@ -94,7 +113,8 @@ Howler, which can't guard) and clips for its own abilities:
 - `humanoid(m, w, mats, skip)` and `held_blade(m, side, length)`: a plain body and a straight blade, for the standard
   skeleton. `etch_tiles(style)`: eight etching tiles from a small pattern library.
 - Material slots past Body / Metal / Etched: `Dark` (near black: smoke, shadow), `Glow` (the team's colour, glowing:
-  eyes, cores, claw tips) and `Gold`. Unity's `UnitLooks` maps them by name.
+  eyes, cores, claw tips), `Gold`, `Bone` (pale ivory: masks, bone, pale flesh) and `Eye` (bright white). Unity's
+  `UnitLooks` maps them by name.
 - `PREVIEW_VIEW = {'ortho': ..., 'height': ...}` zooms the preview sheet for a small or tall unit.
 
 Unit models are imported Read/Write (`UnitModelImport`): the tactical view (Alt) draws their edges from the mesh.

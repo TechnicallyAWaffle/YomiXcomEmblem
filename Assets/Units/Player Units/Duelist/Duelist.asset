@@ -28,9 +28,21 @@ MonoBehaviour:
   EyeHeight: 1.6
   BodyHeight: 1.8
   BodyRadius: 0.4
+  ReactionSpeed: 0.25
   BasicAttack: {fileID: 11400000, guid: 12cf8e446e89e2e4a99ad8cfb3f3a974, type: 2}
   Makina: 0
+  CannotBlock: 0
+  CannotFocus: 0
+  CannotMove: 0
+  CannotDash: 0
+  CannotDodge: 0
+  MapObjective: 0
   StrainPerSecond: 0
+  StrainName: 
+  ExcludedEtchings: []
+  DivergeAction: {fileID: 0}
+  RegressAction: {fileID: 0}
+  InsanityAction: {fileID: 0}
   Description: 
   Universal: {fileID: 11400000, guid: 789b922f559e46a4cbc6c2bd16c844df, type: 2}
   Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
@@ -47,6 +59,11 @@ MonoBehaviour:
   - {fileID: 11400000, guid: cfdfb3c2d43ce6146bec2a32dc3a2c82, type: 2}
   - {fileID: 11400000, guid: f0502229add7462f8ecccf64b65ab607, type: 2}
   - {fileID: 11400000, guid: 5631706492ab4edca6cef54c9cc66a2b, type: 2}
+  - {fileID: 11400000, guid: 25001e9f40a64af4e99b0d74cb781e4d, type: 2}
+  - {fileID: 11400000, guid: c4d641f73e0a39e49be91c132e5571b7, type: 2}
+  - {fileID: 11400000, guid: abdf39aaa20a0d9478c3b2ada156900f, type: 2}
+  - {fileID: 11400000, guid: 94c3c75152bdd754fbeb631d4fa1d4a9, type: 2}
+  - {fileID: 11400000, guid: 4da8f41bf39faab49b38ca6297834433, type: 2}
   Passives:
   - karranos_sigil
   AIProfile: 
@@ -56,6 +73,8 @@ MonoBehaviour:
   Model: {fileID: 919132149155446097, guid: 1a95ce2171cb3334fbd39cc3d6bac84f, type: 3}
   ModelAnimations: {fileID: 9100000, guid: 15a5a090872c07249bee8304a11490df, type: 2}
   ModelEtchings: {fileID: 0}
+  DivergedModel: {fileID: 0}
+  DivergedAnimations: {fileID: 0}
   Icon: {fileID: 0}
   GrantedActions:
   - monostep
@@ -65,4 +84,9 @@ MonoBehaviour:
   - opening_theorem
   - vindication
   - quell_the_uproar
-  DataVersion: 15
+  - feint
+  - third_intention
+  - breakthrough
+  - contempt
+  - countersign
+  DataVersion: 16

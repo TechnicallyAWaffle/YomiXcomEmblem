@@ -199,7 +199,12 @@ namespace TacticsGame.Core
         public override bool RollsToHit(ActionDefinition def) { return false; }
         public override bool TakesBlockSlot { get { return true; } }   // the Duelist's Block
 
-        public override bool IgnoresCooldown(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId) { return actor.HasStatus(StatusIds.Rebuttal); }
+        // A Transcended parry's cooldown holds even when it parries: its Rebuttal (Stacks 1) doesn't lift it.
+        public override bool IgnoresCooldown(BattleSimulation sim, Unit actor, ActionDefinition def, string targetId)
+        {
+            var r = actor.GetStatus(StatusIds.Rebuttal);
+            return r != null && r.Stacks == 0;
+        }
         public override float WindupSeconds(BattleSimulation sim, Unit actor, ActionDefinition def) { return actor.HasStatus(StatusIds.Rebuttal) ? 0f : base.WindupSeconds(sim, actor, def); }
 
         public override void Describe(AbilityTip tip)
@@ -218,7 +223,9 @@ namespace TacticsGame.Core
                 var def = u.Actions.Find(x => x != null && x.BehaviorId == "parry");
                 if (def == null) return;
                 sim.AddStrain(u, -Param(def, "strain_relief"));
-                sim.ApplyStatus(u, new StatusEffect { Id = StatusIds.Rebuttal, SourceId = u.Id, ExpiresAt = sim.Now + Param(def, "followup_seconds"), Flags = StatusFlags.FollowupWindow }, u);
+                var parrying = u.GetStatus(StatusIds.Parrying);
+                sim.ApplyStatus(u, new StatusEffect { Id = StatusIds.Rebuttal, SourceId = u.Id, ExpiresAt = sim.Now + Param(def, "followup_seconds"), Flags = StatusFlags.FollowupWindow,
+                                                      Stacks = parrying != null ? parrying.Stacks : 0 }, u);   // 1: from a Transcended parry (its cooldown stands)
                 if (u.Phase == UnitPhase.Recovery) sim.EndRecoveryNow(u);
                 sim.EmitFx(u, ctx.Other, "parry", def, u.Position);
             });
@@ -236,6 +243,7 @@ namespace TacticsGame.Core
             {
                 Id = StatusIds.Parrying, SourceId = u.Id, ExpiresAt = sim.Now + Param(a.Definition, "window") + BattleSimulation.TickLength,
                 Flags = StatusFlags.NegatesDamage | StatusFlags.StunImmune | StatusFlags.Counters,   // meets attacks before any dodge
+                Stacks = a.Transcended ? 1 : 0,   // a Transcended parry: what it earns doesn't lift its cooldown
             }, u);
         }
     }

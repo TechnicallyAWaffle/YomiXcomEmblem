@@ -26,6 +26,7 @@ namespace TacticsGame.Core
             { "brutebeast", () => new BrutebeastAI() },
             { "wraith", () => new WraithAI() },
             { "monarch", () => new MonarchAI() },
+            { ObjectiveAI.Style, () => new ObjectiveAI() },
             { "zola", () => new ZolaAI() },
             { "primavaeran", () => new PrimavaeranAI() },
             { IdleAI.Style, () => new IdleAI() },
@@ -38,6 +39,7 @@ namespace TacticsGame.Core
             { WexAI.Style, () => new WexAI() },
             { HowlerAI.Style, () => new HowlerAI() },
             { MatriarchAI.Style, () => new MatriarchAI() },
+            { InertAI.Style, () => new InertAI() },
         };
 
         private static readonly Dictionary<string, IUnitAI> shared = new Dictionary<string, IUnitAI>();
@@ -89,8 +91,14 @@ namespace TacticsGame.Core
     /// The default enemy AI: each unit is played by its AI asset (a style with tuned numbers), else its AIProfile style
     /// ("auto" picks one from its abilities), else BasicEnemyAI.
     /// </summary>
-    public class AIRouter : IUnitAI, IDropPreference
+    public class AIRouter : IUnitAI, IDropPreference, IHazardEvader
     {
+        public UnitCommand Evade(BattleSimulation sim, Unit unit)
+        {
+            var evader = For(unit) as IHazardEvader;
+            return evader != null ? evader.Evade(sim, unit) : null;
+        }
+
         public Unit DropNear(BattleSimulation sim, Unit unit)
         {
             var pref = For(unit) as IDropPreference;
@@ -197,11 +205,9 @@ namespace TacticsGame.Core
             var r = React(sim, unit) ?? Rest(sim, unit);
             if (r != null) return r;
 
-            float threat = NearestMeleeThreat(sim, unit, unit.Position);
+            var away = Reposition(sim, unit, QuickestShot(sim, unit));   // keep its distance by time (BasicEnemyAI.Reposition)
+            if (away != null) return away;
             Vector3 spot;
-            if (threat < KeepDistance && !unit.IsRooted && BrawlerPressing(sim, unit) &&
-                BestSpot(sim, unit, p => RangedSpotScore(sim, unit, p), out spot) && NearestMeleeThreat(sim, unit, spot) > threat + 1f)
-                return UnitCommand.MoveTo(unit.Id, spot);
 
             var snipe = Find(unit, AbilityRole.Snipe);
             var mark = Marker(unit);
@@ -238,12 +244,12 @@ namespace TacticsGame.Core
             {
                 if (BestSpot(sim, unit, p => MarkSpotScore(sim, unit, mark, p), out spot)) return UnitCommand.MoveTo(unit.Id, spot);
                 var near = sim.NearestEnemy(unit);
-                return UnitCommand.MoveTo(unit.Id, sim.ApproachSpot(unit, near, unit.ActionStat(mark, ActionStat.Range) * 0.85f));
+                return ApproachStep(sim, unit, near, unit.ActionStat(mark, ActionStat.Range) * 0.85f);
             }
             if (AnyTargetInSight(sim, unit, unit.Position) || unit.IsRooted) return UnitCommand.Idle(unit.Id, 0.4f);
             if (BestSpot(sim, unit, p => RangedSpotScore(sim, unit, p), out spot)) return UnitCommand.MoveTo(unit.Id, spot);
             var nearest = sim.NearestEnemy(unit);
-            return UnitCommand.MoveTo(unit.Id, sim.ApproachSpot(unit, nearest, Mathf.Max(KeepDistance, MaxRange(unit) * 0.6f)));
+            return ApproachStep(sim, unit, nearest, Mathf.Max(KeepDistance, MaxRange(unit) * 0.6f));
         }
 
         /// <summary>A spot to mark from: someone in the mark's reach and sight scores high, and brawlers stay far.</summary>
@@ -491,9 +497,12 @@ namespace TacticsGame.Core
             var r = React(sim, unit) ?? Rest(sim, unit);
             if (r != null) return r;
             var blast = Find(unit, AbilityRole.AreaBlast);
-            bool pressed = NearestMeleeThreat(sim, unit, unit.Position) < KeepDistance && BrawlerPressing(sim, unit);
             Vector3 at;
-            if (!pressed && Ready(sim, unit, blast) && BestBlast(sim, unit, blast, out at)) return UnitCommand.UseActionAt(unit.Id, blast, at);
+            if (Ready(sim, unit, blast) && BestBlast(sim, unit, blast, out at))
+            {
+                var away = Reposition(sim, unit, blast);   // no time to cast it before a brawler is on it: step away first
+                return away ?? UnitCommand.UseActionAt(unit.Id, blast, at);
+            }
             return DecideRanged(sim, unit);
         }
 

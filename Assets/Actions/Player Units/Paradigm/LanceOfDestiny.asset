@@ -18,6 +18,9 @@ MonoBehaviour:
   Roles: 0
   Description: Charge up energy, increasing Strain overtime. Release to throw out
     a heavy lance that deals more damage and stun based on charge time.
+  Details: 
+  TipOverrides: []
+  WindupName: 
   Targeting: 4
   Range: 16
   IsRanged: 1
@@ -33,17 +36,22 @@ MonoBehaviour:
   RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 1
+  WindupDisplay: 0
   Damage: 10
   BaseAccuracy: 1
   StunDuration: 0.25
   StrainOnTarget: 8
   StrainOnSelf: 0
   HealthCost: 0
+  HysteriaOnUse: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
   BlockPierce: 0
   StunnedDamageMultiplier: 1
+  DivergedVersion: {fileID: 0}
+  Form: 0
   Shape: 2
+  ConeAngle: 90
   AreaRadius: 0
   LineWidth: 0.8
   AreaHeight: 0
@@ -52,6 +60,7 @@ MonoBehaviour:
   AuraAtTarget: 0
   AuraDamagePerSecond: 0
   AuraStrainPerSecond: 0
+  AuraDamageGrowth: 0
   InnatePassive: 0
   SummonUnit: {fileID: 0}
   SummonUnits: []
@@ -86,21 +95,40 @@ MonoBehaviour:
   ChargeDamageMultiplier: 6
   ChargeStunMultiplier: 6
   ChargeHealMultiplier: 1
+  WeakpointsOnTarget: 0
+  WeakpointsOnSelfDuringWindup: 0
+  WeakpointsOnSelf: 0
+  WeakpointSeconds: 0
+  BreaksWeakpoints: 0
   FollowUps: []
   IsFollowup: 0
+  StageNames: []
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  ProjectileSpeed: 7
+  ProjectileAcceleration: 16
+  ProjectileMaxSpeed: 26
+  ProjectileRadius: 0.3
+  ProjectileLifetime: 4
+  ProjectileHoming: 2
+  ProjectileHomingDelay: 0.25
+  ProjectileTurnRate: 200
+  ProjectileTurnGrowth: 500
+  LinkedAbilities: []
+  RequiresLink: 0
   CanTranscend: 0
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
+  TranscendCooldown: -1
   ExtraCinematic: 0
   Visuals:
     Kind: 4
     Color: {r: 1, g: 0.85, b: 0.35, a: 1}
     Width: 0.25
     Pierce: 0
+    Orb: 0
   InterruptedByDamage: 0
   InterruptedByStun: 0
   Params: []
-  DataVersion: 15
+  DataVersion: 16

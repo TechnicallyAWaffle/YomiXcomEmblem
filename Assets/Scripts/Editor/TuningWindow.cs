@@ -3,6 +3,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using TacticsGame.Core;
+using TacticsGame.Presentation;
 
 /// <summary>
 /// Tools > Combat Test > Tuning &amp; Text: every player-facing string and tuning number in one place.
@@ -14,17 +15,22 @@ using TacticsGame.Core;
 ///   - AI Profiles: every AIProfileDefinition asset: its style and the numbers it overrides.
 ///   - Battle Rules: battle-wide numbers (fall damage, focus, grapple timings...): overrides of BattleSimulation's tunable
 ///     fields kept in Assets/Resources/BattleTuning.asset, which every battle applies (see BattleTuning).
+///   - Text: every line of interface wording the code shows (GameText: menus, notices, popups, tooltip headings, Etching
+///     comparisons), found in the scripts (GameTextIndex), grouped by key; edits are kept in Assets/Resources/GameText.asset
+///     and show at once, in Play mode too. An ability's own tooltip lines are changed on the ability (Abilities > Details:
+///     Tooltip lines, ActionDefinition.TipOverrides).
 /// Search narrows any tab by name; the Text / Numbers filter narrows Details. Edits go through Undo and mark the assets
 /// dirty: Save writes them to disk. SquadAssets never overwrites a field edited here (its patches only touch what a new
 /// DataVersion changes).
 /// </summary>
 public class TuningWindow : EditorWindow
 {
-    private enum Tab { Abilities, Units, Upgrades, AIProfiles, BattleRules }
+    private enum Tab { Abilities, Units, Upgrades, AIProfiles, BattleRules, Text, Statuses }
     private enum Show { All, Text, Numbers }
-    private static readonly string[] TabNames = { "Abilities", "Units", "Upgrades", "AI Profiles", "Battle Rules" };
+    private static readonly string[] TabNames = { "Abilities", "Units", "Upgrades", "AI Profiles", "Battle Rules", "Text", "Statuses" };
 
     private const string TuningPath = "Assets/Resources/" + BattleTuning.ResourceName + ".asset";
+    private const string GameTextPath = "Assets/Resources/" + GameText.ResourceName + ".asset";
 
     // Table columns: the ActionDefinition fields and their headers.
     private static readonly string[] TableFields = { "Windup", "Recovery", "Cooldown", "Range", "Damage", "BaseAccuracy", "StunDuration", "StrainOnSelf", "StrainOnTarget" };
@@ -34,7 +40,7 @@ public class TuningWindow : EditorWindow
     // Fields code looks up by value (renaming them breaks the ability): shown, not editable.
     private static readonly HashSet<string> Locked = new HashSet<string> { "Id", "BehaviorId", "AIProfile", "m_Script" };
     // Fields drawn their own way below the rest (an ability's Params: as its behavior's numbers).
-    private static readonly HashSet<string> DrawnSeparately = new HashSet<string> { "Params" };
+    private static readonly HashSet<string> DrawnSeparately = new HashSet<string> { "Params", "TipOverrides" };
 
     private Tab tab;
     private Show show;
@@ -63,6 +69,8 @@ public class TuningWindow : EditorWindow
         upgrades = Find<UpgradeDefinition>().OrderBy(u => Folder(u)).ThenBy(u => u.DisplayName).ToList();
         aiProfiles = Find<AIProfileDefinition>().OrderBy(p => p.name).ToList();
         tuning = AssetDatabase.LoadAssetAtPath<BattleTuning>(TuningPath);
+        gameText = AssetDatabase.LoadAssetAtPath<GameText>(GameTextPath);
+        textIndex = null;   // scanned again when the Text tab is next drawn (scripts may have changed)
     }
 
     private static List<T> Find<T>() where T : Object
@@ -92,11 +100,17 @@ public class TuningWindow : EditorWindow
     private void OnGUI()
     {
         EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
-        tab = (Tab)GUILayout.Toolbar((int)tab, TabNames, EditorStyles.toolbarButton, GUILayout.Width(470f));
+        tab = (Tab)GUILayout.Toolbar((int)tab, TabNames, EditorStyles.toolbarButton, GUILayout.Width(650f));
         GUILayout.Space(8f);
         search = GUILayout.TextField(search, EditorStyles.toolbarSearchField, GUILayout.MinWidth(120f));
         if (tab == Tab.Abilities) table = GUILayout.Toggle(table, table ? "Table" : "Details", EditorStyles.toolbarButton, GUILayout.Width(60f));
-        if (tab != Tab.BattleRules && tab != Tab.AIProfiles && !(tab == Tab.Abilities && table))
+        if (tab == Tab.Text)
+        {
+            editedOnly = GUILayout.Toggle(editedOnly, "Edited only", EditorStyles.toolbarButton, GUILayout.Width(80f));
+            if (GUILayout.Button("Rescan", EditorStyles.toolbarButton, GUILayout.Width(60f))) textIndex = null;
+        }
+        if (tab == Tab.Statuses) editedOnly = GUILayout.Toggle(editedOnly, "Edited only", EditorStyles.toolbarButton, GUILayout.Width(80f));
+        if (tab != Tab.BattleRules && tab != Tab.AIProfiles && tab != Tab.Text && tab != Tab.Statuses && !(tab == Tab.Abilities && table))
             show = (Show)EditorGUILayout.EnumPopup(show, EditorStyles.toolbarDropDown, GUILayout.Width(80f));
         if (GUILayout.Button("Save", EditorStyles.toolbarButton, GUILayout.Width(50f))) AssetDatabase.SaveAssets();
         EditorGUILayout.EndHorizontal();
@@ -121,8 +135,298 @@ public class TuningWindow : EditorWindow
             case Tab.BattleRules:
                 DrawRules();
                 break;
+            case Tab.Text:
+                DrawText();
+                break;
+            case Tab.Statuses:
+                DrawStatuses();
+                break;
         }
         EditorGUILayout.EndScrollView();
+    }
+
+    // ------------------------------------------------------------------ text (GameText)
+
+    private GameText gameText;
+    private List<GameTextIndex.Entry> textIndex;
+    private bool editedOnly;
+    private GUIStyle defaultTextStyle;
+
+    /// <summary>
+    /// Every GameText line, grouped by its key's first part: the key, its default wording, and its edited text if it has
+    /// one. Edit copies the default in to start from; Hide keeps an empty text (hidden where the code allows); Reset drops
+    /// the edit. {0}, {1}... are values the code fills in: keep them.
+    /// </summary>
+    private void DrawText()
+    {
+        if (textIndex == null) textIndex = GameTextIndex.Scan();
+        if (defaultTextStyle == null)
+        {
+            defaultTextStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
+            defaultTextStyle.normal.textColor = new Color(0.62f, 0.62f, 0.62f);
+        }
+        if (gameText == null)
+        {
+            EditorGUILayout.HelpBox("No GameText asset yet: every line shows its default wording. Create it to start editing.", MessageType.Info);
+            if (!GUILayout.Button("Create " + GameTextPath, GUILayout.Width(320f))) return;
+            if (!AssetDatabase.IsValidFolder("Assets/Resources")) AssetDatabase.CreateFolder("Assets", "Resources");
+            gameText = CreateInstance<GameText>();
+            AssetDatabase.CreateAsset(gameText, GameTextPath);
+            AssetDatabase.SaveAssets();
+            GameText.Reload();
+        }
+
+        var edited = new Dictionary<string, GameText.Line>();
+        foreach (var l in gameText.Lines) if (l != null && !string.IsNullOrEmpty(l.Key)) edited[l.Key] = l;
+        EditorGUILayout.LabelField(string.Format("{0} lines, {1} edited. {{0}}, {{1}}... are values filled in by the game: keep them. Hide leaves a line empty (hidden where the game allows it).",
+            textIndex.Count, edited.Count), EditorStyles.wordWrappedMiniLabel);
+
+        string s = (search ?? "").Trim();
+        string group = null;
+        bool groupOpen = false;
+        foreach (var e in textIndex)
+        {
+            GameText.Line line;
+            bool isEdited = edited.TryGetValue(e.Key, out line);
+            if (editedOnly && !isEdited) continue;
+            if (s.Length > 0 && e.Key.IndexOf(s, System.StringComparison.OrdinalIgnoreCase) < 0 && e.Default.IndexOf(s, System.StringComparison.OrdinalIgnoreCase) < 0 &&
+                !(isEdited && (line.Text ?? "").IndexOf(s, System.StringComparison.OrdinalIgnoreCase) >= 0)) continue;
+            if (e.Group != group)
+            {
+                group = e.Group;
+                string k = "text:" + group;
+                bool was = open.Contains(k) || s.Length > 0 || editedOnly;
+                groupOpen = EditorGUILayout.Foldout(was, ObjectNames.NicifyVariableName(group), true, EditorStyles.foldoutHeader);
+                if (groupOpen && !open.Contains(k) && s.Length == 0 && !editedOnly) open.Add(k);
+                else if (!groupOpen) open.Remove(k);
+            }
+            if (!groupOpen) continue;
+            DrawTextLine(e, isEdited ? line : null);
+        }
+        if (textIndex.Count == 0) EditorGUILayout.HelpBox("No GameText.Get / GameText.Format calls found in Assets/Scripts.", MessageType.Info);
+    }
+
+    private void DrawTextLine(GameTextIndex.Entry e, GameText.Line line)
+    {
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.SelectableLabel(e.Key, EditorStyles.miniBoldLabel, GUILayout.Height(16f));
+        GUILayout.FlexibleSpace();
+        if (GUILayout.Button(new GUIContent("Source", e.File + ":" + e.Line), EditorStyles.miniButtonLeft, GUILayout.Width(52f)))
+            AssetDatabase.OpenAsset(AssetDatabase.LoadAssetAtPath<MonoScript>(e.File), e.Line);
+        if (line == null)
+        {
+            if (GUILayout.Button("Edit", EditorStyles.miniButtonMid, GUILayout.Width(40f))) SetText(e.Key, e.Default);
+            if (GUILayout.Button("Hide", EditorStyles.miniButtonRight, GUILayout.Width(40f))) SetText(e.Key, "");
+        }
+        else if (GUILayout.Button("Reset", EditorStyles.miniButtonRight, GUILayout.Width(50f))) { RemoveText(e.Key); line = null; }
+        EditorGUILayout.EndHorizontal();
+        GUILayout.Label((line != null ? "Default: " : "") + e.Default, defaultTextStyle);
+        if (e.OtherDefaults.Count > 0)
+            EditorGUILayout.HelpBox("This key has other defaults elsewhere in the code: " + string.Join(" | ", e.OtherDefaults.ToArray()), MessageType.Warning);
+        if (line != null)
+        {
+            EditorGUI.BeginChangeCheck();
+            string now = EditorGUILayout.TextArea(line.Text ?? "", EditorStyles.textArea);
+            if (EditorGUI.EndChangeCheck()) SetText(e.Key, now);
+            if (string.IsNullOrEmpty(line.Text)) EditorGUILayout.LabelField("(hidden)", EditorStyles.centeredGreyMiniLabel);
+            string missing = MissingPlaceholders(e.Default, line.Text ?? "");
+            if (missing != null && !string.IsNullOrEmpty(line.Text)) EditorGUILayout.HelpBox("Leaves out " + missing + ": that value won't show.", MessageType.None);
+        }
+        EditorGUILayout.EndVertical();
+    }
+
+    /// <summary>The {0}, {1}... the default has and the text doesn't (null: none missing).</summary>
+    private static string MissingPlaceholders(string def, string text)
+    {
+        var missing = new List<string>();
+        for (int i = 0; i < 10; i++) { string p = "{" + i; if (def.Contains(p) && !text.Contains(p)) missing.Add("{" + i + "}"); }
+        return missing.Count > 0 ? string.Join(", ", missing.ToArray()) : null;
+    }
+
+    private void SetText(string key, string text)
+    {
+        Undo.RecordObject(gameText, "Edit text");
+        var line = gameText.Lines.Find(l => l != null && l.Key == key);
+        if (line == null) gameText.Lines.Add(line = new GameText.Line { Key = key });
+        line.Text = text;
+        EditorUtility.SetDirty(gameText);
+        GameText.Reload();
+    }
+
+    private void RemoveText(string key)
+    {
+        Undo.RecordObject(gameText, "Reset text");
+        gameText.Lines.RemoveAll(l => l == null || l.Key == key);
+        EditorUtility.SetDirty(gameText);
+        GameText.Reload();
+    }
+
+    // ------------------------------------------------------------------ statuses (StatusGlossary)
+
+    /// <summary>
+    /// Every status the game knows a description for or an ability puts on units: its shared description (what every
+    /// ability's STATUS EFFECTS section says; edited into the GameText asset under status.desc.id), and, per ability using it,
+    /// that ability's own wording (its StatusSpec's Look.Description), which replaces the shared one in that popup only.
+    /// </summary>
+    private void DrawStatuses()
+    {
+        if (defaultTextStyle == null)
+        {
+            defaultTextStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
+            defaultTextStyle.normal.textColor = new Color(0.62f, 0.62f, 0.62f);
+        }
+        if (gameText == null)
+        {
+            EditorGUILayout.HelpBox("No GameText asset yet: create it in the Text tab to edit status descriptions. Each ability's own wording can still be edited below.", MessageType.Info);
+        }
+        // id -> the abilities that put it on someone, with the property path of each spec.
+        var uses = new SortedDictionary<string, List<KeyValuePair<ActionDefinition, string>>>();
+        foreach (var id in StatusGlossary.Known) uses[id] = new List<KeyValuePair<ActionDefinition, string>>();
+        string[] fields = { "SelfStatuses", "SelfStatusesDuringWindup", "TargetStatusesDuringWindup", "TargetStatusesOnHit", "SelfStatusesOnHit", "AuraStatuses", "RandomStatusesOnHit" };
+        foreach (var a in actions)
+        {
+            int f = 0;
+            foreach (var list in StatusGlossary.SpecLists(a))
+            {
+                string field = fields[f++];
+                if (list == null) continue;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var spec = list[i];
+                    if (spec == null || string.IsNullOrEmpty(spec.Id)) continue;
+                    List<KeyValuePair<ActionDefinition, string>> l;
+                    if (!uses.TryGetValue(spec.Id, out l)) uses[spec.Id] = l = new List<KeyValuePair<ActionDefinition, string>>();
+                    l.Add(new KeyValuePair<ActionDefinition, string>(a, field + ".Array.data[" + i + "]"));
+                }
+            }
+            foreach (var id in ActionBehaviors.Get(a.BehaviorId).StatusesApplied(a))
+                if (!uses.ContainsKey(id)) uses[id] = new List<KeyValuePair<ActionDefinition, string>>();
+        }
+        var edited = new Dictionary<string, GameText.Line>();
+        if (gameText != null) foreach (var l in gameText.Lines) if (l != null && !string.IsNullOrEmpty(l.Key)) edited[l.Key] = l;
+        EditorGUILayout.LabelField(string.Format("{0} statuses. The shared description is what every ability's STATUS EFFECTS section says about it; an ability's own wording replaces it in that ability's popup only. Hide leaves it out.", uses.Count), EditorStyles.wordWrappedMiniLabel);
+
+        string s = (search ?? "").Trim();
+        foreach (var kv in uses)
+        {
+            string id = kv.Key, key = StatusGlossary.Key(id);
+            GameText.Line line;
+            bool isEdited = edited.TryGetValue(key, out line);
+            bool ownWording = kv.Value.Exists(u => OwnWording(u.Key, u.Value) != null);
+            if (editedOnly && !isEdited && !ownWording) continue;
+            string name = StatusDisplay.NameOf(id), def = StatusGlossary.Default(id) ?? "";
+            if (s.Length > 0 && id.IndexOf(s, System.StringComparison.OrdinalIgnoreCase) < 0 && name.IndexOf(s, System.StringComparison.OrdinalIgnoreCase) < 0 &&
+                def.IndexOf(s, System.StringComparison.OrdinalIgnoreCase) < 0 && !kv.Value.Exists(u => u.Key.DisplayName.IndexOf(s, System.StringComparison.OrdinalIgnoreCase) >= 0)) continue;
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(name.ToUpperInvariant() + "   (" + id + ")", EditorStyles.miniBoldLabel);
+            GUILayout.FlexibleSpace();
+            if (gameText != null)
+            {
+                if (!isEdited)
+                {
+                    if (GUILayout.Button("Edit", EditorStyles.miniButtonLeft, GUILayout.Width(40f))) SetText(key, def);
+                    if (GUILayout.Button("Hide", EditorStyles.miniButtonRight, GUILayout.Width(40f))) SetText(key, "");
+                }
+                else if (GUILayout.Button("Reset", EditorStyles.miniButton, GUILayout.Width(50f))) { RemoveText(key); isEdited = false; }
+            }
+            EditorGUILayout.EndHorizontal();
+            GUILayout.Label((isEdited ? "Default: " : "") + (def.Length > 0 ? def : "(no built-in description: nothing is shown until one is written)"), defaultTextStyle);
+            if (isEdited)
+            {
+                EditorGUI.BeginChangeCheck();
+                string now = EditorGUILayout.TextArea(line.Text ?? "", EditorStyles.textArea);
+                if (EditorGUI.EndChangeCheck()) SetText(key, now);
+                if (string.IsNullOrEmpty(line.Text)) EditorGUILayout.LabelField("(hidden)", EditorStyles.centeredGreyMiniLabel);
+            }
+            if (kv.Value.Count > 0)
+            {
+                string k = "status:" + id;
+                bool was = open.Contains(k) || ownWording;
+                bool now = EditorGUILayout.Foldout(was, string.Format("Used by {0} {1}", kv.Value.Count, kv.Value.Count == 1 ? "ability" : "abilities"), true);
+                if (now && !was) open.Add(k); else if (!now) open.Remove(k);
+                if (now) foreach (var u in kv.Value) DrawOwnWording(u.Key, u.Value);
+            }
+            EditorGUILayout.EndVertical();
+        }
+    }
+
+    /// <summary>An ability's own wording for one of its statuses (that spec's Look.Description), or null.</summary>
+    private static string OwnWording(ActionDefinition a, string specPath)
+    {
+        var so = new SerializedObject(a);
+        var p = so.FindProperty(specPath + ".Look.Description");
+        return p != null && !string.IsNullOrEmpty(p.stringValue) ? p.stringValue : null;
+    }
+
+    private void DrawOwnWording(ActionDefinition a, string specPath)
+    {
+        var so = new SerializedObject(a);
+        var p = so.FindProperty(specPath + ".Look.Description");
+        if (p == null) return;
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("   " + a.DisplayName + "  (" + Folder(a) + ")", GUILayout.Width(240f));
+        EditorGUI.BeginChangeCheck();
+        string now = EditorGUILayout.TextField(p.stringValue ?? "");
+        if (EditorGUI.EndChangeCheck()) { p.stringValue = now; so.ApplyModifiedProperties(); }
+        if (string.IsNullOrEmpty(p.stringValue)) GUILayout.Label("shared", EditorStyles.centeredGreyMiniLabel, GUILayout.Width(44f));
+        else if (GUILayout.Button("Clear", EditorStyles.miniButton, GUILayout.Width(44f))) { p.stringValue = ""; so.ApplyModifiedProperties(); }
+        EditorGUILayout.EndHorizontal();
+    }
+
+    // ------------------------------------------------------------------ an ability's tooltip lines
+
+    /// <summary>
+    /// An ability's hover popup lines as its behavior words them now (ActionBehavior.Describe and the numbers), each with
+    /// Edit / Hide to add an override for it (ActionDefinition.TipOverrides), then the overrides themselves. The orders
+    /// panel's own lines (Windup, Recovery, Cooldown, Strain...) can be overridden by their labels the same way.
+    /// </summary>
+    private void DrawTipLines(ActionDefinition def)
+    {
+        EditorGUI.indentLevel++;
+        EditorGUILayout.LabelField("Tooltip lines", EditorStyles.miniBoldLabel);
+        var behavior = ActionBehaviors.Get(def.BehaviorId);
+        var raw = new List<KeyValuePair<string, string>>();
+        var saved = def.TipOverrides;
+        def.TipOverrides = null;   // the lines as generated, before this ability's own changes
+        try
+        {
+            var full = new AbilityTip(def, null);
+            behavior.Describe(full);
+            var numbers = new AbilityTip(def, null);
+            ActionBehavior.DescribeNumbers(numbers, behavior);
+            foreach (var c in numbers.Effect) raw.Add(c);
+            foreach (var c in full.Effect) if (!raw.Exists(r => r.Key == c.Key)) raw.Add(c);
+        }
+        catch (System.Exception ex) { EditorGUILayout.HelpBox("Couldn't word its lines here: " + ex.Message, MessageType.None); }
+        finally { def.TipOverrides = saved; }
+        foreach (var c in raw)
+        {
+            bool has = def.TipOverrides != null && def.TipOverrides.Exists(o => o != null && string.Equals((o.Label ?? "").Trim(), c.Key, System.StringComparison.OrdinalIgnoreCase));
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(c.Key, c.Value, EditorStyles.wordWrappedMiniLabel);
+            using (new EditorGUI.DisabledScope(has))
+            {
+                if (GUILayout.Button("Edit", EditorStyles.miniButtonLeft, GUILayout.Width(40f))) AddTipOverride(def, c.Key, false);
+                if (GUILayout.Button("Hide", EditorStyles.miniButtonRight, GUILayout.Width(40f))) AddTipOverride(def, c.Key, true);
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+        var so = new SerializedObject(def);
+        so.Update();
+        EditorGUILayout.PropertyField(so.FindProperty("TipOverrides"), new GUIContent("Overrides"), true);
+        so.ApplyModifiedProperties();
+        EditorGUI.indentLevel--;
+    }
+
+    private static void AddTipOverride(ActionDefinition def, string label, bool hide)
+    {
+        Undo.RecordObject(def, "Tooltip line");
+        if (def.TipOverrides == null) def.TipOverrides = new List<ActionDefinition.TipOverride>();
+        def.TipOverrides.Add(new ActionDefinition.TipOverride { Label = label, Hide = hide });
+        EditorUtility.SetDirty(def);
     }
 
     // ------------------------------------------------------------------ abilities table
@@ -208,6 +512,7 @@ public class TuningWindow : EditorWindow
         EditorGUI.indentLevel--;
         so.ApplyModifiedProperties();
         var action = o as ActionDefinition;
+        if (action != null && show != Show.Numbers) DrawTipLines(action);
         if (action != null && show != Show.Text) DrawBehaviorNumbers(action);
         GUILayout.Space(6f);
     }

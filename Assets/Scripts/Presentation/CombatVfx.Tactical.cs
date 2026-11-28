@@ -11,6 +11,12 @@ namespace TacticsGame.Presentation
     ///              waiting to carry out (fainter). In the unit's team colour.
     ///   Weakpoints: each open one marked large and bright: the ground triangle, a diamond at chest height on that side,
     ///              and a ring about the unit, all pulsing.
+    ///   Areas:     every area effect's hitbox (an area windup's circle or lane, a dome or zone, a delayed blast) as a
+    ///              see-through shape with a translucent outline: red for the enemy's, blue for the squad's; with a
+    ///              targeting line from its source to its centre when that isn't where the source stands.
+    ///   Projectiles: an arrowhead at each one, and its predicted course in small running arrows (ProjectilePath.Predict):
+    ///              a homing one's toward where its target is now, as if it stays there; any other straight on, until it
+    ///              would meet the ground or a wall, or fall apart.
     /// Arrows move on real time, so they keep running while the world is held for orders.
     /// </summary>
     public partial class CombatVfx
@@ -26,9 +32,14 @@ namespace TacticsGame.Presentation
             return t == Team.Player ? Color.Lerp(Palette.Squad, Color.white, 0.25f) : t == Team.Enemy ? Color.Lerp(Palette.Enemy, Color.white, 0.15f) : new Color(0.8f, 0.45f, 1f);
         }
 
-        /// <summary>The tactical view's frame: targeting arrows and weakpoints only (no effects).</summary>
+        [Tooltip("Tactical view areas: how see-through their fill is (alpha) and how strong their outline.")]
+        public float AreaFillAlpha = 0.12f;
+        public float AreaOutlineAlpha = 0.6f;
+
+        /// <summary>The tactical view's frame: area hitboxes, targeting arrows, projectile courses and weakpoints (no effects).</summary>
         private void DrawTactical()
         {
+            DrawTacticalAreas();
             var aimed = new HashSet<string>();
             float now = Clock;
             foreach (var w in windups)
@@ -60,6 +71,95 @@ namespace TacticsGame.Presentation
             }
             DrawTacticalProjectiles();
             DrawTacticalWeakpoints();
+        }
+
+        /// <summary>
+        /// Every area effect's hitbox: area windups (a circle, a lane, a charge's run), domes and zones up now, and delayed
+        /// blasts waiting to go off. Each a see-through fill in its team's colour with a translucent outline, and a targeting
+        /// line (running arrows) from its source to its centre when it isn't centred on the source.
+        /// </summary>
+        private void DrawTacticalAreas()
+        {
+            float now = Clock;
+            foreach (var w in windups)
+            {
+                var actor = Director.FindView(w.ActorId);
+                if (actor == null || actor.IsDead) continue;
+                var def = w.Def;
+                Color c = TeamColor(TeamOf(w.ActorId));
+                float range = RangeOr(w.Range, def), radius = RadiusOr(w.Radius, def);
+                if (def.Shape == AreaShape.Circle && radius > 0f)
+                {
+                    bool onSelf = def.Targeting == TargetType.Self;
+                    Vector3 center = onSelf ? actor.transform.position : w.TargetPos;
+                    TacticalDisc(center, radius, c);   // the windup's own arrow already runs to its centre (DrawTactical)
+                }
+                else if (def.Shape == AreaShape.Cone && radius > 0f)
+                {
+                    Vector3 from = actor.transform.position;
+                    Vector3 dir = Flat(w.TargetPos - from);
+                    if (dir.sqrMagnitude < 1e-4f) dir = actor.transform.forward;
+                    TacticalShape(WorldMarkers.ConeOutline(from + Vector3.up * 0.05f, dir, radius, def.ConeAngle), c);
+                }
+                else if (def.Shape == AreaShape.Line || def.BehaviorId == "charge")
+                {
+                    Vector3 from = actor.transform.position;
+                    Vector3 dir = Flat(w.TargetPos - from);
+                    if (dir.sqrMagnitude < 1e-4f) dir = actor.transform.forward;
+                    dir.Normalize();
+                    bool charge = def.Shape != AreaShape.Line;
+                    Vector3 side = Vector3.Cross(Vector3.up, dir) * (charge ? 0.6f : def.LineWidth / 2f);
+                    Vector3 bend, end;
+                    if (charge) { bend = from + dir * (range * 0.5f); end = from + dir * range; }
+                    else
+                    {
+                        float aimDist = Mathf.Min(Flat(w.TargetPos - from).magnitude, range);
+                        bend = LinePoint(def, from, w.TargetPos, dir, aimDist); end = LinePoint(def, from, w.TargetPos, dir, range);
+                    }
+                    var outline = new[] { from - side, bend - side, end - side, end + side, bend + side, from + side };
+                    TacticalShape(outline, c);
+                }
+                else if (def.BehaviorId == "trap" && radius > 0f) TacticalDisc(w.TargetPos, radius, c);
+            }
+            foreach (var d in domes.Values)
+            {
+                var view = Director.FindView(d.ActorId);
+                if ((view == null && !d.Anchored) || now < d.Start || now > d.EndsAt) continue;
+                Vector3 center = d.Anchored ? d.Center : view.transform.position;
+                Color c = TeamColor(TeamOf(d.ActorId));
+                TacticalDisc(center, d.Radius, c);
+                if (d.Anchored && view != null && !view.IsDead) TacticalSourceLine(view, center, c);
+            }
+            foreach (var b in blasts.Values)
+            {
+                if (now < b.Start || now > b.At) continue;
+                Color c = TeamColor(TeamOf(b.ActorId));
+                TacticalDisc(b.Center, b.Radius, c);
+                var view = b.ActorId != null ? Director.FindView(b.ActorId) : null;
+                if (view != null && !view.IsDead) TacticalSourceLine(view, b.Center, c);
+            }
+        }
+
+        private void TacticalDisc(Vector3 center, float radius, Color c)
+        {
+            markers.Disc(center, radius, WithAlpha(c, AreaFillAlpha));
+            markers.Circle(center, radius, WithAlpha(c, AreaOutlineAlpha), 0.07f, 64);
+        }
+
+        private void TacticalShape(Vector3[] outline, Color c)
+        {
+            markers.Fill(outline, WithAlpha(c, AreaFillAlpha));
+            var loop = new Vector3[outline.Length + 1];
+            System.Array.Copy(outline, loop, outline.Length);
+            loop[outline.Length] = outline[0];
+            markers.Polyline(loop, WithAlpha(c, AreaOutlineAlpha), 0.07f);
+        }
+
+        /// <summary>A targeting line from an area's source to its centre, unless the source stands in the middle of it.</summary>
+        private void TacticalSourceLine(UnitView source, Vector3 center, Color c)
+        {
+            if (Flat(center - source.transform.position).sqrMagnitude < 1f) return;
+            TacticalArrow(Chest(source), center + Vector3.up * 0.1f, c, 0.6f, 0.8f);
         }
 
         /// <summary>Where a windup is aimed: its target unit's chest, or the ground point of one aimed at a point (an area).

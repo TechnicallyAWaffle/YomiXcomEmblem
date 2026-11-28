@@ -107,6 +107,18 @@ namespace TacticsGame.Presentation
                 memberAt.Add(null);
             }
 
+            // The encounter's objectives (the Omen), each on the map's objective spawn point it was given.
+            var objectiveMap = map != null ? map : Maps != null ? Maps.Current : null;
+            if (encounterSpec.Objectives != null)
+                foreach (var o in encounterSpec.Objectives)
+                {
+                    if (o == null || o.Unit == null) continue;
+                    var view = Spawn(o.Unit, Team.Enemy, ObjectiveSpawn(objectiveMap, o.SpawnPoint), EnemyMaterial, "Objective_" + o.Unit.DisplayName);
+                    if (view == null) continue;
+                    placements.Add(new BattleContext.Placement { View = view, Team = Team.Enemy, Definition = o.Unit, Upgrades = o.Upgrades });
+                    memberAt.Add(null);
+                }
+
             Context.Placements = placements;
             return memberAt;
         }
@@ -121,6 +133,16 @@ namespace TacticsGame.Presentation
                 sim.StartReinforcementWaves(waves.Pool, Team.Enemy, waves.FirstAfter, waves.Every, waves.PerWave, waves.MaxUp);
             var map = Maps != null ? Maps.Current : null;
             if (map != null) { sim.State.Terrain.AreaMax = map.GroundSize / 2f; sim.State.Terrain.AreaMin = -map.GroundSize / 2f; }
+            if (spec != null && spec.Temperance != null && spec.Temperance.Enabled) sim.StartTemperance(spec.Temperance.ArriveAfter);
+            if (spec != null) sim.AwaitReinforcements = spec.AwaitReinforcements;
+            MissionRules.BeginAll(sim, spec);   // the conditions its objectives bring (reinforcements, ...)
+        }
+
+        /// <summary>Objective spawn point 'index' on 'map' (past the last: the enemies' rows, so it still stands somewhere).</summary>
+        private Vector3 ObjectiveSpawn(MapTemplate map, int index)
+        {
+            if (map != null && index >= 0 && index < map.ObjectiveSpawns.Count) return map.ObjectiveSpawns[index];
+            return StartBattle(Team.Enemy, 1000 + index, 1001 + index);
         }
 
         private void Finished(BattleOutcome outcome)

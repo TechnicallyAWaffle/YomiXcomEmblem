@@ -33,15 +33,15 @@ MonoBehaviour:
       Upgrades: []
       ArriveAfter: 0
       Side: 1
-    - Unit: {fileID: 11400000, guid: e95ee1d8a76adb142a7fb71940391e01, type: 2}
-      Count: 2
-      Upgrades: []
-      ArriveAfter: 0
-      Side: 1
     - Unit: {fileID: 11400000, guid: d86f79d27c898af4aba4b4449007afff, type: 2}
       Count: 3
       Upgrades: []
       ArriveAfter: 12
+      Side: 1
+    - Unit: {fileID: 11400000, guid: 1c1630d06c3ce1341b0febc38013f263, type: 2}
+      Count: 2
+      Upgrades: []
+      ArriveAfter: 5
       Side: 1
     Objective: 0
     Waves:

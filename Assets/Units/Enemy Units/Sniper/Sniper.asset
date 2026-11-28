@@ -28,9 +28,21 @@ MonoBehaviour:
   EyeHeight: 1.6
   BodyHeight: 1.8
   BodyRadius: 0.4
+  ReactionSpeed: 0.25
   BasicAttack: {fileID: 11400000, guid: 997ef3a7185c894488f9f3dd7d4b926a, type: 2}
   Makina: 0
+  CannotBlock: 0
+  CannotFocus: 0
+  CannotMove: 0
+  CannotDash: 0
+  CannotDodge: 0
+  MapObjective: 0
   StrainPerSecond: 0
+  StrainName: 
+  ExcludedEtchings: []
+  DivergeAction: {fileID: 0}
+  RegressAction: {fileID: 0}
+  InsanityAction: {fileID: 0}
   Description: 
   Universal: {fileID: 11400000, guid: 8d752144b2c92e640a8570bb313d0a88, type: 2}
   Dash: {fileID: 11400000, guid: af957ff18056eb34eb52cf0373026d02, type: 2}
@@ -45,6 +57,8 @@ MonoBehaviour:
   Model: {fileID: 919132149155446097, guid: 8a2a9c3e93c8fd94e98b374338a09fbc, type: 3}
   ModelAnimations: {fileID: 9100000, guid: 599418a1f43bf7d4283a1332badc4b36, type: 2}
   ModelEtchings: {fileID: 0}
+  DivergedModel: {fileID: 0}
+  DivergedAnimations: {fileID: 0}
   Icon: {fileID: 0}
   GrantedActions: []
-  DataVersion: 15
+  DataVersion: 16

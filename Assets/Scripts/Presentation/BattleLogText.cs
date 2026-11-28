@@ -84,7 +84,7 @@ namespace TacticsGame.Presentation
                 {
                     var m = (MissInfo)evt.Payload;
                     string with = m.ActionId != null ? " with " + ActionName(m.ActionId) : "";
-                    string why = m.Reason == "cover" ? (m.HitCover ? "hits cover" : "cover") : m.Reason == "out_of_range" ? "out of range" : m.Reason;
+                    string why = m.Reason == "cover" ? (m.HitCover ? "hits cover" : "cover") : m.Reason == "out_of_range" ? "out of range" : m.Reason == "off_line" ? "out of the line of fire" : m.Reason;
                     return string.Format("{0} misses {1}{2} ({3})", Who(evt.ActorId, "a miss with no attacker"), Who(evt.TargetId, "a miss with no target (" + m.Reason + ")"), with, why);
                 }
                 case EventType.Dodge:

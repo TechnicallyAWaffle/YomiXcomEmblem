@@ -30,6 +30,14 @@ namespace TacticsGame.Core
         UnitCommand Decide(BattleSimulation sim, Unit unit);
     }
 
+    /// <summary>An AI that gets its units out of area attacks and projectiles' paths (BattleSimulation.Evasion.cs).</summary>
+    public interface IHazardEvader
+    {
+        /// <summary>'unit' is ready to act, with hazards on it that it has reacted to (BattleSimulation.DueHazards): how it
+        /// gets out of the way, or null to decide as usual. Asked before Decide.</summary>
+        UnitCommand Evade(BattleSimulation sim, Unit unit);
+    }
+
     /// <summary>
     /// An AI that keeps watch between its units' decisions (a pack noticing an opening the moment it comes): the battle
     /// calls Watch every BattleSimulation.WatchTicks ticks for each living unit it plays (BattleSimulation.TickWatchers).

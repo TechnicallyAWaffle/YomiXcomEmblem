@@ -11,6 +11,9 @@ namespace TacticsGame.Core
     /// <summary>Light/Heavy drives block break amounts and Unravel (Heavy at max Strain).</summary>
     public enum ImpactType { Light, Heavy }
 
+    /// <summary>How an ability's windup shows (ActionDefinition.WindupDisplay): Auto from its impact, or forced for flavour.</summary>
+    public enum WindupDisplay { Auto, Light, Heavy }
+
     /// <summary>AnyUnit: an ally, an enemy or (unless ActionDefinition.CannotTargetSelf) the user. New values go at the end:
     /// assets store the number.</summary>
     public enum TargetType { None, Self, Enemy, Ally, Position, AnyUnit }
@@ -19,7 +22,10 @@ namespace TacticsGame.Core
     public enum StatusTarget { Any, Allies, Enemies }
 
     /// <summary>Area of an area_attack: a circle around the target point (or the actor, for Self), or a line from the actor.</summary>
-    public enum AreaShape { None, Circle, Line }
+    public enum AreaShape { None, Circle, Line, Cone }   // Cone: AreaRadius long, ActionDefinition.ConeAngle wide, from the user toward the aimed point
+
+    /// <summary>Which of the Forsaken's forms an ability can be used in (ActionDefinition.Form). Any: either.</summary>
+    public enum FormLock { Any, Composed, Diverged }
 
     /// <summary>How an action relocates its target: shoved away from the nearest enemy (Reconstruct) or pulled toward the actor (Chain Hook).
     /// AwayFromSource: knocked straight back from the actor on hit (Kinetic Blast). New values go at the end: assets store the number.</summary>
@@ -65,7 +71,7 @@ namespace TacticsGame.Core
         public const string Revenge = "revenge";        // Revenge Maxim: the next ability within its time winds up much faster (spent on use)
         public const string RevengePrimed = "revenge_primed";   // bookkeeping: a Transcended Block under way; Revenge comes when it ends
         public const string Flurry = "flurry";          // Sharpshooter's Flurry: much faster actions and more dodge, basic attack only (BasicAttackOnly)
-        public const string Ascended = "ascended";      // Monarch's Ascension happened: Unstoppable and in the air for good
+        public const string Ascended = "ascended";      // Monarch's Ascension happened (once a battle): up in the air, Unstoppable, for a while
         public const string Decayed = "decayed";        // inside an Abstract Decay zone: slowed
         public const string Unmake = "unmake";          // Mark of the Unmaker's marks (Stacks); at the limit the next one Fates and Unravels
         public const string SaviorsGuard = "saviors_guard";   // Savior: the Tank's ally guarded (+Block) as it comes to them
@@ -104,5 +110,15 @@ namespace TacticsGame.Core
         public const string CripplingRounds = "crippling_rounds";   // Crippling Pursuit: less damage, but its hits CRIPPLE (ArmsHits)
         public const string Crippled = "crippled";      // slower walking and dodges, no dashes (NoDash)
         public const string MentalWeapon = "mental_weapon";   // Mental Weapon: its next single-target damage fires the stored bullet at that target
+        public const string Intention = "intention";       // Third Intention: the next two abilities have no recovery (SpentOnAbility)
+        public const string Diverged = "diverged";         // the Forsaken's Diverged form (NEUROSIS's SelfStatuses): faster, more Block, no Dash or Block (Forsaken.cs)
+        public const string Frenzied = "frenzied";         // Madness Spills Forth: faster strikes while it goes after its target
+        public const string Hysteria = "hysteria";         // the Forsaken in Diverged form: a stack a second (and per Rampage hit); at the limit, MADNESS
+        public const string Measured = "measured";         // Measurement's slow
+        public const string Insanity = "insanity";         // the Forsaken at the HYSTERIA limit: MADNESS's rules, but on no side (Team.Rogue, Unit.HomeTeam), striking the nearest unit of any side
+        public const string Countersign = "countersign";   // Countersign, on an enemy (SourceId: the Duelist): its next hit on the Duelist's ally goes to the Duelist
+        public const string WrathfulReflection = "wrathful_reflection";   // a shield that sends half of what its holder takes back at the attacker
+        public const string StrangeAxis = "strange_axis";  // inside Strange Axis: damage taken comes as strain instead (DamageAsStrain)
+        public const string Composition = "composition";   // Compositions of Destruction's projectile (a unit: CompositionState), hidden
     }
 }

@@ -28,9 +28,21 @@ MonoBehaviour:
   EyeHeight: 1.6
   BodyHeight: 1.8
   BodyRadius: 0.4
+  ReactionSpeed: 0.25
   BasicAttack: {fileID: 11400000, guid: 51067cd2ab680b24992275c305dd8739, type: 2}
   Makina: 0
+  CannotBlock: 0
+  CannotFocus: 0
+  CannotMove: 0
+  CannotDash: 0
+  CannotDodge: 0
+  MapObjective: 0
   StrainPerSecond: 0
+  StrainName: 
+  ExcludedEtchings: []
+  DivergeAction: {fileID: 0}
+  RegressAction: {fileID: 0}
+  InsanityAction: {fileID: 0}
   Description: 'Neither an inch of their skin is left unblemished, nor a corner of
     their mind latent. The Paradigm User nestles themselves into the fabric of the
     universe and tears at their cognition to unleash catastrophic power upon foes
@@ -64,6 +76,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: c6b0c744386be3644a61d261acf6a1c5, type: 2}
   - {fileID: 11400000, guid: 68025a0293196b745a8f5ac620822522, type: 2}
   - {fileID: 11400000, guid: 6ccc81c39058bb042b090858c17b2688, type: 2}
+  - {fileID: 11400000, guid: 3a6e4fd120234144b8b1b0742837999d, type: 2}
   Passives: []
   AIProfile: 
   AI: {fileID: 0}
@@ -72,6 +85,8 @@ MonoBehaviour:
   Model: {fileID: 919132149155446097, guid: e1f5929b01e8bfd4597c1ba3f7350005, type: 3}
   ModelAnimations: {fileID: 9100000, guid: 05ad9aa589f1b58468fe5070767ac9b9, type: 2}
   ModelEtchings: {fileID: 2800000, guid: fd20ee0c8e0059647983afa1984a419c, type: 3}
+  DivergedModel: {fileID: 0}
+  DivergedAnimations: {fileID: 0}
   Icon: {fileID: 0}
   GrantedActions:
   - regeneration_seal
@@ -85,4 +100,5 @@ MonoBehaviour:
   - splinters
   - baneful_domain
   - mindshatter
-  DataVersion: 15
+  - vipers
+  DataVersion: 16

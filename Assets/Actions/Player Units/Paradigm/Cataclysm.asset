@@ -19,6 +19,7 @@ MonoBehaviour:
   Description: After a long channel, deal heavy damage in a huge area and stun. Any
     damage breaks the channel.
   Details: 
+  TipOverrides: []
   WindupName: 
   Targeting: 4
   Range: 16
@@ -35,17 +36,22 @@ MonoBehaviour:
   RequiredStatusOnTarget: 0
   ConsumeOnResolve: 0
   Impact: 1
+  WindupDisplay: 0
   Damage: 35
   BaseAccuracy: 1
   StunDuration: 2
   StrainOnTarget: 30
   StrainOnSelf: 30
   HealthCost: 0
+  HysteriaOnUse: 0
   UnravelsOverMaxStrain: 0
   PiercesTerrain: 0
   BlockPierce: 0
   StunnedDamageMultiplier: 1
+  DivergedVersion: {fileID: 0}
+  Form: 0
   Shape: 1
+  ConeAngle: 90
   AreaRadius: 7.5
   LineWidth: 0
   AreaHeight: 0
@@ -100,16 +106,29 @@ MonoBehaviour:
   ChainFollowups: 0
   ChainCostMultiplier: 1
   ChainWindow: 1
+  ProjectileSpeed: 7
+  ProjectileAcceleration: 16
+  ProjectileMaxSpeed: 26
+  ProjectileRadius: 0.3
+  ProjectileLifetime: 4
+  ProjectileHoming: 2
+  ProjectileHomingDelay: 0.25
+  ProjectileTurnRate: 200
+  ProjectileTurnGrowth: 500
+  LinkedAbilities: []
+  RequiresLink: 0
   CanTranscend: 0
   TranscendStrain: 15
   TranscendWindupMultiplier: 1
+  TranscendCooldown: -1
   ExtraCinematic: 0
   Visuals:
     Kind: 5
     Color: {r: 0.65, g: 0.3, b: 1, a: 1}
     Width: 0.25
     Pierce: 0
+    Orb: 0
   InterruptedByDamage: 1
   InterruptedByStun: 1
   Params: []
-  DataVersion: 15
+  DataVersion: 16

@@ -36,6 +36,13 @@ namespace TacticsGame.Presentation
         [Tooltip("Start as soon as the scene plays. Off when a PreBattleSetup screen starts it instead.")]
         public bool StartOnPlay = true;
 
+        [Tooltip("A dodge: battle seconds before the strike over which time slows gradually to a stop (0: it stops at once).")]
+        [Min(0f)] public float DodgeEaseSeconds = 0.5f;
+
+        /// <summary>The unit about to dodge (the stretch now playing ends in its dodge, or its dodge is being ordered), or
+        /// null. DodgeMoment darkens the screen and holds the camera on it.</summary>
+        public string DodgingUnitId { get; private set; }
+
         private void Start() { if (StartOnPlay) StartBattle(); }
 
         public void StartBattle()
@@ -60,6 +67,15 @@ namespace TacticsGame.Presentation
             var summons = GetComponent<SummonViews>();
             if (summons == null) summons = gameObject.AddComponent<SummonViews>();
             summons.Bind(Director, Context);   // views for units that join mid-battle; before Load, so a reset clears them
+            var dodge = GetComponent<DodgeMoment>();
+            if (dodge == null) dodge = gameObject.AddComponent<DodgeMoment>();
+            dodge.Controller = this;
+            var replay = GetComponent<ReplayControls>();
+            if (replay == null) replay = gameObject.AddComponent<ReplayControls>();
+            replay.Director = Director;   // the replay's play / pause, scrub bar and speed
+            var temperance = GetComponent<TemperanceDisplay>();
+            if (temperance == null) temperance = gameObject.AddComponent<TemperanceDisplay>();
+            temperance.Director = Director;   // Temperance's approach bar, warning, rings and beams
             UiDeclutter.Set(false);   // every battle starts in the normal view, never the tactical one (Alt) left on from before
             Director.Load(Sim.Timeline, Context.Registry);
             foreach (var view in Context.Registry.Values) view.Director = Director;
@@ -92,7 +108,10 @@ namespace TacticsGame.Presentation
                 if (!onlyMoves || seg.Time - ordersAt >= Sim.FreedomsEmbraceResetAfter) embraceClock = 0f;
                 onlyMoves = true;
 
-                Director.PlayUntil(seg.Time);                     // present that stretch at playbackSpeed
+                // A stretch ending in a dodge eases to its stop, the screen darkening on the dodger (DodgeMoment).
+                var dodge = seg.End == SegmentEnd.DecisionNeeded && seg.Decisions != null ? seg.Decisions.Find(d => d.Kind == DecisionKind.DodgeDash) : null;
+                DodgingUnitId = dodge != null ? dodge.UnitId : null;
+                Director.PlayUntil(seg.Time, dodge != null ? DodgeEaseSeconds : 0f);   // present that stretch at playbackSpeed
                 yield return new WaitUntil(() => Director.ReachedTarget);
 
                 if (seg.End == SegmentEnd.BattleOver) break;
@@ -101,6 +120,7 @@ namespace TacticsGame.Presentation
                 bool done = false;
                 Input.RequestDecisions(Sim, seg.Decisions, () => done = true);
                 yield return HoldForOrders(seg, () => done);
+                DodgingUnitId = null;
                 EmbraceProgress = 0f;
                 if (!done) Input.CancelDecisions();   // ended from outside (the dev menu), or taken by Freedom's Embrace: the next segment plays on
             }

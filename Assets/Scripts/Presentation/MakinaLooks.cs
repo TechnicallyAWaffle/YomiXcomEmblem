@@ -25,18 +25,20 @@ namespace TacticsGame.Presentation
         public static bool Apply(UnitView view, UnitDefinition def, System.Func<Color, bool, Material> material)
         {
             string name = def.name.Replace("(Clone)", "").Trim();
-            if (name != "Monolith" && name != "Hedron" && name != "Stellation" && name != "Infinite") return false;
+            if (name != "Monolith" && name != "Hedron" && name != "Stellation" && name != "Infinite" && name != "Composition" && name != "Forsaken") return false;
             var body = view.Model.GetComponent<Renderer>();
             if (body != null) body.forceRenderingOff = true;   // the shape replaces the capsule (forced off: a flash or meld toggling renderers on won't bring it back)
             var root = new GameObject(RootName).transform;
             root.SetParent(view.Model, false);
-            root.gameObject.AddComponent<MakinaShell>();   // marks it: a Makina breaks apart when it dies (Shatter)
+            if (name != "Forsaken") root.gameObject.AddComponent<MakinaShell>();   // marks it: a Makina breaks apart when it dies (Shatter); the Forsaken falls as a unit does
             var s = view.Model.localScale;
             root.localScale = new Vector3(1f / Mathf.Max(0.01f, s.x), 1f / Mathf.Max(0.01f, s.y), 1f / Mathf.Max(0.01f, s.z));
             int layer = view.gameObject.layer;
             if (name == "Monolith") BuildMonolith(root, layer, material);
             else if (name == "Hedron") BuildHedron(view, root, layer, material);
             else if (name == "Stellation") BuildStellation(view, root, layer, material);
+            else if (name == "Composition") BuildComposition(view, root, layer, material);
+            else if (name == "Forsaken") { BuildForsaken(view, root, layer, material); root.localPosition += Vector3.up * (ForsakenFloat - view.Model.localPosition.y); }
             else BuildInfinite(view, root, layer, material);
             return true;
         }
@@ -87,6 +89,89 @@ namespace TacticsGame.Presentation
             Part(PrimitiveType.Cube, spin, new Vector3(0f, 0.45f, 0f), new Vector3(1.05f, 0.05f, 1.05f), glyph, layer, new Vector3(0f, 45f, 0f));   // a band near the top
             Part(PrimitiveType.Cube, spin, new Vector3(0f, -0.1f, 0f), new Vector3(0.62f, 0.05f, 0.62f), glyph, layer, new Vector3(0f, 45f, 0f));  // a band lower down
             Part(PrimitiveType.Sphere, spin, new Vector3(0f, -0.83f, 0f), new Vector3(0.14f, 0.14f, 0.14f), glyph, layer);                         // the tip
+            var spinner = spin.gameObject.AddComponent<MakinaSpin>();
+            spinner.View = view;
+        }
+
+        // ------------------------------------------------------------------ the Forsaken's placeholder (only without its models: UnitDefinition.Model / DivergedModel)
+
+        /// <summary>How high the Forsaken's placeholder floats: its feet this far off the ground (the shapes stand on the model's centre otherwise, 1m up). Its real models float by their own skeletons (Art/Forsaken).</summary>
+        public static float ForsakenFloat = 0.5f;
+
+        private static readonly Color ForsakenSkin = new Color(0.32f, 0.3f, 0.36f), ForsakenDark = new Color(0.07f, 0.05f, 0.09f), ForsakenEye = new Color(1f, 1f, 1f);
+
+        /// <summary>
+        /// The Forsaken's two forms, both built now, one shown (SetForsakenForm). Composed: a slumped figure, head hung low,
+        /// two arms on its left side, twitching like the Hedron. Diverged: a big four-armed beast of jagged dark shapes with
+        /// white eyes scattered over it.
+        /// </summary>
+        private static void BuildForsaken(UnitView view, Transform root, int layer, System.Func<Color, bool, Material> material)
+        {
+            var skin = material(ForsakenSkin, false); var dark = material(ForsakenDark, false); var eye = material(ForsakenEye, true);
+
+            var composed = new GameObject("Composed").transform;
+            composed.SetParent(root, false);
+            var body = new GameObject("Body").transform;   // the part that twitches and hunches
+            body.SetParent(composed, false);
+            body.localPosition = new Vector3(0f, 0.85f, 0f);
+            Part(PrimitiveType.Capsule, body, new Vector3(0f, 0.15f, 0.1f), new Vector3(0.45f, 0.42f, 0.32f), skin, layer, new Vector3(28f, 0f, 0f));      // slumped torso
+            Part(PrimitiveType.Sphere, body, new Vector3(0.05f, 0.45f, 0.38f), new Vector3(0.28f, 0.3f, 0.28f), skin, layer);                             // hung head
+            Part(PrimitiveType.Capsule, body, new Vector3(-0.3f, 0.12f, 0.14f), new Vector3(0.11f, 0.34f, 0.11f), skin, layer, new Vector3(20f, 0f, -12f)); // left arm
+            Part(PrimitiveType.Capsule, body, new Vector3(-0.33f, -0.08f, 0.02f), new Vector3(0.1f, 0.32f, 0.1f), skin, layer, new Vector3(-10f, 0f, -24f)); // the second left arm
+            Part(PrimitiveType.Capsule, composed, new Vector3(-0.12f, 0.38f, 0f), new Vector3(0.14f, 0.38f, 0.14f), dark, layer);                          // legs
+            Part(PrimitiveType.Capsule, composed, new Vector3(0.12f, 0.38f, 0f), new Vector3(0.14f, 0.38f, 0.14f), dark, layer);
+            var twitch = body.gameObject.AddComponent<MakinaJitter>();
+            twitch.View = view; twitch.TurnMin = 6f; twitch.TurnMax = 22f; twitch.HoldMin = 0.2f; twitch.HoldMax = 0.9f;
+
+            var diverged = new GameObject("Diverged").transform;
+            diverged.SetParent(root, false);
+            Part(PrimitiveType.Sphere, diverged, new Vector3(0f, 1.15f, 0f), new Vector3(1.3f, 1.05f, 1.1f), dark, layer);                  // the hulk
+            Part(PrimitiveType.Sphere, diverged, new Vector3(0f, 1.6f, 0.45f), new Vector3(0.6f, 0.5f, 0.55f), dark, layer);                // its head, low and forward
+            for (int i = 0; i < 4; i++)   // four long arms, two to a side
+            {
+                float side = i < 2 ? -1f : 1f, up = i % 2 == 0 ? 1.4f : 0.95f;
+                Part(PrimitiveType.Capsule, diverged, new Vector3(side * 0.75f, up - 0.35f, 0.15f), new Vector3(0.22f, 0.7f, 0.22f), dark, layer, new Vector3(25f, 0f, side * (i % 2 == 0 ? 35f : 15f)));
+            }
+            var rng = new System.Random(7);
+            for (int i = 0; i < 14; i++)   // jagged edges
+            {
+                float a = (float)(rng.NextDouble() * System.Math.PI * 2.0), h = 0.6f + (float)rng.NextDouble() * 1.1f;
+                Part(PrimitiveType.Cube, diverged, new Vector3(Mathf.Cos(a) * 0.62f, h, Mathf.Sin(a) * 0.55f), new Vector3(0.12f, 0.45f, 0.12f), dark, layer,
+                     new Vector3((float)rng.NextDouble() * 80f - 40f, a * Mathf.Rad2Deg, 45f + (float)rng.NextDouble() * 40f));
+            }
+            for (int i = 0; i < 11; i++)   // white eyes all over it
+            {
+                float a = (float)(rng.NextDouble() * System.Math.PI * 1.6 - 0.3), h = 0.8f + (float)rng.NextDouble() * 0.95f;
+                Part(PrimitiveType.Sphere, diverged, new Vector3(Mathf.Sin(a) * 0.6f, h, Mathf.Cos(a) * 0.52f), Vector3.one * (0.06f + (float)rng.NextDouble() * 0.05f), eye, layer);
+            }
+            diverged.gameObject.SetActive(false);
+            root.gameObject.AddComponent<ForsakenForm>().View = view;
+        }
+
+        /// <summary>Show the Forsaken's Diverged or Composed form (FormChanged): it bursts out, or kneels and rises.</summary>
+        public static void SetForsakenForm(UnitView view, bool diverged)
+        {
+            var form = view != null ? view.GetComponentInChildren<ForsakenForm>(true) : null;   // on its model's root, or the placeholder's
+            if (form != null) form.Show(diverged);
+        }
+
+        private static readonly Color CompositionCore = new Color(0.25f, 0.1f, 0.25f), CompositionGlow = new Color(1f, 0.5f, 0.85f);
+
+        /// <summary>Compositions of Destruction's projectile: a dark core in a glowing shell at chest height, with shards
+        /// turning around it.</summary>
+        private static void BuildComposition(UnitView view, Transform root, int layer, System.Func<Color, bool, Material> material)
+        {
+            var core = material(CompositionCore, false); var glow = material(CompositionGlow, true);
+            var spin = new GameObject("Composition").transform;
+            spin.SetParent(root, false);
+            spin.localPosition = new Vector3(0f, 0.7f, 0f);
+            Part(PrimitiveType.Sphere, spin, Vector3.zero, new Vector3(0.42f, 0.42f, 0.42f), glow, layer);
+            Part(PrimitiveType.Sphere, spin, Vector3.zero, new Vector3(0.26f, 0.26f, 0.26f), core, layer);
+            for (int i = 0; i < 3; i++)
+            {
+                float a = i * 120f * Mathf.Deg2Rad;
+                Part(PrimitiveType.Cube, spin, new Vector3(Mathf.Cos(a) * 0.42f, 0.05f * (i - 1), Mathf.Sin(a) * 0.42f), new Vector3(0.09f, 0.09f, 0.09f), glow, layer, new Vector3(45f, i * 120f, 45f));
+            }
             var spinner = spin.gameObject.AddComponent<MakinaSpin>();
             spinner.View = view;
         }
@@ -380,6 +465,74 @@ namespace TacticsGame.Presentation
     /// holding each for a moment; while it winds up or uses an ability it holds still. Read off CombatVfx's windups, like
     /// MakinaSpin.
     /// </summary>
+    /// <summary>
+    /// The Forsaken's two forms on its view: which is shown, the change (Diverged swells out from small; Composed is shown
+    /// kneeling, then stands), and, while REGRESSION winds up, the Diverged form hunching over (read off CombatVfx's windups).
+    /// </summary>
+    public class ForsakenForm : MonoBehaviour
+    {
+        public UnitView View;
+        private Transform composed, diverged;
+        /// <summary>Real models (UnitLooks): each form's Animator, the view's while that form is shown. Null for the placeholder.</summary>
+        public Animator ComposedAnimator, DivergedAnimator;
+        private float shownAt = -99f;
+        private bool isDiverged;
+        private CombatVfx vfx;
+
+        private void Awake()
+        {
+            if (composed == null) composed = transform.Find("Composed");
+            if (diverged == null) diverged = transform.Find("Diverged");
+        }
+
+        /// <summary>The two forms' roots (and their models' Animators), set by UnitLooks for a real model.</summary>
+        public void Bind(Transform composedRoot, Transform divergedRoot, Animator composedAnimator, Animator divergedAnimator)
+        {
+            composed = composedRoot; diverged = divergedRoot;
+            ComposedAnimator = composedAnimator; DivergedAnimator = divergedAnimator;
+        }
+
+        public void Show(bool toDiverged)
+        {
+            if (composed == null) Awake();
+            isDiverged = toDiverged;
+            if (composed != null) composed.gameObject.SetActive(!toDiverged);
+            if (diverged != null) diverged.gameObject.SetActive(toDiverged);
+            var animator = toDiverged ? DivergedAnimator : ComposedAnimator;
+            if (View != null && animator != null) View.Animator = animator;   // the shown form's clips play from now on
+            shownAt = Time.time;
+        }
+
+        private void Update()
+        {
+            if (composed == null || diverged == null) return;
+            float t = Time.time - shownAt;
+            if (isDiverged)
+            {
+                // Swelling out of the burst, overshooting a little.
+                float k = Mathf.Clamp01(t / 0.35f);
+                float s = k < 1f ? Mathf.Lerp(0.5f, 1.12f, k) : Mathf.Lerp(1.12f, 1f, Mathf.Clamp01((t - 0.35f) / 0.2f));
+                diverged.localScale = Vector3.one * s;
+                // REGRESSION winding up: it hunches over and clutches its head.
+                float hunch = 0f;
+                if (vfx == null) vfx = Object.FindFirstObjectByType<CombatVfx>();
+                if (vfx != null && View != null && View.Director != null)
+                    foreach (var w in vfx.Windups)
+                        if (w.ActorId == View.UnitId && w.Def != null && w.Def.Id == "regression")
+                            hunch = Mathf.Clamp01((View.Director.PlaybackClock - w.Start) / Mathf.Max(0.01f, w.ResolveAt - w.Start));
+                diverged.localRotation = Quaternion.Euler(35f * hunch, 0f, 0f);
+                diverged.localScale *= 1f - 0.15f * hunch;
+            }
+            else
+            {
+                // Kneeling where it was thrown down, then standing up.
+                float k = Mathf.Clamp01((t - 0.25f) / 0.6f);
+                composed.localScale = new Vector3(1f, Mathf.Lerp(0.55f, 1f, k * k * (3f - 2f * k)), 1f);
+                diverged.localRotation = Quaternion.identity;
+            }
+        }
+    }
+
     public class MakinaJitter : MonoBehaviour
     {
         public UnitView View;

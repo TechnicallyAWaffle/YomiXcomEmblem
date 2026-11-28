@@ -181,7 +181,8 @@ namespace TacticsGame.Core
             base.Describe(tip);
             var def = tip.Def;
             tip.Add("Zone", string.Format("{0} wide for {1}", AbilityTip.Metres(tip.V(ActionStat.AreaRadius)), AbilityTip.Secs(def.AuraSeconds * (tip.Who != null ? tip.Who.DurationScale(def) : 1f))));
-            tip.Add("Damage", string.Format("{0:0.#}/s, +{1:0}% for each second it's up", def.AuraDamagePerSecond, def.AuraDamageGrowth * 100f));
+            float dps = tip.Who != null ? tip.Who.ActionStat(def, ActionStat.Damage, def.AuraDamagePerSecond) : def.AuraDamagePerSecond;
+            tip.Add("Damage", string.Format("{0:0.#}/s, +{1:0}% for each second it's up", dps, def.AuraDamageGrowth * 100f));
             tip.Add("Recast", string.Format("while it's up: renews it, +{0:0} strain", Param(def, "followup_strain")));
         }
 

@@ -70,6 +70,7 @@ namespace TacticsGame.Core
         EndsOnFocus = 1 << 17,        // gone the moment its holder Focuses (Scepter Of Tyranny's stage: Focus starts it over)
         StrikesOnExpire = 1 << 19,    // when it runs out, the ability that put it there lands its LinkedAction on its holder (RUPTURED: Delayed Crush; BattleSimulation.ExpireTimers)
         Counters = 1 << 18,           // a counter stance: attacks on its holder skip the dodge roll, so the counter meets them (Parry, Mesmerize; BattleSimulation.RollDodge)
+        SpentOnAbility = 1 << 20,     // its holder's next abilities spend it, one use each (StatusSpec.Uses; a Dash doesn't): its ActionModifiers go with each one used (Clear and Steady, INTENTION)
     }
 
     /// <summary>A change to one unit stat: added to it, or multiplying it.</summary>
@@ -170,21 +171,51 @@ namespace TacticsGame.Core
         /// <summary>
         /// Does the ability really have this number (so changing it does something)? Its value is above zero, and it is used:
         /// a range needs something to aim at, a stun something that hits, a radius an area. Every ability carries the
-        /// defaults (a 15m range, a 0.5s stun) whether it uses them or not.
+        /// defaults (a 15m range, a 0.5s stun) whether it uses them or not. The numbers of what acts for it count too
+        /// (ActionBehavior.ActsThrough: a summon's unit): an Etching on a summon is passed on to what it brings in
+        /// (BattleSimulation.InheritEtchings).
         /// </summary>
         public static bool Has(ActionDefinition def, ActionStat stat)
         {
-            if (def != null && stat == ActionStat.Weakpoints) return def.Damage > 0f;   // any ability that hits for damage can be made to open them
-            if (def == null || Base(def, stat) <= 0f) return false;
+            if (def == null) return false;
+            if (OwnHas(def, stat)) return true;
+            foreach (var d in ActionBehaviors.Get(def.BehaviorId).ActsThrough(def))
+                if (d != null && d != def && OwnHas(d, stat)) return true;
+            return false;
+        }
+
+        /// <summary>Has, from the ability's own fields only.</summary>
+        private static bool OwnHas(ActionDefinition def, ActionStat stat)
+        {
+            if (stat == ActionStat.Damage) return DealsOwnDamage(def);   // a hit, or a dome that hurts (Baneful Domain)
+            if (stat == ActionStat.Weakpoints) return def.Damage > 0f;   // any ability that hits for damage can be made to open them
+            if (Base(def, stat) <= 0f) return false;
             switch (stat)
             {
                 case ActionStat.Range: return def.Targeting != TargetType.Self && def.Targeting != TargetType.None;
                 case ActionStat.StunDuration: return def.Damage > 0f || def.Targeting == TargetType.Enemy;
                 case ActionStat.Accuracy: case ActionStat.BlockPierce: return def.Damage > 0f;
-                case ActionStat.AreaRadius: return def.Shape != AreaShape.None || def.BehaviorId == "trap" || def.BehaviorId == "aura";
+                case ActionStat.AreaRadius: return ActionBehaviors.Get(def.BehaviorId).UsesAreaRadius(def);
             }
             return true;
         }
+
+        /// <summary>Does it deal damage itself: a hit (Damage), or a dome that hurts those inside (AuraDamagePerSecond, which
+        /// its Damage modifiers scale: BattleSimulation.TickAuraEffects).</summary>
+        public static bool DealsOwnDamage(ActionDefinition def) { return def != null && (def.Damage > 0f || def.AuraDamagePerSecond > 0f); }
+
+        /// <summary>Does it deal damage, itself or through what acts for it (a summon's unit)?</summary>
+        public static bool DealsDamage(ActionDefinition def) { return Has(def, ActionStat.Damage); }
+
+        /// <summary>Does it hit for damage, itself or through what acts for it (what can strike critically, open or break weakpoints)?</summary>
+        public static bool HitsForDamage(ActionDefinition def)
+        {
+            if (def == null) return false;
+            if (def.Damage > 0f) return true;
+            foreach (var d in ActionBehaviors.Get(def.BehaviorId).ActsThrough(def)) if (d != null && d != def && d.Damage > 0f) return true;
+            return false;
+        }
+
 
         /// <summary>Can this ability number go below zero? (Only a strain cost: negative relieves strain.)</summary>
         public static bool AllowsNegative(ActionStat stat) { return stat == ActionStat.StrainOnSelf || stat == ActionStat.StrainOnTarget; }   // negative: relief (Minutes Turn To Centuries)

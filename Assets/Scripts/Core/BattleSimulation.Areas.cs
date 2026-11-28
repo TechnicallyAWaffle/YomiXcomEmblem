@@ -145,11 +145,11 @@ namespace TacticsGame.Core
             TickAuraEffects();
         }
 
-        /// <summary>Domes that hurt or strain the enemies inside (AuraDamagePerSecond, AuraStrainPerSecond), in StrainRecoveryTicks steps.</summary>
+        /// <summary>Domes that hurt or strain the enemies inside (AuraDamagePerSecond, AuraStrainPerSecond), in RateTicks steps.</summary>
         private void TickAuraEffects()
         {
-            if (tick % StrainRecoveryTicks != 0) return;
-            float step = StrainRecoveryTicks * TickLength;
+            if (tick % RateTicks != 0) return;
+            float step = RateTicks * TickLength;
             foreach (var a in auras.ToArray())
             {
                 var def = a.Definition;
@@ -159,7 +159,7 @@ namespace TacticsGame.Core
                     var u = GetUnit(id);
                     if (u == null || !u.IsAlive || u.Team == a.Source.Team) continue;
                     if (def.AuraStrainPerSecond > 0f) AddStrain(u, def.AuraStrainPerSecond * a.Source.StrainDealtMult() * step);
-                    if (def.AuraDamagePerSecond > 0f) DealTickDamage(a.Source, u, AuraDamageNow(a) * a.Source.DamageDealtMult() * step, def);
+                    if (def.AuraDamagePerSecond > 0f) DealTickDamage(a.Source, u, a.Source.ActionStat(def, ActionStat.Damage, AuraDamageNow(a)) * a.Source.DamageDealtMult() * step, def);   // its Damage Etchings (Summation) scale it
                 }
             }
         }
@@ -415,11 +415,13 @@ namespace TacticsGame.Core
         {
             if (!u.IsAlive || amount <= 0f) return;
             DevAdjustDamage(source, u, ref amount);
-            u.Health -= amount;
+            float asStrain;
+            float lost = TakeAsStrain(u, amount, out asStrain);   // Strange Axis
+            u.Health -= lost;
             if (source != null) u.LastAttackerId = source.Id;
             u.LastHitAction = null;
             u.LastHitTag = "fall";
-            Emit(EventType.Damage, source != null ? source.Id : null, u.Id, new DamageInfo { ActionId = "fall", Amount = amount, Impact = ImpactType.Heavy, RemainingHealth = u.Health });
+            Emit(EventType.Damage, source != null ? source.Id : null, u.Id, new DamageInfo { ActionId = "fall", Amount = lost, Impact = ImpactType.Heavy, RemainingHealth = u.Health, AsStrain = asStrain });
         }
     }
 }

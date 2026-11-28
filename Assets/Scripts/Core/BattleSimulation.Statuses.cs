@@ -9,6 +9,42 @@ namespace TacticsGame.Core
     {
         // ------------------------------------------------------------------ helpers for behaviors
 
+        /// <summary>
+        /// An ability started: each status on 'u' that its next abilities spend (StatusFlags.SpentOnAbility) loses a use (the last
+        /// one ends it), and what it changes about 'def' goes with the ability: its windup already counted them, and its recovery
+        /// and the rest read them from the instance (ActionInstance.Carried). Null when it spent nothing.
+        /// </summary>
+        internal List<ActionModifier> SpendOnAbility(Unit u, ActionDefinition def)
+        {
+            List<ActionModifier> carried = null;
+            foreach (var s in u.Statuses.ToArray())
+            {
+                if (!s.Has(StatusFlags.SpentOnAbility)) continue;
+                if (carried == null) carried = new List<ActionModifier>();
+                if (s.ActionModifiers != null) foreach (var m in s.ActionModifiers) if (m.AppliesTo(def)) carried.Add(m);
+                if (s.UsesLeft > 1) s.UsesLeft--;
+                else RemoveStatus(u, s.Id);
+            }
+            return carried;
+        }
+
+        /// <summary>
+        /// Damage about to come off 'u's health: under a status that turns it into strain (StatusEffect.DamageAsStrain: Strange
+        /// Axis), that share of it is added as strain and none of it is lost from health. Returns the health it does take, and
+        /// the strain it gave in 'asStrain'.
+        /// </summary>
+        internal float TakeAsStrain(Unit u, float amount, out float asStrain)
+        {
+            asStrain = 0f;
+            if (u == null || amount <= 0f) return amount;
+            float share = 0f;
+            foreach (var s in u.Statuses) share = Mathf.Max(share, s.DamageAsStrain);
+            if (share <= 0f) return amount;
+            asStrain = amount * share;
+            AddStrain(u, asStrain);
+            return 0f;
+        }
+
         /// <summary>Apply (or refresh: same id replaces) a status. Rooting a walking unit stops it where it stands.</summary>
         public void ApplyStatus(Unit target, StatusEffect status, Unit source)
         {
